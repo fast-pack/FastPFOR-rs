@@ -3,6 +3,7 @@ mod cursor;
 mod error;
 mod integer_compression;
 
+pub use cursor::IncrementCursor;
 pub use error::{FastPForError, FastPForResult};
 pub use integer_compression::bitpacking::{fast_pack, fast_unpack};
 pub use integer_compression::codec::Codec;
