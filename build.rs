@@ -3,9 +3,10 @@ fn main() {
     {
         use std::path::Path;
 
-        if !Path::new("cpp/CMakeLists.txt").exists() {
-            panic!("FastPFOR submodule not initialized. Run `git submodule update --init`.");
-        }
+        assert!(
+            Path::new("cpp/CMakeLists.txt").exists(),
+            "FastPFOR submodule not initialized. Run `git submodule update --init`."
+        );
 
         // Compile FastPFOR using CMake
         println!("cargo:rerun-if-changed=cpp");

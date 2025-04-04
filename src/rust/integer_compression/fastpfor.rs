@@ -195,7 +195,7 @@ impl FastPFOR {
             }
             tmp_input_offset += self.block_size;
         }
-        input_offset.set_position(tmp_input_offset as u64);
+        input_offset.set_position(u64::from(tmp_input_offset));
         output[header_pos] = tmp_output_offset - header_pos as u32;
         let byte_size = self.bytes_container.position();
         while (self.bytes_container.position() & 3) != 0 {
@@ -244,7 +244,7 @@ impl FastPFOR {
                 tmp_output_offset -= (overflow * k as u32) / 32;
             }
         }
-        output_offset.set_position(tmp_output_offset as u64);
+        output_offset.set_position(u64::from(tmp_output_offset));
     }
 
     fn best_b_from_data(&mut self, input: &[u32], pos: u32) {
@@ -299,11 +299,12 @@ impl FastPFOR {
         let bytesize = input[inexcept as usize];
         inexcept += 1;
         self.bytes_container.clear();
+        let length = bytesize.div_ceil(4);
         self.bytes_container.buffer =
             self.bytes_container
                 .as_int_buffer()
-                .put(input, inexcept as usize, (bytesize + 3) / 4);
-        inexcept += (bytesize + 3) / 4;
+                .put(input, inexcept as usize, length);
+        inexcept += length;
 
         let bitmap = input[inexcept as usize];
         inexcept += 1;
@@ -361,7 +362,7 @@ impl FastPFOR {
 
         let run_end = thissize / self.block_size;
         for _ in 0..run_end {
-            let b = self.bytes_container.get() as u32;
+            let b = u32::from(self.bytes_container.get());
             let cexcept = self.bytes_container.get();
             for k in (0..self.block_size).step_by(32) {
                 bitpacking::fast_unpack(
@@ -374,7 +375,7 @@ impl FastPFOR {
                 tmp_input_offset += b;
             }
             if cexcept > 0 {
-                let maxbits = self.bytes_container.get() as u32;
+                let maxbits = u32::from(self.bytes_container.get());
                 let index = maxbits - b;
                 if index == 1 {
                     for _ in 0..cexcept {
@@ -393,8 +394,8 @@ impl FastPFOR {
             }
             tmp_output_offset += self.block_size;
         }
-        output_offset.set_position(tmp_output_offset as u64);
-        input_offset.set_position(inexcept as u64);
+        output_offset.set_position(u64::from(tmp_output_offset));
+        input_offset.set_position(u64::from(inexcept));
     }
 }
 
@@ -437,9 +438,7 @@ mod tests {
         let answer = out_buf_uncomp[..output_offset.position() as usize].to_vec();
 
         for k in 0..BLOCK_SIZE_256 {
-            if answer[k as usize] != data[k as usize] {
-                panic!("bug {} {} != {}", k, answer[k as usize], data[k as usize]);
-            }
+            assert_eq!(answer[k as usize], data[k as usize], "bug in {k}");
         }
     }
 
@@ -481,9 +480,7 @@ mod tests {
         let answer = out_buf_uncomp[..output_offset.position() as usize].to_vec();
 
         for k in 0..BLOCK_SIZE_128 {
-            if answer[k as usize] != data[k as usize] {
-                panic!("bug {} {} != {}", k, answer[k as usize], data[k as usize]);
-            }
+            assert_eq!(answer[k as usize], data[k as usize], "bug in {k}");
         }
     }
 
@@ -567,7 +564,7 @@ mod tests {
     #[test]
     fn test_alternating_sequence() {
         let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, BLOCK_SIZE_128);
-        let data: Vec<u32> = (0..65536).map(|i| if i % 2 == 0 { 0 } else { 1 }).collect(); // Alternating 0s and 1s
+        let data: Vec<_> = (0..65536).map(|i| u32::from(i % 2 != 0)).collect(); // Alternating 0s and 1s
         run_codec_test(&mut codec, &data);
     }
 

@@ -1,5 +1,4 @@
 #![expect(clippy::identity_op)]
-#![expect(clippy::precedence)] // FIXME: this shouldn't be needed
 
 pub fn fast_pack(input: &[u32], inpos: usize, output: &mut [u32], outpos: usize, bit: u8) {
     match bit {

@@ -1,4 +1,4 @@
-# FastPFor for Rust
+# `FastPFor` for Rust
 
 [![GitHub](https://img.shields.io/badge/github-fastpfor-8da0cb?logo=github)](https://github.com/jjcfrancisco/fastpfor)
 [![crates.io version](https://img.shields.io/crates/v/fastpfor.svg)](https://crates.io/crates/fastpfor)
@@ -10,6 +10,8 @@ This is a Rust wrapper for the [C++ FastPFor library](https://github.com/fast-pa
 
 ### Supported algorithms
 Unless otherwise specified, all codecs support `&[u32]` only.
+
+```text
 * BP32
 * Copy
 * FastBinaryPacking8
@@ -41,6 +43,7 @@ Unless otherwise specified, all codecs support `&[u32]` only.
 * VByte
 * VarInt (both `&[u32]` and `&[u64]`)
 * VarIntGb
+```
 
 ## Usage
 
@@ -83,7 +86,7 @@ sudo apt-get install build-essential libsimde-dev
 ```
 
 ### macOS
-To build FastPFor on macOS, you'll need to install SIMDe. Since Homebrew installs packages in `/opt/homebrew` (for Apple Silicon), you'll also need to explicitly set the include paths.
+To build `FastPFor` on macOS, you'll need to install `SIMDe`. Since Homebrew installs packages in `/opt/homebrew` (for Apple Silicon), you'll also need to explicitly set the include paths.
 
 ```bash
 # install SIMDe via Homebrew
@@ -96,12 +99,19 @@ export CXXFLAGS="-I/opt/homebrew/include"
 export CFLAGS="-I/opt/homebrew/include"
 ```
 
+## Development
+
+* This project is easier to develop with [just](https://github.com/casey/just#readme), a modern alternative to `make`.
+  Install it with `cargo install just`.
+* To get a list of available commands, run `just`.
+* To run tests, use `just test`.
+
 ## License
 
 Licensed under either of
 
-* Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
-* MIT license ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
+* Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or <https://www.apache.org/licenses/LICENSE-2.0>)
+* MIT license ([LICENSE-MIT](LICENSE-MIT) or <https://opensource.org/licenses/MIT>)
   at your option.
 
 ### Contribution

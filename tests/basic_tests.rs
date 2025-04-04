@@ -25,7 +25,7 @@ fn saul_test() {
             let mut answer: Vec<u32> = vec![0; input.len()];
             let mut input_offset = Cursor::new(0);
             let mut output_offset = Cursor::new(0);
-            output_offset.set_position(x as u64);
+            output_offset.set_position(u64::from(x));
 
             codec
                 .compress(
@@ -40,7 +40,7 @@ fn saul_test() {
                 });
 
             let len = output_offset.position() as u32 - x;
-            output_offset.set_position(x as u64);
+            output_offset.set_position(u64::from(x));
 
             codec
                 .uncompress(
@@ -163,7 +163,7 @@ fn verity_bitpacking() {
             fast_pack(&data, 0, &mut compressed, 0, bit);
             fast_unpack(&compressed, 0, &mut uncompressed, 0, bit);
 
-            assert_eq!(uncompressed, data, "Mismatch for bit {}", bit);
+            assert_eq!(uncompressed, data, "Mismatch for bit {bit}");
         }
     }
 }
@@ -212,7 +212,7 @@ fn test_spurious<C: Integer<u32>>(codec: &mut C) {
     for inlength in 0..32 {
         codec
             .compress(&x, inlength, &mut i0, &mut y, &mut i1)
-            .unwrap_or_else(|e| panic!("Compression failed: {:?}", e));
+            .unwrap_or_else(|e| panic!("Compression failed: {e:?}"));
 
         assert_eq!(
             0,
@@ -242,7 +242,7 @@ fn test_zero_in_zero_out<C: Integer<u32>>(codec: &mut C) {
     // Test compression
     codec
         .compress(&x, 0, &mut i0, &mut y, &mut i1)
-        .unwrap_or_else(|e| panic!("Compression failed: {:?}", e));
+        .unwrap_or_else(|e| panic!("Compression failed: {e:?}"));
     assert_eq!(
         i1.position(),
         0,
@@ -255,7 +255,7 @@ fn test_zero_in_zero_out<C: Integer<u32>>(codec: &mut C) {
     let mut outpos = Cursor::new(0);
     codec
         .uncompress(&y, 0, &mut i1, &mut out, &mut outpos)
-        .unwrap_or_else(|e| panic!("Decompression failed: {:?}", e));
+        .unwrap_or_else(|e| panic!("Decompression failed: {e:?}"));
     assert_eq!(
         outpos.position(),
         0,
@@ -305,7 +305,7 @@ fn test_increasing_sequence() {
                 &mut Cursor::new(0),
             )
             .unwrap_or_else(|e| {
-                panic!("Failed to compress: {:?}", e);
+                panic!("Failed to compress: {e:?}");
             });
 
         // Decompress the data
@@ -319,12 +319,12 @@ fn test_increasing_sequence() {
                 &mut Cursor::new(0),
             )
             .unwrap_or_else(|e| {
-                panic!("Failed to uncompress: {:?}", e);
+                panic!("Failed to uncompress: {e:?}");
             });
 
         // Verify decompressed data matches original
         for (i, &value) in data.iter().enumerate() {
-            assert_eq!(value, decompressed[i], "Mismatch at index {}", i);
+            assert_eq!(value, decompressed[i], "Mismatch at index {i}");
         }
     }
 }
@@ -353,7 +353,7 @@ fn test_random_numbers() {
                 &mut Cursor::new(0),
             )
             .unwrap_or_else(|e| {
-                panic!("Failed to compress: {:?}", e);
+                panic!("Failed to compress: {e:?}");
             });
 
         // Decompress the data
@@ -367,12 +367,12 @@ fn test_random_numbers() {
                 &mut Cursor::new(0),
             )
             .unwrap_or_else(|e| {
-                panic!("Failed to uncompress: {:?}", e);
+                panic!("Failed to uncompress: {e:?}");
             });
 
         // Verify decompressed data matches original
         for (i, &value) in data.iter().enumerate() {
-            assert_eq!(value, decompressed[i], "Mismatch at index {}", i);
+            assert_eq!(value, decompressed[i], "Mismatch at index {i}");
         }
     }
 }
