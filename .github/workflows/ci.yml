@@ -39,8 +39,7 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: target/llvm-cov/codecov.info
-          fail_ci_if_error: true
-      - run: git status
+          fail_ci_if_error: false
       - name: Test packaging for publish
         run: |
           rustup install nightly --profile minimal
