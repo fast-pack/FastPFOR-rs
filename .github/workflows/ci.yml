@@ -2,12 +2,16 @@ name: Build
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ main ]
   release:
     types: [ published ]
   workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
   test:
@@ -42,10 +46,10 @@ jobs:
         if: github.event_name != 'release' && github.event_name != 'workflow_dispatch'
       - name: Read crate metadata
         id: metadata
-        run: echo "rust-version=$(sed -ne 's/rust-version *= *\"\(.*\)\"/\1/p' Cargo.toml)" >> $GITHUB_OUTPUT
+        run: echo "value=$(sed -ne 's/rust-version *= *\"\(.*\)\"/\1/p' Cargo.toml)" >> $GITHUB_OUTPUT
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: ${{ steps.metadata.outputs.rust-version }}
+          toolchain: ${{ steps.metadata.outputs.value }}
           components: rustfmt
       - run: just -v ci-test-msrv
