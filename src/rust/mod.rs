@@ -3,6 +3,7 @@ mod cursor;
 mod error;
 mod integer_compression;
 
+pub use cursor::IncrementCursor;
 pub use error::{FastPForError, FastPForResult};
 pub use integer_compression::bitpacking::{fast_pack, fast_unpack};
 pub use integer_compression::codec::Codec;
@@ -15,7 +16,6 @@ pub use integer_compression::integer_codec::Integer;
 pub use integer_compression::just_copy::JustCopy;
 pub use integer_compression::skippable_codec::Skippable;
 pub use integer_compression::variable_byte::VariableByte;
-pub use cursor::IncrementCursor;
 
 #[derive(Debug, PartialEq)]
 pub enum Output {
