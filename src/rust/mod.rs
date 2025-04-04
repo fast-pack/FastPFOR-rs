@@ -1,5 +1,5 @@
 pub mod bytebuffer;
-mod cursor;
+pub mod cursor;
 mod error;
 mod integer_compression;
 
