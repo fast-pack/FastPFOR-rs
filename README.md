@@ -9,7 +9,7 @@
 This is a Rust wrapper for the [C++ FastPFor library](https://github.com/fast-pack/FastPFor), as well as a pure Rust re-implementation (work in progress).  Supports 32-bit and 64-bit integers, and SIMD-optimized codecs for 128-bit and 256-bit vectors. Based on the [Decoding billions of integers per second through vectorization, 2012](https://arxiv.org/abs/1209.2137) paper.
 
 ### Supported algorithms
-Unless otherwise specified, all codecs support `&[u32]` only. 
+Unless otherwise specified, all codecs support `&[u32]` only.
 * BP32
 * Copy
 * FastBinaryPacking8
