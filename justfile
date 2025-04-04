@@ -8,12 +8,12 @@ clean:
     cargo clean
     rm -f Cargo.lock
 
-# Update dependencies, including breaking changes
+# Update all dependencies, including the breaking changes. Requires nightly toolchain (install with `rustup install nightly`)
 update:
     cargo +nightly -Z unstable-options update --breaking
     cargo update
 
-# Run cargo clippy
+# Run cargo clippy to lint the code
 clippy:
     cargo clippy --all-targets --workspace --all-features -- -D warnings
 
@@ -21,21 +21,29 @@ clippy:
 test-fmt:
     cargo fmt --all -- --check
 
-# Run cargo fmt
+# Reformat all code `cargo fmt`. If nightly is available, use it for better results
 fmt:
-    cargo +nightly fmt -- --config imports_granularity=Module,group_imports=StdExternalCrate
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if command -v cargo +nightly &> /dev/null; then
+        echo 'Reformatting Rust code using nightly Rust fmt to sort imports'
+        cargo +nightly fmt --all -- --config imports_granularity=Module,group_imports=StdExternalCrate
+    else
+        echo 'Reformatting Rust with the stable cargo fmt.  Install nightly with `rustup install nightly` for better results'
+        cargo fmt --all
+    fi
 
 # Build and open code documentation
 docs:
     cargo doc --no-deps --all-features --open
 
-# Quick compile
+# Quick compile without building a binary
 check:
-    cargo check --all-targets --workspace --all-features
+    RUSTFLAGS='-D warnings' cargo check cargo check --workspace --all-targets --all-features
 
 # Default build
 build *ARGS:
-    cargo build --all-targets --workspace --all-features {{ARGS}}
+    RUSTFLAGS='-D warnings' cargo build --all-targets --workspace --all-features {{ARGS}}
 
 # Run all tests
 test *ARGS: build
@@ -90,7 +98,7 @@ ci-test: rust-info test-fmt clippy test test-doc
 ci-test-msrv: rust-info test
 
 # Verify that the current version of the crate is not the same as the one published on crates.io
-check-if-published:
+check-if-published: (assert "jq")
     #!/usr/bin/env bash
     set -euo pipefail
     LOCAL_VERSION="$(grep '^version =' Cargo.toml | sed -E 's/version = "([^"]*)".*/\1/')"
@@ -104,4 +112,12 @@ check-if-published:
         exit 1
     else
         echo "The current crate version has not yet been published."
+    fi
+
+# Ensure that a certain command is available
+[private]
+assert $COMMAND:
+    @if ! type "{{COMMAND}}" > /dev/null; then \
+        echo "Command '{{COMMAND}}' could not be found. Please make sure it has been installed on your computer." ;\
+        exit 1 ;\
     fi
