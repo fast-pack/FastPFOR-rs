@@ -1,5 +1,11 @@
-.ccache
+**/*.rs.bk
+*.pdb
+.idea/
+.vscode/
 Cargo.lock
-cache.sqlite
-out.png
+codecov*
+debug/
 target/
+temp/
+tmp/
+venv/

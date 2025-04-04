@@ -162,12 +162,12 @@ macro_rules! implement_codecs {
                 #[test]
                 #[allow(non_snake_case)]
                 fn $name() {
-                    roundtrip_32($name::new());
                     $(
                         // hack to only expand this block if $is_64 is set
                         const _ : () = { let _ = $is_64; };
                         roundtrip_64($name::new());
                     )*
+                    roundtrip_32($name::new());
                 }
             )*
 

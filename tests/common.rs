@@ -16,9 +16,9 @@ pub enum TestCodec {
 impl TestCodec {
     pub fn name(&self) -> &str {
         match self {
-            TestCodec::VariableByte(_, name) => name,
-            TestCodec::JustCopy(_, name) => name,
-            TestCodec::Composition(_, name) => name,
+            TestCodec::Composition(_, name)
+            | TestCodec::JustCopy(_, name)
+            | TestCodec::VariableByte(_, name) => name,
         }
     }
     pub fn compress(

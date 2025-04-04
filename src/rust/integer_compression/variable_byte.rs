@@ -36,8 +36,8 @@ impl Skippable for VariableByte {
             return Ok(());
         }
         let mut buf = ByteBuffer::new(input_length * 8);
-        for k in input_offset.position()..(input_offset.position() + input_length as u64) {
-            let val = input[k as usize] as i64;
+        for k in input_offset.position()..(input_offset.position() + u64::from(input_length)) {
+            let val = i64::from(input[k as usize]);
             if val < (1 << 7) {
                 buf.put((val | (1 << 7)) as u8);
             } else if val < (1 << 14) {
@@ -74,7 +74,7 @@ impl Skippable for VariableByte {
         output_offset.add(length / 4);
         input_offset.add(input_length);
 
-        FastPForResult::Ok(())
+        Ok(())
     }
 
     #[expect(unused_variables)]
@@ -141,7 +141,7 @@ impl Integer<u32> for VariableByte {
         output_offset.set_position(tmp_outpos);
         input_offset.add(input_length);
 
-        FastPForResult::Ok(())
+        Ok(())
     }
 }
 
@@ -160,7 +160,7 @@ impl Integer<i8> for VariableByte {
         }
         let mut out_pos_tmp = output_offset.position();
         for k in input_offset.position() as u32..(input_offset.position() as u32 + input_length) {
-            let val = input[k as usize] as i64;
+            let val = i64::from(input[k as usize]);
             if val < (1 << 7) {
                 output[out_pos_tmp as usize] = (val | (1 << 7)) as i8;
                 out_pos_tmp += 1;
@@ -198,9 +198,9 @@ impl Integer<i8> for VariableByte {
                 out_pos_tmp += 1;
             }
         }
-        output_offset.set_position(out_pos_tmp + input_length as u64);
+        output_offset.set_position(out_pos_tmp + u64::from(input_length));
         input_offset.add(input_length);
-        FastPForResult::Ok(())
+        Ok(())
     }
     fn uncompress(
         &mut self,
@@ -215,34 +215,34 @@ impl Integer<i8> for VariableByte {
         let mut tmp_outpos = output_offset.position();
         let mut v = 0;
         while p < final_p {
-            v = input[p as usize] as i32;
+            v = i32::from(input[p as usize]);
             if input[p as usize] < 0 {
                 p += 1;
                 continue;
             }
-            v |= (input[p as usize + 1] as i32) << 7;
+            v |= i32::from(input[p as usize + 1]) << 7;
             if input[p as usize + 1] < 0 {
                 p += 2;
                 continue;
             }
-            v |= (input[p as usize + 2] as i32) << 14;
+            v |= i32::from(input[p as usize + 2]) << 14;
             if input[p as usize + 2] < 0 {
                 p += 3;
                 continue;
             }
-            v |= (input[p as usize + 3] as i32) << 21;
+            v |= i32::from(input[p as usize + 3]) << 21;
             if input[p as usize + 3] < 0 {
                 p += 4;
                 continue;
             }
-            v |= (input[p as usize + 4] as i32) << 28;
+            v |= i32::from(input[p as usize + 4]) << 28;
             p += 5;
             output[tmp_outpos as usize] = v as u32;
             tmp_outpos += 1;
         }
         output_offset.set_position(tmp_outpos);
         input_offset.add(input_length);
-        FastPForResult::Ok(())
+        Ok(())
     }
 }
 
