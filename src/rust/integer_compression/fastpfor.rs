@@ -32,10 +32,8 @@ impl Skippable for FastPFOR {
         let inlength = helpers::greatest_multiple(input_length, self.block_size);
         let final_inpos = input_offset.position() as u32 + inlength;
         while input_offset.position() as u32 != final_inpos {
-            let this_size = std::cmp::min(
-                self.page_size,
-                final_inpos - input_offset.position() as u32,
-            );
+            let this_size =
+                std::cmp::min(self.page_size, final_inpos - input_offset.position() as u32);
             self.encode_page(input, this_size, input_offset, output, output_offset);
         }
         FastPForResult::Ok(())

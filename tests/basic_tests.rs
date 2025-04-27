@@ -380,15 +380,15 @@ fn test_random_numbers() {
 #[test]
 fn test_fastpfor_headless_compress_unfit_pagesize() {
     // The input size is a multiple of 128 but does not fit the page size
-    let test_input_size = 512+BLOCK_SIZE_128;
+    let test_input_size = 512 + BLOCK_SIZE_128;
     let page_size = 512;
 
     let input: Vec<u32> = (0..test_input_size).collect();
-    let mut output: Vec<u32> = vec![0; input.len()]; 
+    let mut output: Vec<u32> = vec![0; input.len()];
     let mut decoded: Vec<u32> = vec![0; input.len()];
     let mut input_offset = Cursor::new(0u32);
     let mut output_offset = Cursor::new(0u32);
-    
+
     let mut codec = FastPFOR::new(page_size, BLOCK_SIZE_128);
     codec
         .compress(
@@ -413,5 +413,5 @@ fn test_fastpfor_headless_compress_unfit_pagesize() {
         )
         .expect("decompression failed");
 
-    assert_eq!(input, decoded, "Input and decompressed data do not match"); 
+    assert_eq!(input, decoded, "Input and decompressed data do not match");
 }
