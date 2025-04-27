@@ -29,10 +29,11 @@ impl Skippable for FastPFOR {
         output: &mut [u32],
         output_offset: &mut Cursor<u32>,
     ) -> FastPForResult<()> {
+        let inlength = helpers::greatest_multiple(input_length, self.block_size);
         let pos = input_offset.position() as u32;
-        let final_inpos = pos + input_length;
-        let this_size = std::cmp::min(self.page_size, final_inpos - pos);
+        let final_inpos = pos + inlength;
         while input_offset.position() as u32 != final_inpos {
+            let this_size = std::cmp::min(self.page_size, final_inpos - pos);
             self.encode_page(input, this_size, input_offset, output, output_offset);
         }
         FastPForResult::Ok(())
