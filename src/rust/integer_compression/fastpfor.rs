@@ -168,9 +168,7 @@ impl FastPFOR {
                             + self.bestbbestcexceptmaxb[1] as usize)
                             as u32;
                     new_size = helpers::greatest_multiple(new_size + 31, 32);
-                    self.data_to_be_packed[index as usize].resize(new_size as usize, 1);
-                    self.data_to_be_packed[index as usize]
-                        .clone_from_slice(&vec![1; new_size as usize]);
+                    self.data_to_be_packed[index as usize].resize(new_size as usize, 0);
                 }
                 for k in 0..self.block_size {
                     if (input[(k + tmp_input_offset) as usize] >> self.bestbbestcexceptmaxb[0]) != 0

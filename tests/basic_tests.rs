@@ -415,3 +415,45 @@ fn test_fastpfor_headless_compress_unfit_pagesize() {
 
     assert_eq!(input, decoded, "Input and decompressed data do not match");
 }
+
+#[test]
+fn test_exception_value_vector_resizes() {
+    let page_size = 512;
+    let test_input_size = page_size * 2;
+
+    // every even index value is large which will trigger exception buffer to be resize
+    let input: Vec<u32> = (0..test_input_size)
+        .map(|i| if i % 2 == 0 { 1 << 30 } else { 3 })
+        .collect();
+
+    let mut output: Vec<u32> = vec![0; input.len() * 4];
+    let mut decoded: Vec<u32> = vec![0; input.len()];
+    let mut input_offset = Cursor::new(0u32);
+    let mut output_offset = Cursor::new(0u32);
+
+    let mut codec = FastPFOR::new(page_size, BLOCK_SIZE_128);
+    codec
+        .compress(
+            &input,
+            input.len() as u32,
+            &mut input_offset,
+            &mut output,
+            &mut output_offset,
+        )
+        .expect("compression failed");
+
+    let compressed_len = output_offset.position() as usize;
+    input_offset.set_position(0);
+
+    codec
+        .uncompress(
+            &output,
+            compressed_len as u32,
+            &mut input_offset,
+            &mut decoded,
+            &mut Cursor::new(0u32),
+        )
+        .expect("decompression failed");
+
+    assert_eq!(input, decoded, "Input and decompressed data do not match");
+}
