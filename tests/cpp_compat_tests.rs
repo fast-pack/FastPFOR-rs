@@ -8,7 +8,7 @@ use std::io::Cursor;
 fn test_rust_decompresses_cpp_encoded_data() {
     let test_input_size = 256;
     let input: Vec<u32> = (0..test_input_size).map(|i| (i * 32) ^ (i >> 1)).collect();
-    
+
     // Buffer for the C++ encoded
     let mut compressed_buffer = vec![0; input.len()];
 
