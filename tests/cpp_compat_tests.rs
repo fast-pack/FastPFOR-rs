@@ -14,9 +14,7 @@ fn test_rust_decompresses_cpp_encoded_data() {
 
     // C++ encoding
     let codec_cpp = cpp::FastPFor128Codec::new();
-    let encoded_cpp = codec_cpp
-        .encode32(&input, &mut compressed_buffer)
-        .unwrap();
+    let encoded_cpp = codec_cpp.encode32(&input, &mut compressed_buffer).unwrap();
     let compressed_len = encoded_cpp.len();
 
     // C++ decoding
