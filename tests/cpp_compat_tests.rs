@@ -1,7 +1,7 @@
 #![cfg(all(feature = "rust", feature = "cpp"))]
 
-use fastpfor::cpp::Codec32;
-use fastpfor::rust::Integer;
+use fastpfor::cpp::Codec32 as _;
+use fastpfor::rust::Integer as _;
 use fastpfor::{cpp, rust};
 use std::io::Cursor;
 
