@@ -32,7 +32,7 @@ jobs:
         uses: obi1kenobi/cargo-semver-checks-action@v2
 
   test-nightly:
-    name: Test
+    name: Nightly-specific tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -62,10 +62,7 @@ jobs:
         with:
           toolchain: ${{ steps.msrv.outputs.value }}
           components: rustfmt
-      - run: just ci-test-msrv
-        env:
-          # Ignore warnings in MSRV. Sadly, this cannot be done inside `just ci-test-msrv`
-          CI: ''
+      - run: just ci_mode=0 ci-test-msrv  # Ignore warnings in MSRV
 
   coverage:
     name: Code Coverage
