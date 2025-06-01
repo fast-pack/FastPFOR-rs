@@ -1,9 +1,10 @@
 #![cfg(all(feature = "rust", feature = "cpp"))]
 
+use std::io::Cursor;
+
 use fastpfor::cpp::Codec32 as _;
 use fastpfor::rust::Integer as _;
 use fastpfor::{cpp, rust};
-use std::io::Cursor;
 
 mod common;
 use common::{get_test_cases, test_input_sizes};

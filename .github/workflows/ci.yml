@@ -18,60 +18,90 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - uses: taiki-e/install-action@v2
-        with: { tool: 'just,cargo-llvm-cov' }
       - uses: actions/checkout@v4
         with: { submodules: recursive }
+      - if: github.event_name != 'release' && github.event_name != 'workflow_dispatch'
+        uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with: { tool: just }
       - if: github.event_name == 'release'
         name: Ensure this crate has not yet been published (on release)
         run: just check-if-published
-      - if: github.event_name != 'release' && github.event_name != 'workflow_dispatch'
-        uses: Swatinem/rust-cache@v2
-      - run: RUST_BACKTRACE=1 just -v ci-test
+      - run: just ci-test
       - name: Check semver
         uses: obi1kenobi/cargo-semver-checks-action@v2
-      - if: github.event_name != 'release' && github.event_name != 'workflow_dispatch'
-        name: Generate code coverage
-        run: just ci-coverage
-      - if: github.event_name != 'release' && github.event_name != 'workflow_dispatch'
-        name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: target/llvm-cov/codecov.info
-          fail_ci_if_error: false
-      - name: Test packaging for publish
-        run: |
-          rustup install nightly --profile minimal
-          just test-publish
 
-  msrv:
-    name: Test MSRV
+  test-nightly:
+    name: Nightly-specific tests
     runs-on: ubuntu-latest
     steps:
-      - uses: taiki-e/install-action@v2
-        with: { tool: just }
       - uses: actions/checkout@v4
         with: { submodules: recursive }
       - if: github.event_name != 'release' && github.event_name != 'workflow_dispatch'
         uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with: { tool: just }
+      - run: rustup install nightly --profile minimal
+      - run: just test-publish
+
+  test-msrv:
+    name: Test MSRV
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+      - if: github.event_name != 'release' && github.event_name != 'workflow_dispatch'
+        uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with: { tool: just }
       - name: Read MSRV
         id: msrv
-        run: echo "value=$(sed -ne 's/rust-version *= *\"\(.*\)\"/\1/p' Cargo.toml)" >> $GITHUB_OUTPUT
+        run: echo "value=$(just get-msrv)" >> $GITHUB_OUTPUT
       - name: Install MSRV Rust ${{ steps.msrv.outputs.value }}
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ steps.msrv.outputs.value }}
           components: rustfmt
-      - run: just -v ci-test-msrv
+      - run: just ci_mode=0 ci-test-msrv  # Ignore warnings in MSRV
 
-  publish:
-    if: startsWith(github.ref, 'refs/tags/')
-    name: Publish to crates.io
-    needs: [ test, msrv ]
+  coverage:
+    name: Code Coverage
+    if: github.event_name != 'release'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with: { submodules: recursive }
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with: { tool: 'just,cargo-llvm-cov' }
+      - name: Generate code coverage
+        run: just ci-coverage
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: target/llvm-cov/codecov.info
+          fail_ci_if_error: true
+
+  # This job checks if any of the previous jobs failed or were canceled.
+  # This approach also allows some jobs to be skipped if they are not needed.
+  ci-passed:
+    if: always()
+    needs: [ test, test-nightly, test-msrv, coverage ]
+    runs-on: ubuntu-latest
+    steps:
+      - if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        run: exit 1
+
+  release:
+    # Some dependencies of the `ci-passed` job might be skipped, but we still want to run if the `ci-passed` job succeeded.
+    if: always() && startsWith(github.ref, 'refs/tags/') && needs.ci-passed.result == 'success'
+    name: Publish to crates.io
+    needs: [ ci-passed ]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
       - name: Publish to crates.io
         run: cargo publish
         env:
