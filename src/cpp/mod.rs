@@ -1,3 +1,5 @@
+// Re-export CXX Exception type to simplify usage
+pub use cxx::Exception;
 use cxx::UniquePtr;
 
 #[cxx::bridge(namespace = "FastPForLib")]
@@ -84,7 +86,7 @@ pub trait Codec32: CodecWrapper {
         &self,
         input: &[u32],
         output: &'out mut [u32],
-    ) -> Result<&'out mut [u32], cxx::Exception> {
+    ) -> Result<&'out mut [u32], Exception> {
         let n = ffi::codec_encode32(self.codec(), input, output)?;
         Ok(&mut output[..n])
     }
@@ -94,7 +96,7 @@ pub trait Codec32: CodecWrapper {
         &self,
         input: &[u32],
         output: &'out mut [u32],
-    ) -> Result<&'out mut [u32], cxx::Exception> {
+    ) -> Result<&'out mut [u32], Exception> {
         let n = ffi::codec_decode32(self.codec(), input, output)?;
         Ok(&mut output[..n])
     }
@@ -107,7 +109,7 @@ pub trait Codec64: CodecWrapper {
         &self,
         input: &[u64],
         output: &'out mut [u32],
-    ) -> Result<&'out mut [u32], cxx::Exception> {
+    ) -> Result<&'out mut [u32], Exception> {
         let n = ffi::codec_encode64(self.codec(), input, output)?;
         Ok(&mut output[..n])
     }
@@ -117,7 +119,7 @@ pub trait Codec64: CodecWrapper {
         &self,
         input: &[u32],
         output: &'out mut [u64],
-    ) -> Result<&'out mut [u64], cxx::Exception> {
+    ) -> Result<&'out mut [u64], Exception> {
         let n = ffi::codec_decode64(self.codec(), input, output)?;
         Ok(&mut output[..n])
     }
