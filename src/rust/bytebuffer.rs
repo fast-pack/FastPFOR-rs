@@ -107,8 +107,8 @@ impl IntBuffer {
         // FIXME: why is self not used here??
         assert!(offset + length as usize <= src.len(), "Buffer underflow");
         let mut result: Vec<u8> = vec![];
-        for i in offset..offset + length as usize {
-            result.extend_from_slice(&src[i].to_le_bytes());
+        for value in &src[offset..offset + (length as usize)] {
+            result.extend_from_slice(&value.to_le_bytes());
         }
         result
     }

@@ -1339,9 +1339,7 @@ pub fn fast_unpack(input: &[u32], inpos: usize, output: &mut [u32], outpos: usiz
 }
 
 fn fast_unpack0(output: &mut [u32], outpos: usize) {
-    for i in outpos..outpos + 32 {
-        output[i] = 0;
-    }
+    output[outpos..outpos + 32].fill(0);
 }
 
 fn fast_unpack1(input: &[u32], inpos: usize, output: &mut [u32], outpos: usize) {
