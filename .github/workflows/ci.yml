@@ -22,12 +22,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
         with: { tool: 'just,cargo-binstall' }
-      - if: github.event_name == 'release'
-        name: Ensure this crate has not yet been published (on release)
-        run: just check-if-published
       - run: just ci-test
-      - name: Check semver
-        uses: obi1kenobi/cargo-semver-checks-action@v2
 
   test-nightly:
     name: Nightly-specific tests

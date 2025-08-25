@@ -1,4 +1,5 @@
 #![cfg(feature = "rust")]
+#![allow(clippy::needless_range_loop)]
 
 use std::io::Cursor;
 
@@ -36,7 +37,7 @@ fn saul_test() {
                     &mut output_offset,
                 )
                 .unwrap_or_else(|e| {
-                    panic!("Failed to compress with {}: {:?}", codec.name(), e);
+                    panic!("Failed to compress with {}: {e:?}", codec.name());
                 });
 
             let len = output_offset.position() as u32 - x;
@@ -51,7 +52,7 @@ fn saul_test() {
                     &mut Cursor::new(0),
                 )
                 .unwrap_or_else(|e| {
-                    panic!("Failed to uncompress with {}: {:?}", codec.name(), e);
+                    panic!("Failed to uncompress with {}: {e:?}", codec.name());
                 });
 
             assert_eq!(input, answer);
@@ -81,7 +82,7 @@ fn test_varying_length() {
                     &mut Cursor::new(0),
                 )
                 .unwrap_or_else(|e| {
-                    panic!("Failed to compress with {}: {:?}", codec.name(), e);
+                    panic!("Failed to compress with {}: {e:?}", codec.name());
                 });
             let mut answer = vec![0; l + 1024];
             codec
@@ -93,7 +94,7 @@ fn test_varying_length() {
                     &mut Cursor::new(0),
                 )
                 .unwrap_or_else(|e| {
-                    panic!("Failed to uncompress with {}: {:?}", codec.name(), e);
+                    panic!("Failed to uncompress with {}: {e:?}", codec.name());
                 });
             for k in 0..l {
                 assert_eq!(answer[k], data[k]);
@@ -122,7 +123,7 @@ fn test_varying_length_two() {
                     &mut Cursor::new(0),
                 )
                 .unwrap_or_else(|e| {
-                    panic!("Failed to compress with {}: {:?}", codec.name(), e);
+                    panic!("Failed to compress with {}: {e:?}", codec.name());
                 });
             let mut answer = vec![0; data_copy.len() + 1024];
             codec
@@ -134,7 +135,7 @@ fn test_varying_length_two() {
                     &mut Cursor::new(0),
                 )
                 .unwrap_or_else(|e| {
-                    panic!("Failed to uncompress with {}: {:?}", codec.name(), e);
+                    panic!("Failed to uncompress with {}: {e:?}", codec.name());
                 });
             for k in 1..l {
                 if answer[k] != data[k] {
