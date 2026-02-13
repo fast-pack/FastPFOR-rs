@@ -151,8 +151,12 @@ fn benchmark_decompression(c: &mut Criterion) {
 
     let patterns: Vec<(&str, fn(usize) -> Vec<u32>)> = vec![
         ("uniform_small", |size| generate_uniform_data(size, 1000)),
+        ("uniform_large", |size| {
+            generate_uniform_data(size, u32::MAX)
+        }),
         ("clustered", generate_clustered_data),
         ("sequential", generate_sequential_data),
+        ("sparse", generate_sparse_data),
     ];
 
     for &size in SIZES {
