@@ -1,4 +1,3 @@
-pub mod bytebuffer;
 mod cursor;
 mod error;
 mod integer_compression;

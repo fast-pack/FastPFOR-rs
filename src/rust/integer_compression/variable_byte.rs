@@ -1,9 +1,9 @@
 use std::io::Cursor;
 
-use crate::rust::bytebuffer::ByteBuffer;
 use crate::rust::cursor::IncrementCursor;
 use crate::rust::integer_compression::helpers::{extract7bits, extract_7bits_maskless};
 use crate::rust::{FastPForError, FastPForResult, Integer, Skippable};
+use bytes::{Buf as _, BufMut as _, BytesMut};
 
 #[derive(Debug)]
 pub struct VariableByte;
@@ -35,43 +35,40 @@ impl Skippable for VariableByte {
             // Return early if there is no data to compress
             return Ok(());
         }
-        let mut buf = ByteBuffer::new(input_length * 8);
+        let mut buf = BytesMut::with_capacity(input_length as usize * 8);
         for k in input_offset.position()..(input_offset.position() + u64::from(input_length)) {
             let val = i64::from(input[k as usize]);
             if val < (1 << 7) {
-                buf.put((val | (1 << 7)) as u8);
+                buf.put_u8((val | (1 << 7)) as u8);
             } else if val < (1 << 14) {
-                buf.put(extract7bits(0, val));
-                buf.put(extract_7bits_maskless(1, val) | (1 << 7));
+                buf.put_u8(extract7bits(0, val));
+                buf.put_u8(extract_7bits_maskless(1, val) | (1 << 7));
             } else if val < (1 << 21) {
-                buf.put(extract7bits(0, val));
-                buf.put(extract7bits(1, val));
-                buf.put(extract_7bits_maskless(2, val) | (1 << 7));
+                buf.put_u8(extract7bits(0, val));
+                buf.put_u8(extract7bits(1, val));
+                buf.put_u8(extract_7bits_maskless(2, val) | (1 << 7));
             } else if val < (1 << 28) {
-                buf.put(extract7bits(0, val));
-                buf.put(extract7bits(1, val));
-                buf.put(extract7bits(2, val));
-                buf.put(extract_7bits_maskless(3, val) | (1 << 7));
+                buf.put_u8(extract7bits(0, val));
+                buf.put_u8(extract7bits(1, val));
+                buf.put_u8(extract7bits(2, val));
+                buf.put_u8(extract_7bits_maskless(3, val) | (1 << 7));
             } else {
-                buf.put(extract7bits(0, val));
-                buf.put(extract7bits(1, val));
-                buf.put(extract7bits(2, val));
-                buf.put(extract7bits(3, val));
-                buf.put(extract_7bits_maskless(4, val) | (1 << 7));
+                buf.put_u8(extract7bits(0, val));
+                buf.put_u8(extract7bits(1, val));
+                buf.put_u8(extract7bits(2, val));
+                buf.put_u8(extract7bits(3, val));
+                buf.put_u8(extract_7bits_maskless(4, val) | (1 << 7));
             }
         }
-        while buf.position() % 4 != 0 {
-            buf.put(0);
+        while buf.len() % 4 != 0 {
+            buf.put_u8(0);
         }
-        let length = buf.position();
-        buf.flip();
-        let ibuf = buf.as_int_buffer();
-        ibuf.get(
-            output,
-            output_offset.position() as usize,
-            (length / 4) as usize,
-        );
-        output_offset.add(length / 4);
+        let length = buf.len();
+        let output_position = output_offset.position() as usize;
+        for it in output.iter_mut().skip(output_position).take(length / 4) {
+            *it = buf.get_u32_le();
+        }
+        output_offset.add(length as u32 / 4);
         input_offset.add(input_length);
 
         Ok(())

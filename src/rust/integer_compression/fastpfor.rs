@@ -2,23 +2,46 @@ use std::io::Cursor;
 
 use crate::rust::cursor::IncrementCursor;
 use crate::rust::integer_compression::{bitpacking, helpers};
-use crate::rust::{bytebuffer, FastPForResult, Integer, Skippable};
+use crate::rust::{FastPForResult, Integer, Skippable};
+use bytes::{Buf as _, BufMut as _, BytesMut};
 
+/// Block size constant for 256 integers per block
 pub const BLOCK_SIZE_256: u32 = 256;
+
+/// Block size constant for 128 integers per block
 pub const BLOCK_SIZE_128: u32 = 128;
+
+/// Overhead cost (in bits) for storing each exception's position in the block
 const OVERHEAD_OF_EACH_EXCEPT: u32 = 8;
+
+/// Default page size in number of integers
 pub const DEFAULT_PAGE_SIZE: u32 = 65536;
 
+/// Fast Patched Frame-of-Reference ([`FastPFOR`](https://github.com/lemire/FastPFor)) integer compression codec.
+///
+/// It is useful for compressing sequences of unsigned 32-bit integers.
+///
+/// The algorithm works by
+/// - dividing data into blocks,
+/// - determining the optimal number of bits needed for most values, and
+/// - handling exceptions (values requiring more bits) separately
 #[derive(Debug)]
 pub struct FastPFOR {
+    /// Exception values indexed by bit width difference
     pub data_to_be_packed: [Vec<u32>; 33],
-    pub bytes_container: bytebuffer::ByteBuffer,
+    /// Metadata buffer for encoding/decoding
+    pub bytes_container: BytesMut,
+    /// Maximum integers per page
     pub page_size: u32,
+    /// Position trackers for exception arrays
     pub data_pointers: [usize; 33],
+    /// Frequency count for each bit width:
+    /// freqs[i] = count of values needing exactly i bits
     pub freqs: [u32; 33],
     pub optimal_bits: u32,
     pub exception_count: u32,
     pub max_bits: u32,
+    /// Integers per block (128 or 256)
     pub block_size: u32,
 }
 
@@ -117,11 +140,16 @@ impl Default for FastPFOR {
 }
 
 impl FastPFOR {
+    /// Creates codec with specified page and block sizes.
+    ///
+    /// Pre-allocates buffers for metadata and exception storage.
     pub fn new(page_size: u32, block_size: u32) -> FastPFOR {
         FastPFOR {
             page_size,
             block_size,
-            bytes_container: bytebuffer::ByteBuffer::new(3 * page_size / block_size + page_size),
+            bytes_container: BytesMut::with_capacity(
+                (3 * page_size / block_size + page_size) as usize,
+            ),
             data_to_be_packed: std::array::from_fn(|_| vec![0; page_size as usize / 32 * 4]),
             data_pointers: [0; 33],
             freqs: [0; 33],
@@ -131,6 +159,17 @@ impl FastPFOR {
         }
     }
 
+    /// Encodes a page using optimal bit width per block.
+    ///
+    /// For each block:
+    /// - Determines best bit width, bitpacks regular values,
+    /// - Stores exceptions with positions.
+    /// - Writes header, packed data, metadata bytes, and exception values.
+    ///
+    /// # Arguments
+    /// * `thissize` - Must be multiple of `block_size`
+    /// * `input_offset` - Advanced by `thissize`
+    /// * `output_offset` - Advanced by compressed size
     fn encode_page(
         &mut self,
         input: &[u32],
@@ -152,10 +191,10 @@ impl FastPFOR {
         while tmp_input_offset <= final_input_offset {
             self.best_b_from_data(input, tmp_input_offset);
             let tmp_best_b = self.optimal_bits;
-            self.bytes_container.put(self.optimal_bits as u8);
-            self.bytes_container.put(self.exception_count as u8);
+            self.bytes_container.put_u8(self.optimal_bits as u8);
+            self.bytes_container.put_u8(self.exception_count as u8);
             if self.exception_count > 0 {
-                self.bytes_container.put(self.max_bits as u8);
+                self.bytes_container.put_u8(self.max_bits as u8);
                 let index = self.max_bits - self.optimal_bits;
                 if self.data_pointers[index as usize] + self.exception_count as usize
                     >= self.data_to_be_packed[index as usize].len()
@@ -168,7 +207,7 @@ impl FastPFOR {
                 }
                 for k in 0..self.block_size {
                     if (input[(k + tmp_input_offset) as usize] >> self.optimal_bits) != 0 {
-                        self.bytes_container.put(k as u8);
+                        self.bytes_container.put_u8(k as u8);
                         self.data_to_be_packed[index as usize]
                             [self.data_pointers[index as usize]] =
                             input[(k + tmp_input_offset) as usize] >> tmp_best_b;
@@ -190,22 +229,23 @@ impl FastPFOR {
         }
         input_offset.set_position(u64::from(tmp_input_offset));
         output[header_pos] = tmp_output_offset - header_pos as u32;
-        let byte_size = self.bytes_container.position();
-        while (self.bytes_container.position() & 3) != 0 {
-            self.bytes_container.put(0);
+        let byte_size = self.bytes_container.len();
+        while (self.bytes_container.len() & 3) != 0 {
+            self.bytes_container.put_u8(0);
         }
         // Output should have 3 position as 4
-        output[tmp_output_offset as usize] = byte_size;
+        output[tmp_output_offset as usize] = byte_size as u32;
         tmp_output_offset += 1;
-        let how_many_ints = self.bytes_container.position() / 4;
-        self.bytes_container.flip();
+        let how_many_ints = self.bytes_container.len() / 4;
 
-        self.bytes_container.as_int_buffer().get(
-            output,
-            tmp_output_offset as usize,
-            how_many_ints as usize,
-        );
-        tmp_output_offset += how_many_ints;
+        for it in output
+            .iter_mut()
+            .skip(tmp_output_offset as usize)
+            .take(how_many_ints)
+        {
+            *it = self.bytes_container.get_u32_le();
+        }
+        tmp_output_offset += how_many_ints as u32;
         let mut bitmap = 0;
         for k in 2..=32 {
             if self.data_pointers[k] != 0 {
@@ -240,6 +280,11 @@ impl FastPFOR {
         output_offset.set_position(u64::from(tmp_output_offset));
     }
 
+    /// Computes optimal bit width minimizing total storage cost.
+    ///
+    /// Analyzes frequency distribution to balance regular value bits against exception overhead.
+    ///
+    /// Results stored in `bestbbestcexceptmaxb`
     fn best_b_from_data(&mut self, input: &[u32], pos: u32) {
         self.freqs.fill(0);
         let k_end = std::cmp::min(pos + self.block_size, input.len() as u32);
@@ -277,6 +322,15 @@ impl FastPFOR {
         }
     }
 
+    /// Decodes a compressed page.
+    ///
+    /// Reads header to locate exception data, loads exceptions by bit width,
+    /// unpacks regular values per block, patches in exceptions by position.
+    ///
+    /// # Arguments
+    /// * `thissize` - Expected decompressed integer count
+    /// * `input_offset` - Advanced by bytes read
+    /// * `output_offset` - Advanced by `thissize`
     fn decode_page(
         &mut self,
         input: &[u32],
@@ -293,10 +347,9 @@ impl FastPFOR {
         inexcept += 1;
         self.bytes_container.clear();
         let length = bytesize.div_ceil(4);
-        self.bytes_container.buffer =
-            self.bytes_container
-                .as_int_buffer()
-                .put(input, inexcept as usize, length);
+        for i in inexcept..inexcept + length {
+            self.bytes_container.put_u32_le(input[i as usize]);
+        }
         inexcept += length;
 
         let bitmap = input[inexcept as usize];
@@ -355,8 +408,8 @@ impl FastPFOR {
 
         let run_end = thissize / self.block_size;
         for _ in 0..run_end {
-            let b = u32::from(self.bytes_container.get());
-            let cexcept = self.bytes_container.get();
+            let b = u32::from(self.bytes_container.get_u8());
+            let cexcept = self.bytes_container.get_u8();
             for k in (0..self.block_size).step_by(32) {
                 bitpacking::fast_unpack(
                     input,
@@ -368,16 +421,16 @@ impl FastPFOR {
                 tmp_input_offset += b;
             }
             if cexcept > 0 {
-                let maxbits = u32::from(self.bytes_container.get());
+                let maxbits = u32::from(self.bytes_container.get_u8());
                 let index = maxbits - b;
                 if index == 1 {
                     for _ in 0..cexcept {
-                        let pos = self.bytes_container.get();
+                        let pos = self.bytes_container.get_u8();
                         output[pos as usize + tmp_output_offset as usize] |= 1 << b;
                     }
                 } else {
                     for _ in 0..cexcept {
-                        let pos = self.bytes_container.get();
+                        let pos = self.bytes_container.get_u8();
                         let except_value = self.data_to_be_packed[index as usize]
                             [self.data_pointers[index as usize]];
                         output[pos as usize + tmp_output_offset as usize] |= except_value << b;
