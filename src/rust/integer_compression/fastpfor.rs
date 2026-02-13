@@ -11,11 +11,11 @@ pub const DEFAULT_PAGE_SIZE: u32 = 65536;
 
 #[derive(Debug)]
 pub struct FastPFOR {
-    pub data_to_be_packed: Vec<Vec<u32>>,
+    pub data_to_be_packed: [Vec<u32>; 33],
     pub bytes_container: bytebuffer::ByteBuffer,
     pub page_size: u32,
-    pub data_pointers: Vec<usize>,
-    pub freqs: Vec<u32>,
+    pub data_pointers: [usize; 33],
+    pub freqs: [u32; 33],
     pub bestbbestcexceptmaxb: [u32; 3],
     pub block_size: u32,
 }
@@ -120,9 +120,9 @@ impl FastPFOR {
             page_size,
             block_size,
             bytes_container: bytebuffer::ByteBuffer::new(3 * page_size / block_size + page_size),
-            data_to_be_packed: vec![vec![0; page_size as usize / 32 * 4]; 33],
-            data_pointers: vec![0; 33],
-            freqs: vec![0; 33],
+            data_to_be_packed: std::array::from_fn(|_| vec![0; page_size as usize / 32 * 4]),
+            data_pointers: [0; 33],
+            freqs: [0; 33],
             bestbbestcexceptmaxb: [0; 3],
         }
     }
