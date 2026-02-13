@@ -81,7 +81,7 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-binstall
-      - run: cargo binstall cargo-fuzz@0.13.1 # Pinned to avoid breakage.
+      - run: cargo binstall -y cargo-fuzz@0.13.1 # Pinned to avoid breakage.
 
       # Build and then run the fuzz target.
       #  --target x86_64-unknown-linux-gnu is necessary to not default to musl, which is not supported by cargo-fuzz.
