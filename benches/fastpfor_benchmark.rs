@@ -1,3 +1,4 @@
+use core::ops::Range;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use fastpfor::rust::{FastPFOR, Integer, BLOCK_SIZE_128, BLOCK_SIZE_256, DEFAULT_PAGE_SIZE};
 use rand::rngs::StdRng;
@@ -8,15 +9,27 @@ use std::io::Cursor;
 const SIZES: &[usize; 2] = &[1024, 4096];
 const SEED: u64 = 456;
 
+type DataGeneratorFn = fn(usize) -> Vec<u32>;
+
 /// Generate uniformly distributed random data
-fn generate_uniform_data(size: usize, max_value: u32) -> Vec<u32> {
-    let mut rng = StdRng::seed_from_u64(black_box(SEED));
-    (0..size).map(|_| rng.random_range(0..max_value)).collect()
+fn generate_uniform_data_from_range(size: usize, value_range: Range<u32>) -> Vec<u32> {
+    let mut rng = StdRng::seed_from_u64(SEED);
+    (0..size)
+        .map(|_| rng.random_range(value_range.clone()))
+        .collect()
+}
+
+fn generate_uniform_data_small_value_distribution(size: usize) -> Vec<u32> {
+    generate_uniform_data_from_range(size, 0..1000)
+}
+
+fn generate_uniform_data_large_value_distribution(size: usize) -> Vec<u32> {
+    generate_uniform_data_from_range(size, 0..u32::MAX)
 }
 
 /// Generate clustered data - values tend to cluster around changing base values
 fn generate_clustered_data(size: usize) -> Vec<u32> {
-    let mut rng = StdRng::seed_from_u64(black_box(SEED));
+    let mut rng = StdRng::seed_from_u64(SEED);
     let mut data = Vec::with_capacity(size);
     let mut base = 0u32;
 
@@ -37,7 +50,7 @@ fn generate_sequential_data(size: usize) -> Vec<u32> {
 
 /// Generate sparse data - mostly zeros with occasional random values
 fn generate_sparse_data(size: usize) -> Vec<u32> {
-    let mut rng = StdRng::seed_from_u64(black_box(SEED));
+    let mut rng = StdRng::seed_from_u64(SEED);
     (0..size)
         .map(|_| {
             if rng.random_bool(0.9) {
@@ -50,8 +63,8 @@ fn generate_sparse_data(size: usize) -> Vec<u32> {
 }
 
 /// Generate constant data - best case for compression
-fn generate_constant_data(size: usize, value: u32) -> Vec<u32> {
-    vec![value; size]
+fn generate_constant_data(size: usize) -> Vec<u32> {
+    vec![SEED as u32; size]
 }
 
 /// Generate data with powers of two
@@ -122,18 +135,22 @@ fn decompress_data(codec: &mut FastPFOR, compressed: &[u32], original_size: usiz
 fn benchmark_compression(c: &mut Criterion) {
     let mut group = c.benchmark_group("compression");
 
-    let patterns: Vec<(&str, fn(usize) -> Vec<u32>)> = vec![
-        ("uniform_small", |size| generate_uniform_data(size, 1000)),
-        ("uniform_large", |size| {
-            generate_uniform_data(size, u32::MAX)
-        }),
+    let patterns: &[(&str, DataGeneratorFn)] = &[
+        (
+            "uniform_small_value_distribution",
+            generate_uniform_data_small_value_distribution,
+        ),
+        (
+            "uniform_large_value_distribution",
+            generate_uniform_data_large_value_distribution,
+        ),
         ("clustered", generate_clustered_data),
         ("sequential", generate_sequential_data),
         ("sparse", generate_sparse_data),
     ];
 
     for &size in SIZES {
-        for (name, generator) in &patterns {
+        for (name, generator) in patterns {
             let data = generator(size);
             group.throughput(Throughput::Elements(size as u64));
             group.bench_with_input(BenchmarkId::new(*name, size), &data, |b, data| {
@@ -151,18 +168,22 @@ fn benchmark_compression(c: &mut Criterion) {
 fn benchmark_decompression(c: &mut Criterion) {
     let mut group = c.benchmark_group("decompression");
 
-    let patterns: Vec<(&str, fn(usize) -> Vec<u32>)> = vec![
-        ("uniform_small", |size| generate_uniform_data(size, 1000)),
-        ("uniform_large", |size| {
-            generate_uniform_data(size, u32::MAX)
-        }),
+    let patterns: &[(&str, DataGeneratorFn)] = &[
+        (
+            "uniform_small_value_distribution",
+            generate_uniform_data_small_value_distribution,
+        ),
+        (
+            "uniform_large_value_distribution",
+            generate_uniform_data_large_value_distribution,
+        ),
         ("clustered", generate_clustered_data),
         ("sequential", generate_sequential_data),
         ("sparse", generate_sparse_data),
     ];
 
     for &size in SIZES {
-        for (name, generator) in &patterns {
+        for (name, generator) in patterns {
             let data = generator(size);
             let compressed = prepare_compressed_data(&data, BLOCK_SIZE_128);
 
@@ -187,7 +208,7 @@ fn benchmark_roundtrip(c: &mut Criterion) {
     let mut group = c.benchmark_group("roundtrip");
 
     for &size in SIZES {
-        let data = generate_uniform_data(size, 1000);
+        let data = generate_uniform_data_small_value_distribution(size);
 
         group.throughput(Throughput::Elements(size as u64));
         group.bench_with_input(
@@ -239,7 +260,7 @@ fn benchmark_block_sizes(c: &mut Criterion) {
     let mut group = c.benchmark_group("block_sizes");
 
     let size = *SIZES.last().unwrap();
-    let data = generate_uniform_data(size, 1000);
+    let data = generate_uniform_data_small_value_distribution(size);
 
     let block_sizes = [BLOCK_SIZE_128, BLOCK_SIZE_256];
 
@@ -275,22 +296,32 @@ fn benchmark_compression_ratio(c: &mut Criterion) {
     group.sample_size(20); // Fewer samples since we're measuring ratio, not just speed
 
     let size = *SIZES.last().unwrap();
-    let patterns = vec![
-        ("uniform_small", generate_uniform_data(size, 100)),
-        ("uniform_medium", generate_uniform_data(size, 10000)),
-        ("uniform_large", generate_uniform_data(size, u32::MAX)),
-        ("clustered", generate_clustered_data(size)),
-        ("sequential", generate_sequential_data(size)),
-        ("sparse", generate_sparse_data(size)),
-        ("constant", generate_constant_data(size, 42)),
-        ("geometric", generate_geometric_data(size)),
+    let patterns: &[(&str, DataGeneratorFn)] = &[
+        (
+            "uniform_small_distribution",
+            generate_uniform_data_small_value_distribution,
+        ),
+        (
+            "uniform_large_distribution",
+            generate_uniform_data_large_value_distribution,
+        ),
+        ("clustered", generate_clustered_data),
+        ("sequential", generate_sequential_data),
+        ("sparse", generate_sparse_data),
+        ("constant", generate_constant_data),
+        ("geometric", generate_geometric_data),
     ];
 
-    for (name, data) in patterns {
-        group.bench_function(name, |b| {
+    for (name, data_fn) in patterns {
+        let data = data_fn(size);
+        group.bench_function(*name, |b| {
             b.iter(|| {
                 let mut codec = FastPFOR::default();
                 let compressed_size = compress_data(&mut codec, black_box(&data));
+                #[expect(
+                    clippy::cast_precision_loss,
+                    reason = "Loss of precision is acceptable for compression ratio calculation"
+                )]
                 let ratio = data.len() as f64 / compressed_size as f64;
                 black_box(ratio)
             });
