@@ -10,11 +10,7 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 arbitrary = { version = "1", features = ["derive"] }
-fastpfor = { path = "..", default-features = false }
-
-[features]
-cpp = ["fastpfor/cpp"]
-rust = ["fastpfor/rust"]
+fastpfor = { path = "..", features = ["cpp", "rust"] }
 
 # Prevent this from interfering with workspaces
 [workspace]
@@ -22,14 +18,12 @@ members = ["."]
 
 [[bin]]
 name = "fastpfor_rust"
-required-features = ["rust"]
 path = "fuzz_targets/fastpfor_rust.rs"
 test = false
 doc = false
 
 [[bin]]
 name = "fastpfor_cpp"
-required-features = ["cpp"]
 path = "fuzz_targets/fastpfor_cpp.rs"
 test = false
 doc = false
