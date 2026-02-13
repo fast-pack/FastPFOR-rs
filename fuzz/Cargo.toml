@@ -1,0 +1,23 @@
+[package]
+name = "fastpfor-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+fastpfor = { path = "..", features = ["rust"], default-features = false }
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "fastpfor_roundtrip"
+path = "fuzz_targets/fastpfor_roundtrip.rs"
+test = false
+doc = false
