@@ -2,6 +2,7 @@
 #![allow(clippy::needless_range_loop)]
 
 use std::io::Cursor;
+use std::num::NonZeroU32;
 
 use fastpfor::rust::{
     fast_pack, fast_unpack, Composition, FastPFOR, Integer, VariableByte, BLOCK_SIZE_128,
@@ -381,10 +382,10 @@ fn test_random_numbers() {
 #[test]
 fn test_fastpfor_headless_compress_unfit_pagesize() {
     // The input size is a multiple of 128 but does not fit the page size
-    let test_input_size = 512 + BLOCK_SIZE_128;
-    let page_size = 512;
+    let test_input_size = BLOCK_SIZE_128.checked_add(512).unwrap();
+    let page_size = NonZeroU32::new(512).unwrap();
 
-    let input: Vec<u32> = (0..test_input_size).collect();
+    let input: Vec<u32> = (0..test_input_size.get()).collect();
     let mut output: Vec<u32> = vec![0; input.len()];
     let mut decoded: Vec<u32> = vec![0; input.len()];
     let mut input_offset = Cursor::new(0u32);
@@ -419,8 +420,8 @@ fn test_fastpfor_headless_compress_unfit_pagesize() {
 
 #[test]
 fn test_exception_value_vector_resizes() {
-    let page_size = 512;
-    let test_input_size = page_size * 2;
+    let page_size = NonZeroU32::new(512).unwrap();
+    let test_input_size = page_size.get() * 2;
 
     // every even index value is large which will trigger exception buffer to be resize
     let input: Vec<u32> = (0..test_input_size)

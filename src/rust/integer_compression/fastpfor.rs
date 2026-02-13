@@ -453,7 +453,7 @@ mod tests {
     fn fastpfor_test() {
         let mut codec1 = FastPFOR::default();
         let mut codec2 = FastPFOR::default();
-        let mut data = vec![0u32; BLOCK_SIZE_256 as usize];
+        let mut data = vec![0u32; BLOCK_SIZE_256.get() as usize];
         data[126] = -1i32 as u32;
         let mut out_buf = vec![0; data.len() * 4];
         let mut input_offset = Cursor::new(0);
@@ -483,7 +483,9 @@ mod tests {
             .unwrap();
         let answer = out_buf_uncomp[..output_offset.position() as usize].to_vec();
 
-        for k in 0..BLOCK_SIZE_256 {
+        assert_eq!(answer.len(), BLOCK_SIZE_256.get() as usize);
+        assert_eq!(data.len(), BLOCK_SIZE_256.get() as usize);
+        for k in 0..BLOCK_SIZE_256.get() {
             assert_eq!(answer[k as usize], data[k as usize], "bug in {k}");
         }
     }
@@ -492,10 +494,7 @@ mod tests {
     fn fastpfor_test_128() {
         let mut codec1 = FastPFOR::new(DEFAULT_PAGE_SIZE, BLOCK_SIZE_128);
         let mut codec2 = FastPFOR::new(DEFAULT_PAGE_SIZE, BLOCK_SIZE_128);
-        let mut data = vec![0; BLOCK_SIZE_128 as usize];
-        for i in 0..BLOCK_SIZE_128 {
-            data[i as usize] = 0;
-        }
+        let mut data = vec![0; BLOCK_SIZE_128.get() as usize];
         data[126] = -1i32 as u32;
         let mut out_buf = vec![0; data.len() * 4];
         let mut input_offset = Cursor::new(0);
@@ -525,7 +524,9 @@ mod tests {
             .unwrap();
         let answer = out_buf_uncomp[..output_offset.position() as usize].to_vec();
 
-        for k in 0..BLOCK_SIZE_128 {
+        assert_eq!(answer.len(), BLOCK_SIZE_128.get() as usize);
+        assert_eq!(data.len(), BLOCK_SIZE_128.get() as usize);
+        for k in 0..BLOCK_SIZE_128.get() {
             assert_eq!(answer[k as usize], data[k as usize], "bug in {k}");
         }
     }
