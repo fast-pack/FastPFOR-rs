@@ -8,7 +8,7 @@ pub type FastPForResult<T> = Result<T, FastPForError>;
 #[derive(Error, Debug)]
 pub enum FastPForError {
     /// Unsupported operation
-    #[error("Unsupported operation: Unimplemented")]
+    #[error("Unsupported operation")]
     Unimplemented,
 
     /// Not enough data in the input buffer
