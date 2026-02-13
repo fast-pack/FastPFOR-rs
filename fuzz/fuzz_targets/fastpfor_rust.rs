@@ -1,9 +1,10 @@
 #![no_main]
 
-use fastpfor::rust::{DEFAULT_PAGE_SIZE, FastPFOR, Integer};
-use libfuzzer_sys::fuzz_target;
 use std::io::Cursor;
 use std::num::NonZeroU32;
+
+use fastpfor::rust::{DEFAULT_PAGE_SIZE, FastPFOR, Integer};
+use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: (u32, Vec<u32>)| {
     let (block_size, input_data) = data;

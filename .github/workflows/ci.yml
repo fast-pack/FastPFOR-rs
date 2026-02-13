@@ -92,7 +92,7 @@ jobs:
         with:
           name: fuzzing-artifacts-${{ matrix.fuzz_target }}-${{ github.sha }}
           path: fuzz/artifacts
-yxx
+
   coverage:
     name: Code Coverage
     if: github.event_name != 'release'
