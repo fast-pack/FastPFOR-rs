@@ -1,17 +1,12 @@
 #![no_main]
 
 use std::io::Cursor;
-use std::num::NonZeroU32;
 
-use fastpfor::rust::{DEFAULT_PAGE_SIZE, FastPFOR};
+use fastpfor::rust::{BLOCK_SIZE_256, DEFAULT_PAGE_SIZE, FastPFOR, Integer};
 use libfuzzer_sys::fuzz_target;
 
-fuzz_target!(|data: (u32, Vec<u32>)| {
-    let (block_size, input_data) = data;
-
-    let Ok(block_size) = NonZeroU32::try_from(block_size) else {
-        return;
-    };
+fuzz_target!(|input_data: Vec<u32>| {
+    let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, BLOCK_SIZE_256);
 
     // Limit input size to avoid timeouts
     let input_data: Vec<u32> = input_data.into_iter().take(10_000).collect();
@@ -21,7 +16,7 @@ fuzz_target!(|data: (u32, Vec<u32>)| {
 
     // Compress the data
     let mut output_offset = Cursor::new(0);
-    FastPFOR::new(DEFAULT_PAGE_SIZE, block_size)
+    codec
         .compress(
             &input_data,
             input_data.len() as u32,
@@ -39,7 +34,7 @@ fuzz_target!(|data: (u32, Vec<u32>)| {
     let mut decompressed = vec![0u32; input_data.len()];
     let mut output_offset = Cursor::new(0);
 
-    FastPFOR::new(DEFAULT_PAGE_SIZE, block_size)
+    codec
         .uncompress(
             &compressed,
             compressed_size,
