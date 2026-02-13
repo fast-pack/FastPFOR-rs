@@ -1,9 +1,9 @@
 use std::io::Cursor;
 
-use crate::rust::bytebuffer::ByteBuffer;
 use crate::rust::cursor::IncrementCursor;
 use crate::rust::integer_compression::helpers::{extract7bits, extract_7bits_maskless};
 use crate::rust::{FastPForError, FastPForResult, Integer, Skippable};
+use bytes::{Buf as _, BufMut as _, BytesMut};
 
 #[derive(Debug)]
 pub struct VariableByte;
@@ -35,7 +35,7 @@ impl Skippable for VariableByte {
             // Return early if there is no data to compress
             return Ok(());
         }
-        let mut buf = ByteBuffer::new(input_length * 8);
+        let mut buf = BytesMut::with_capacity(input_length as usize * 8);
         for k in input_offset.position()..(input_offset.position() + u64::from(input_length)) {
             let val = i64::from(input[k as usize]);
             if val < (1 << 7) {

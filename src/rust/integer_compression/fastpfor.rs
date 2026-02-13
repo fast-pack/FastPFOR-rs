@@ -2,7 +2,8 @@ use std::io::Cursor;
 
 use crate::rust::cursor::IncrementCursor;
 use crate::rust::integer_compression::{bitpacking, helpers};
-use crate::rust::{bytebuffer, FastPForResult, Integer, Skippable};
+use crate::rust::{FastPForResult, Integer, Skippable};
+use bytes::{Buf as _, BufMut as _, BytesMut};
 
 /// Block size constant for 256 integers per block
 pub const BLOCK_SIZE_256: u32 = 256;
@@ -29,7 +30,7 @@ pub struct FastPFOR {
     /// Exception values indexed by bit width difference
     pub data_to_be_packed: Vec<Vec<u32>>,
     /// Metadata buffer for encoding/decoding
-    pub bytes_container: bytebuffer::ByteBuffer,
+    pub bytes_container: BytesMut,
     /// Maximum integers per page
     pub page_size: u32,
     /// Position trackers for exception arrays
@@ -146,7 +147,9 @@ impl FastPFOR {
         FastPFOR {
             page_size,
             block_size,
-            bytes_container: bytebuffer::ByteBuffer::new(3 * page_size / block_size + page_size),
+            bytes_container: BytesMut::with_capacity(
+                (3 * page_size / block_size + page_size) as usize,
+            ),
             data_to_be_packed: vec![vec![0; page_size as usize / 32 * 4]; 33],
             data_pointers: vec![0; 33],
             freqs: vec![0; 33],
