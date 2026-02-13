@@ -79,8 +79,8 @@ fn compress_data(codec: &mut FastPFOR, data: &[u32]) -> usize {
 }
 
 /// Helper function to compress data and return compressed buffer
-fn prepare_compressed_data(data: &[u32]) -> Vec<u32> {
-    let mut codec = FastPFOR::default();
+fn prepare_compressed_data(data: &[u32], block_size: u32) -> Vec<u32> {
+    let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, block_size);
     let mut compressed = vec![0u32; data.len() * 2];
     let mut input_offset = Cursor::new(0);
     let mut output_offset = Cursor::new(0);
@@ -164,7 +164,7 @@ fn benchmark_decompression(c: &mut Criterion) {
     for &size in SIZES {
         for (name, generator) in &patterns {
             let data = generator(size);
-            let compressed = prepare_compressed_data(&data);
+            let compressed = prepare_compressed_data(&data, BLOCK_SIZE_128);
 
             group.throughput(Throughput::Elements(size as u64));
             group.bench_with_input(
@@ -241,28 +241,28 @@ fn benchmark_block_sizes(c: &mut Criterion) {
     let size = *SIZES.last().unwrap();
     let data = generate_uniform_data(size, 1000);
 
-    let block_sizes = vec![BLOCK_SIZE_128, BLOCK_SIZE_256];
+    let block_sizes = [BLOCK_SIZE_128, BLOCK_SIZE_256];
 
-    for block_size in &block_sizes {
+    for block_size in block_sizes {
         group.throughput(Throughput::Elements(size as u64));
         group.bench_function(format!("compress_{block_size}"), |b| {
             b.iter(|| {
-                let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, *block_size);
+                let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, block_size);
                 black_box(compress_data(&mut codec, black_box(&data)))
             });
         });
     }
 
     // Also benchmark decompression performance for each block size
-    for block_size in &block_sizes {
+    for block_size in block_sizes {
         // Pre-compress the data once for this block size so the decompression
         // benchmark measures only decompression work inside `b.iter`.
-        let compressed = prepare_compressed_data(&data);
+        let compressed = prepare_compressed_data(&data, block_size);
 
         group.throughput(Throughput::Elements(size as u64));
         group.bench_function(format!("decompress_{block_size}"), |b| {
             b.iter(|| {
-                let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, *block_size);
+                let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, block_size);
                 black_box(decompress_data(&mut codec, black_box(&compressed), size));
             });
         });
