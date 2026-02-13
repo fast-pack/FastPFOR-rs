@@ -128,9 +128,6 @@ impl FastPFOR {
             optimal_bits: 0,
             exception_count: 0,
             max_bits: 0,
-            data_to_be_packed: vec![vec![0; page_size as usize / 32 * 4]; 33],
-            data_pointers: vec![0; 33],
-            freqs: vec![0; 33],
         }
     }
 
