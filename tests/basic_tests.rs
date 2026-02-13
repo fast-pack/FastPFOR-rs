@@ -7,7 +7,7 @@ use fastpfor::rust::{
     fast_pack, fast_unpack, Composition, FastPFOR, Integer, VariableByte, BLOCK_SIZE_128,
     DEFAULT_PAGE_SIZE,
 };
-use rand::Rng;
+use rand::RngExt as _;
 
 mod common;
 
@@ -333,7 +333,7 @@ fn test_increasing_sequence() {
 #[test]
 fn test_random_numbers() {
     use rand::rngs::StdRng;
-    use rand::{Rng, SeedableRng};
+    use rand::SeedableRng;
 
     let n = 65536;
     let mut rng = StdRng::seed_from_u64(123456);
