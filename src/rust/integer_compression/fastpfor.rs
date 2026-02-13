@@ -36,7 +36,7 @@ impl Skippable for FastPFOR {
                 std::cmp::min(self.page_size, final_inpos - input_offset.position() as u32);
             self.encode_page(input, this_size, input_offset, output, output_offset);
         }
-        FastPForResult::Ok(())
+        Ok(())
     }
 
     #[expect(unused_variables)]
@@ -51,7 +51,7 @@ impl Skippable for FastPFOR {
     ) -> FastPForResult<()> {
         if inlength == 0 && self.block_size == BLOCK_SIZE_128 {
             // Return early if there is no data to compress and block size is 128
-            return FastPForResult::Ok(());
+            return Ok(());
         }
         let mynvalue = helpers::greatest_multiple(inlength, self.block_size);
         let final_out = output_offset.position() as u32 + mynvalue;
@@ -60,7 +60,7 @@ impl Skippable for FastPFOR {
                 std::cmp::min(self.page_size, final_out - output_offset.position() as u32);
             self.decode_page(input, input_offset, output, output_offset, this_size);
         }
-        FastPForResult::Ok(())
+        Ok(())
     }
 }
 
@@ -76,7 +76,7 @@ impl Integer<u32> for FastPFOR {
         let inlength = helpers::greatest_multiple(input_length, self.block_size);
         if inlength == 0 {
             // Return early if there is no data to compress
-            return FastPForResult::Ok(());
+            return Ok(());
         }
         output[output_offset.position() as usize] = inlength;
         output_offset.increment();
@@ -93,7 +93,7 @@ impl Integer<u32> for FastPFOR {
     ) -> FastPForResult<()> {
         if input_length == 0 {
             // Return early if there is no data to compress
-            return FastPForResult::Ok(());
+            return Ok(());
         }
         let outlength = input[input_offset.position() as usize];
         input_offset.increment();

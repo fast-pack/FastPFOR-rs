@@ -32,10 +32,10 @@ impl Skippable for JustCopy {
         let end_output = start_output + input_length as usize;
 
         if end_input > input.len() {
-            return FastPForResult::Err(FastPForError::NotEnoughData);
+            return Err(FastPForError::NotEnoughData);
         }
         if end_output > output.len() {
-            return FastPForResult::Err(FastPForError::OutputBufferTooSmall);
+            return Err(FastPForError::OutputBufferTooSmall);
         }
 
         output[start_output..end_output].copy_from_slice(&input[start_input..end_input]);
@@ -43,7 +43,7 @@ impl Skippable for JustCopy {
         input_offset.set_position(end_input as u64);
         output_offset.set_position(end_output as u64);
 
-        FastPForResult::Ok(())
+        Ok(())
     }
 
     fn headless_uncompress(
@@ -61,17 +61,17 @@ impl Skippable for JustCopy {
         let end_output = start_output + num as usize;
 
         if end_input > input.len() {
-            return FastPForResult::Err(FastPForError::NotEnoughData);
+            return Err(FastPForError::NotEnoughData);
         }
         if end_output > output.len() {
-            return FastPForResult::Err(FastPForError::OutputBufferTooSmall);
+            return Err(FastPForError::OutputBufferTooSmall);
         }
 
         output[start_output..end_output].copy_from_slice(&input[start_input..end_input]);
 
         input_offset.set_position(end_input as u64);
         output_offset.set_position(end_output as u64);
-        FastPForResult::Ok(())
+        Ok(())
     }
 }
 
@@ -102,10 +102,10 @@ impl Integer<u32> for JustCopy {
 
         // Ensure we don't exceed the slice bounds
         if end_input > input.len() {
-            return FastPForResult::Err(FastPForError::NotEnoughData);
+            return Err(FastPForError::NotEnoughData);
         }
         if end_output > output.len() {
-            return FastPForResult::Err(FastPForError::OutputBufferTooSmall);
+            return Err(FastPForError::OutputBufferTooSmall);
         }
 
         output[start_output..end_output].copy_from_slice(&input[start_input..end_input]);
@@ -114,6 +114,6 @@ impl Integer<u32> for JustCopy {
         input_offset.set_position(end_input as u64);
         output_offset.set_position(end_output as u64);
 
-        FastPForResult::Ok(())
+        Ok(())
     }
 }
