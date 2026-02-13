@@ -1,10 +1,11 @@
 use core::ops::Range;
+use std::hint::black_box;
+use std::io::Cursor;
+
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use fastpfor::rust::{FastPFOR, Integer, BLOCK_SIZE_128, BLOCK_SIZE_256, DEFAULT_PAGE_SIZE};
 use rand::rngs::StdRng;
 use rand::{RngExt as _, SeedableRng};
-use std::hint::black_box;
-use std::io::Cursor;
 
 const SIZES: &[usize; 2] = &[1024, 4096];
 const SEED: u64 = 456;

@@ -1,9 +1,9 @@
 use std::io::Cursor;
+use std::num::NonZeroU32;
 
 use crate::rust::cursor::IncrementCursor;
 use crate::rust::integer_compression::{bitpacking, helpers};
 use crate::rust::{bytebuffer, FastPForResult, Integer, Skippable};
-use std::num::NonZeroU32;
 
 /// Block size constant for 256 integers per block
 pub const BLOCK_SIZE_256: NonZeroU32 = NonZeroU32::new(256).unwrap();
