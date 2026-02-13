@@ -23,9 +23,10 @@ harness = false
 # Keeping it on for now to simplify development.
 default = ["cpp"]
 cpp = ["dep:cmake", "dep:cxx", "dep:cxx-build"]
-rust = ["dep:thiserror"]
+rust = ["dep:thiserror", "dep:bytes"]
 
 [dependencies]
+bytes = { version = "1.11", optional = true }
 cxx = { version = "1.0.194", optional = true }
 thiserror = { version = "2.0.18", optional = true }
 
