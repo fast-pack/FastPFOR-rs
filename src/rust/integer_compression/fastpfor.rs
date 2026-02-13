@@ -1,4 +1,5 @@
 use std::io::Cursor;
+use std::num::NonZeroU32;
 
 use crate::rust::cursor::IncrementCursor;
 use crate::rust::integer_compression::{bitpacking, helpers};
@@ -6,16 +7,16 @@ use crate::rust::{FastPForResult, Integer, Skippable};
 use bytes::{Buf as _, BufMut as _, BytesMut};
 
 /// Block size constant for 256 integers per block
-pub const BLOCK_SIZE_256: u32 = 256;
+pub const BLOCK_SIZE_256: NonZeroU32 = NonZeroU32::new(256).unwrap();
 
 /// Block size constant for 128 integers per block
-pub const BLOCK_SIZE_128: u32 = 128;
+pub const BLOCK_SIZE_128: NonZeroU32 = NonZeroU32::new(128).unwrap();
 
 /// Overhead cost (in bits) for storing each exception's position in the block
 const OVERHEAD_OF_EACH_EXCEPT: u32 = 8;
 
 /// Default page size in number of integers
-pub const DEFAULT_PAGE_SIZE: u32 = 65536;
+pub const DEFAULT_PAGE_SIZE: NonZeroU32 = NonZeroU32::new(65536).unwrap();
 
 /// Fast Patched Frame-of-Reference ([`FastPFOR`](https://github.com/lemire/FastPFor)) integer compression codec.
 ///
@@ -74,7 +75,7 @@ impl Skippable for FastPFOR {
         output_offset: &mut Cursor<u32>,
         num: u32,
     ) -> FastPForResult<()> {
-        if inlength == 0 && self.block_size == BLOCK_SIZE_128 {
+        if inlength == 0 && self.block_size == BLOCK_SIZE_128.get() {
             // Return early if there is no data to uncompress and block size is 128
             return Ok(());
         }
@@ -143,7 +144,9 @@ impl FastPFOR {
     /// Creates codec with specified page and block sizes.
     ///
     /// Pre-allocates buffers for metadata and exception storage.
-    pub fn new(page_size: u32, block_size: u32) -> FastPFOR {
+    pub fn new(page_size: NonZeroU32, block_size: NonZeroU32) -> FastPFOR {
+        let page_size = page_size.get();
+        let block_size = block_size.get();
         FastPFOR {
             page_size,
             block_size,
@@ -453,7 +456,7 @@ mod tests {
     fn fastpfor_test() {
         let mut codec1 = FastPFOR::default();
         let mut codec2 = FastPFOR::default();
-        let mut data = vec![0u32; BLOCK_SIZE_256 as usize];
+        let mut data = vec![0u32; BLOCK_SIZE_256.get() as usize];
         data[126] = -1i32 as u32;
         let mut out_buf = vec![0; data.len() * 4];
         let mut input_offset = Cursor::new(0);
@@ -483,7 +486,9 @@ mod tests {
             .unwrap();
         let answer = out_buf_uncomp[..output_offset.position() as usize].to_vec();
 
-        for k in 0..BLOCK_SIZE_256 {
+        assert_eq!(answer.len(), BLOCK_SIZE_256.get() as usize);
+        assert_eq!(data.len(), BLOCK_SIZE_256.get() as usize);
+        for k in 0..BLOCK_SIZE_256.get() {
             assert_eq!(answer[k as usize], data[k as usize], "bug in {k}");
         }
     }
@@ -492,10 +497,7 @@ mod tests {
     fn fastpfor_test_128() {
         let mut codec1 = FastPFOR::new(DEFAULT_PAGE_SIZE, BLOCK_SIZE_128);
         let mut codec2 = FastPFOR::new(DEFAULT_PAGE_SIZE, BLOCK_SIZE_128);
-        let mut data = vec![0; BLOCK_SIZE_128 as usize];
-        for i in 0..BLOCK_SIZE_128 {
-            data[i as usize] = 0;
-        }
+        let mut data = vec![0; BLOCK_SIZE_128.get() as usize];
         data[126] = -1i32 as u32;
         let mut out_buf = vec![0; data.len() * 4];
         let mut input_offset = Cursor::new(0);
@@ -525,7 +527,9 @@ mod tests {
             .unwrap();
         let answer = out_buf_uncomp[..output_offset.position() as usize].to_vec();
 
-        for k in 0..BLOCK_SIZE_128 {
+        assert_eq!(answer.len(), BLOCK_SIZE_128.get() as usize);
+        assert_eq!(data.len(), BLOCK_SIZE_128.get() as usize);
+        for k in 0..BLOCK_SIZE_128.get() {
             assert_eq!(answer[k as usize], data[k as usize], "bug in {k}");
         }
     }
