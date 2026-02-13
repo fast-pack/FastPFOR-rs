@@ -67,7 +67,7 @@ jobs:
       matrix:
         include:
           - fuzz_target: fastpfor_cpp
-          #- fuzz_target: fastpfor_rust
+          - fuzz_target: fastpfor_rust
 
     steps:
       - uses: actions/checkout@v6
@@ -87,6 +87,7 @@ jobs:
       #  --target x86_64-unknown-linux-gnu is necessary to not default to musl, which is not supported by cargo-fuzz.
       - run: cargo fuzz build --target x86_64-unknown-linux-gnu ${{ matrix.fuzz_target }}
       - run: cargo fuzz run --target x86_64-unknown-linux-gnu ${{ matrix.fuzz_target }} -- -max_total_time=${{ env.FUZZ_TIME }}
+        if: ${{ matrix.fuzz_target != 'fastpfor_rust' }} # fastpfor_rust does not pass this
 
       # Upload fuzzing artifacts on failure for post-mortem debugging.
       - uses: actions/upload-artifact@v4
