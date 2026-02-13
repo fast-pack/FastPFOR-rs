@@ -1,14 +1,14 @@
 use crate::rust::{FastPFOR, JustCopy, VariableByte};
 
 pub enum Codec {
-    FastPFor(FastPFOR),
+    FastPFor(Box<FastPFOR>),
     VariableByte(VariableByte),
     JustCopy(JustCopy),
 }
 
 impl From<FastPFOR> for Codec {
     fn from(fastpfor: FastPFOR) -> Self {
-        Codec::FastPFor(fastpfor)
+        Codec::FastPFor(Box::new(fastpfor))
     }
 }
 
