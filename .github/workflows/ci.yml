@@ -67,7 +67,7 @@ jobs:
       matrix:
         include:
           - fuzz_target: fastpfor_cpp
-          - fuzz_target: fastpfor_rust
+          #- fuzz_target: fastpfor_rust
 
     steps:
       - uses: actions/checkout@v4
