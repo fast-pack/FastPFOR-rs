@@ -35,7 +35,7 @@ pub struct FastPFOR {
     /// Position trackers for exception arrays
     pub data_pointers: Vec<usize>,
     /// Frequency count for each bit width:
-    /// freqs[0..32] = count of values needing exactly i bits
+    /// freqs[0..=32] = count of values needing exactly i bits
     pub freqs: Vec<u32>,
     pub optimal_bits: u32,
     pub exception_count: u32,
