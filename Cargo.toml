@@ -18,11 +18,12 @@ rust-version = "1.85.0"
 # Keeping it on for now to simplify development.
 default = ["cpp"]
 cpp = ["dep:cmake", "dep:cxx", "dep:cxx-build"]
-rust = ["dep:thiserror"]
+rust = ["dep:thiserror", "dep:bytes"]
 
 [dependencies]
 cxx = { version = "1.0.194", optional = true }
 thiserror = { version = "2.0.18", optional = true }
+bytes = { version = "1.11", optional = true }
 
 [build-dependencies]
 cmake = { version = "0.1.57", optional = true }

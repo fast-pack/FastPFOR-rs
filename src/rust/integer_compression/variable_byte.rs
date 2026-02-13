@@ -64,13 +64,10 @@ impl Skippable for VariableByte {
             buf.put(0);
         }
         let length = buf.position();
-        buf.flip();
-        let ibuf = buf.as_int_buffer();
-        ibuf.get(
-            output,
-            output_offset.position() as usize,
-            (length / 4) as usize,
-        );
+        let output_position = output_offset.position() as usize;
+        for it in output.iter_mut().skip(output_position).take(length as usize / 4) {
+            *it = buf.get_u32_le();
+        }
         output_offset.add(length / 4);
         input_offset.add(input_length);
 
