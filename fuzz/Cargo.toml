@@ -2,7 +2,7 @@
 name = "fastpfor-fuzz"
 version = "0.0.0"
 publish = false
-edition = "2021"
+edition = "2024"
 
 [package.metadata]
 cargo-fuzz = true
@@ -17,7 +17,7 @@ fastpfor = { path = "..", features = ["rust"], default-features = false }
 members = ["."]
 
 [[bin]]
-name = "fastpfor_roundtrip"
-path = "fuzz_targets/fastpfor_roundtrip.rs"
+name = "fastpfor"
+path = "fuzz_targets/fastpfor.rs"
 test = false
 doc = false

@@ -3,18 +3,19 @@ use std::io::Cursor;
 use crate::rust::cursor::IncrementCursor;
 use crate::rust::integer_compression::{bitpacking, helpers};
 use crate::rust::{bytebuffer, FastPForResult, Integer, Skippable};
+use std::num::NonZeroU32;
 
 /// Block size constant for 256 integers per block
-pub const BLOCK_SIZE_256: u32 = 256;
+pub const BLOCK_SIZE_256: NonZeroU32 = 256;
 
 /// Block size constant for 128 integers per block
-pub const BLOCK_SIZE_128: u32 = 128;
+pub const BLOCK_SIZE_128: NonZeroU32 = 128;
 
 /// Overhead cost (in bits) for storing each exception's position in the block
 const OVERHEAD_OF_EACH_EXCEPT: u32 = 8;
 
 /// Default page size in number of integers
-pub const DEFAULT_PAGE_SIZE: u32 = 65536;
+pub const DEFAULT_PAGE_SIZE: NonZeroU32 = 65536;
 
 /// Fast Patched Frame-of-Reference ([`FastPFOR`](https://github.com/lemire/FastPFor)) integer compression codec.
 ///
@@ -31,7 +32,7 @@ pub struct FastPFOR {
     /// Metadata buffer for encoding/decoding
     pub bytes_container: bytebuffer::ByteBuffer,
     /// Maximum integers per page
-    pub page_size: u32,
+    pub page_size: NonZeroU32,
     /// Position trackers for exception arrays
     pub data_pointers: Vec<usize>,
     /// Frequency count for each bit width:
@@ -41,7 +42,7 @@ pub struct FastPFOR {
     pub exception_count: u32,
     pub max_bits: u32,
     /// Integers per block (128 or 256)
-    pub block_size: u32,
+    pub block_size: NonZeroU32,
 }
 
 impl Skippable for FastPFOR {
@@ -142,11 +143,11 @@ impl FastPFOR {
     /// Creates codec with specified page and block sizes.
     ///
     /// Pre-allocates buffers for metadata and exception storage.
-    pub fn new(page_size: u32, block_size: u32) -> FastPFOR {
+    pub fn new(page_size: NonZeroU32, block_size: NonZeroU32) -> FastPFOR {
         FastPFOR {
             page_size,
             block_size,
-            bytes_container: bytebuffer::ByteBuffer::new(3 * page_size / block_size + page_size),
+            bytes_container: bytebuffer::ByteBuffer::new(3 * page_size / block_size.get() + page_size),
             data_to_be_packed: vec![vec![0; page_size as usize / 32 * 4]; 33],
             data_pointers: vec![0; 33],
             freqs: vec![0; 33],
