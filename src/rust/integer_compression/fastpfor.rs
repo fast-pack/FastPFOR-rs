@@ -6,16 +6,16 @@ use crate::rust::{bytebuffer, FastPForResult, Integer, Skippable};
 use std::num::NonZeroU32;
 
 /// Block size constant for 256 integers per block
-pub const BLOCK_SIZE_256: NonZeroU32 = 256;
+pub const BLOCK_SIZE_256: NonZeroU32 = NonZeroU32::new(256).unwrap();
 
 /// Block size constant for 128 integers per block
-pub const BLOCK_SIZE_128: NonZeroU32 = 128;
+pub const BLOCK_SIZE_128: NonZeroU32 = NonZeroU32::new(128).unwrap();
 
 /// Overhead cost (in bits) for storing each exception's position in the block
 const OVERHEAD_OF_EACH_EXCEPT: u32 = 8;
 
 /// Default page size in number of integers
-pub const DEFAULT_PAGE_SIZE: NonZeroU32 = 65536;
+pub const DEFAULT_PAGE_SIZE: NonZeroU32 = NonZeroU32::new(65536).unwrap();
 
 /// Fast Patched Frame-of-Reference ([`FastPFOR`](https://github.com/lemire/FastPFor)) integer compression codec.
 ///
@@ -32,7 +32,7 @@ pub struct FastPFOR {
     /// Metadata buffer for encoding/decoding
     pub bytes_container: bytebuffer::ByteBuffer,
     /// Maximum integers per page
-    pub page_size: NonZeroU32,
+    pub page_size: u32,
     /// Position trackers for exception arrays
     pub data_pointers: Vec<usize>,
     /// Frequency count for each bit width:
@@ -42,7 +42,7 @@ pub struct FastPFOR {
     pub exception_count: u32,
     pub max_bits: u32,
     /// Integers per block (128 or 256)
-    pub block_size: NonZeroU32,
+    pub block_size: u32,
 }
 
 impl Skippable for FastPFOR {
@@ -74,7 +74,7 @@ impl Skippable for FastPFOR {
         output_offset: &mut Cursor<u32>,
         num: u32,
     ) -> FastPForResult<()> {
-        if inlength == 0 && self.block_size == BLOCK_SIZE_128 {
+        if inlength == 0 && self.block_size == BLOCK_SIZE_128.get() {
             // Return early if there is no data to uncompress and block size is 128
             return Ok(());
         }
@@ -144,10 +144,12 @@ impl FastPFOR {
     ///
     /// Pre-allocates buffers for metadata and exception storage.
     pub fn new(page_size: NonZeroU32, block_size: NonZeroU32) -> FastPFOR {
+        let page_size = page_size.get();
+        let block_size = block_size.get();
         FastPFOR {
             page_size,
             block_size,
-            bytes_container: bytebuffer::ByteBuffer::new(3 * page_size / block_size.get() + page_size),
+            bytes_container: bytebuffer::ByteBuffer::new(3 * page_size / block_size + page_size),
             data_to_be_packed: vec![vec![0; page_size as usize / 32 * 4]; 33],
             data_pointers: vec![0; 33],
             freqs: vec![0; 33],
