@@ -16,8 +16,7 @@ fuzz_target!(|data: (u32, Vec<u32>)| {
     let input_data: Vec<u32> = input_data.into_iter().take(10_000).collect();
 
     // Allocate output buffer with generous size
-    let output_size = input_data.len() * 2 + 1024;
-    let mut compressed = vec![0u32; output_size];
+    let mut compressed = vec![0u32; input_data.len() * 2 + 1024];
 
     // Compress the data
     let mut output_offset = Cursor::new(0);
@@ -51,7 +50,7 @@ fuzz_target!(|data: (u32, Vec<u32>)| {
     let decompressed_length = output_offset.position() as usize;
 
     // Verify roundtrip
-    if decompressed_length + input_data.len() < 100 {
+    if decompressed_length + input_data.len() < 200 {
         assert_eq!(
             input_data,
             decompressed[..decompressed_length],

@@ -44,13 +44,13 @@ rustup install nightly
 
 ```bash
 cd fuzz
-cargo +nightly fuzz run fastpfor_roundtrip
+cargo +nightly fuzz run fastpfor_rust
 ```
 
 Run for a specific duration (e.g., 60 seconds):
 
 ```bash
-cargo +nightly fuzz run fastpfor_roundtrip -- -max_total_time=60
+cargo +nightly fuzz run fastpfor_rust -- -max_total_time=60
 ```
 
 ## What It Tests
@@ -66,8 +66,8 @@ This ensures the codec is lossless and doesn't corrupt data under any input patt
 
 ## If a Crash Is Found
 
-Crashes are saved to `fuzz/artifacts/fastpfor_roundtrip/`. To reproduce:
+Crashes are saved to `fuzz/artifacts/fastpfor_rust/`. To reproduce:
 
 ```bash
-cargo +nightly fuzz run fastpfor_roundtrip fuzz/artifacts/fastpfor_roundtrip/crash-<hash>
+cargo +nightly fuzz run fastpfor_rust fuzz/artifacts/fastpfor_rust/crash-<hash>
 ```
