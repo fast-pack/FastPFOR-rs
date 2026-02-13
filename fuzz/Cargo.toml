@@ -1,0 +1,29 @@
+[package]
+name = "fastpfor-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+fastpfor = { path = "..", features = ["cpp", "rust"] }
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "fastpfor_rust"
+path = "fuzz_targets/fastpfor_rust.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fastpfor_cpp"
+path = "fuzz_targets/fastpfor_cpp.rs"
+test = false
+doc = false

@@ -1,0 +1,13 @@
+# Fuzzing artifacts
+artifacts/
+corpus/
+coverage/
+
+# Build artifacts
+target/
+Cargo.lock
+
+# Crash/timeout/slow inputs that should be committed
+# are stored in artifacts/ but we ignore by default
+# Uncomment specific patterns if you want to track some artifacts
+# !artifacts/important-crash

@@ -1,9 +1,10 @@
 use std::io::Cursor;
 
+use bytes::{Buf as _, BufMut as _, BytesMut};
+
 use crate::rust::cursor::IncrementCursor;
 use crate::rust::integer_compression::helpers::{extract7bits, extract_7bits_maskless};
 use crate::rust::{FastPForError, FastPForResult, Integer, Skippable};
-use bytes::{Buf as _, BufMut as _, BytesMut};
 
 #[derive(Debug)]
 pub struct VariableByte;
