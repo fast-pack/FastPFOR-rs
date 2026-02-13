@@ -71,6 +71,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with: {persist-credentials: false, submodules: recursive}
 
       # Install the nightly Rust channel.
       - run: rustup toolchain install nightly
