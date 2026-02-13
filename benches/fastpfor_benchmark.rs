@@ -37,7 +37,7 @@ fn generate_sequential_data(size: usize) -> Vec<u32> {
 
 /// Generate sparse data - mostly zeros with occasional random values
 fn generate_sparse_data(size: usize) -> Vec<u32> {
-    let mut rng = StdRng::seed_from_u64(456);
+    let mut rng = StdRng::seed_from_u64(black_box(SEED));
     (0..size)
         .map(|_| {
             if rng.random_bool(0.9) {
