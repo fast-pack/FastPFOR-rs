@@ -293,7 +293,7 @@ fn benchmark_compression_ratio(c: &mut Criterion) {
             b.iter(|| {
                 let mut codec = FastPFOR::default();
                 let compressed_size = compress_data(&mut codec, black_box(&data));
-                let ratio = (data.len() * 4) as f64 / compressed_size as f64;
+                let ratio = data.len() as f64 / compressed_size as f64;
                 black_box(ratio)
             });
         });
