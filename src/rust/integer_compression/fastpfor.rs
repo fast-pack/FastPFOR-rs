@@ -16,7 +16,7 @@ const OVERHEAD_OF_EACH_EXCEPT: u32 = 8;
 /// Default page size in number of integers
 pub const DEFAULT_PAGE_SIZE: u32 = 65536;
 
-/// FastPFOR (Patched Frame-of-Reference) integer compression codec.
+/// Fast Patched Frame-of-Reference ([`FastPFOR`](https://github.com/lemire/FastPFor)) integer compression codec.
 ///
 /// It is useful for compressing sequences of unsigned 32-bit integers.
 ///
@@ -37,7 +37,7 @@ pub struct FastPFOR {
     /// Frequency count for each bit width:
     /// freqs[0..32] = count of values needing exactly i bits
     pub freqs: Vec<u32>,
-    /// [optimal_bits, exception_count, max_bits]
+    /// [`optimal_bits`, `exception_count`, `max_bits`]
     pub bestbbestcexceptmaxb: [u32; 3],
     /// Integers per block (128 or 256)
     pub block_size: u32,
@@ -138,7 +138,7 @@ impl Default for FastPFOR {
 }
 
 impl FastPFOR {
-    /// Creates FastPFOR codec with specified page and block sizes.
+    /// Creates codec with specified page and block sizes.
     ///
     /// Pre-allocates buffers for metadata and exception storage.
     pub fn new(page_size: u32, block_size: u32) -> FastPFOR {
@@ -277,9 +277,9 @@ impl FastPFOR {
 
     /// Computes optimal bit width minimizing total storage cost.
     ///
-    /// Analyzes frequency distribution to balance regular value bits
-    /// against exception overhead. Results stored in `bestbbestcexceptmaxb`:
-    /// [0]=optimal_bits, [1]=exception_count, [2]=max_bits.
+    /// Analyzes frequency distribution to balance regular value bits against exception overhead.
+    ///
+    /// Results stored in `bestbbestcexceptmaxb`
     fn best_b_from_data(&mut self, input: &[u32], pos: u32) {
         self.freqs.fill(0);
         let k_end = std::cmp::min(pos + self.block_size, input.len() as u32);
