@@ -60,19 +60,19 @@ impl Skippable for VariableByte {
                 buf.put(extract_7bits_maskless(4, val) | (1 << 7));
             }
         }
-        while buf.position() % 4 != 0 {
+        while buf.len() % 4 != 0 {
             buf.put(0);
         }
-        let length = buf.position();
+        let length = buf.len();
         let output_position = output_offset.position() as usize;
         for it in output
             .iter_mut()
             .skip(output_position)
-            .take(length as usize / 4)
+            .take(length / 4)
         {
             *it = buf.get_u32_le();
         }
-        output_offset.add(length / 4);
+        output_offset.add(length as u32 / 4);
         input_offset.add(input_length);
 
         Ok(())

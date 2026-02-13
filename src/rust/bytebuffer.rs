@@ -18,8 +18,8 @@ impl ByteBuffer {
     }
 
     #[must_use]
-    pub fn position(&self) -> u32 {
-        self.buffer.len() as u32
+    pub fn len(&self) -> usize {
+        self.buffer.len()
     }
 
     pub fn put(&mut self, byte: u8) {

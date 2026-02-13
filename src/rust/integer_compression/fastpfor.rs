@@ -188,23 +188,23 @@ impl FastPFOR {
         }
         input_offset.set_position(u64::from(tmp_input_offset));
         output[header_pos] = tmp_output_offset - header_pos as u32;
-        let byte_size = self.bytes_container.position();
-        while (self.bytes_container.position() & 3) != 0 {
+        let byte_size = self.bytes_container.len();
+        while (self.bytes_container.len() & 3) != 0 {
             self.bytes_container.put(0);
         }
         // Output should have 3 position as 4
-        output[tmp_output_offset as usize] = byte_size;
+        output[tmp_output_offset as usize] = byte_size as u32;
         tmp_output_offset += 1;
-        let how_many_ints = self.bytes_container.position() / 4;
+        let how_many_ints = self.bytes_container.len() / 4;
 
         for it in output
             .iter_mut()
             .skip(tmp_output_offset as usize)
-            .take(how_many_ints as usize)
+            .take(how_many_ints)
         {
             *it = self.bytes_container.get_u32_le();
         }
-        tmp_output_offset += how_many_ints;
+        tmp_output_offset += how_many_ints as u32;
         let mut bitmap = 0;
         for k in 2..=32 {
             if self.data_pointers[k] != 0 {
