@@ -83,8 +83,9 @@ jobs:
       - run: cargo binstall cargo-fuzz@0.13.1 # Pinned to avoid breakage.
 
       # Build and then run the fuzz target.
-      - run: cargo fuzz build ${{ matrix.fuzz_target }}
-      - run: cargo fuzz run ${{ matrix.fuzz_target }} -- -max_total_time=${{ env.FUZZ_TIME }}
+      #  --target x86_64-unknown-linux-gnu is necessary to not default to musl, which is not supported by cargo-fuzz.
+      - run: cargo fuzz build --target x86_64-unknown-linux-gnu ${{ matrix.fuzz_target }}
+      - run: cargo fuzz run --target x86_64-unknown-linux-gnu ${{ matrix.fuzz_target }} -- -max_total_time=${{ env.FUZZ_TIME }}
 
       # Upload fuzzing artifacts on failure for post-mortem debugging.
       - uses: actions/upload-artifact@v4
