@@ -87,9 +87,7 @@ impl Skippable for VariableByte {
         output_offset: &mut Cursor<u32>,
         num: u32,
     ) -> FastPForResult<()> {
-        FastPForResult::Err(FastPForError::UnsupportedOperationError(
-            "Unimplemented".to_string(),
-        ))
+        Err(FastPForError::Unimplemented)
     }
 }
 

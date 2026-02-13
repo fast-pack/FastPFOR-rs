@@ -1,17 +1,21 @@
 use thiserror::Error;
 
+/// Alias for the result type of `FastPFor` operations.
 pub type FastPForResult<T> = Result<T, FastPForError>;
 
+/// Errors that can occur when using the `FastPFor` codecs.
+#[non_exhaustive]
 #[derive(Error, Debug)]
 pub enum FastPForError {
-    #[error("Unable to uncompress data: {0}")]
-    UncompressError(String),
-    #[error("Unable to compress data: {0}")]
-    CompressError(String),
-    #[error("Invalid block size: {0}")]
-    InvalidBlockSizeError(String),
-    #[error("Unsupported operation: {0}")]
-    UnsupportedOperationError(String),
-    #[error("Out of bounds access")]
-    OutOfBoundsAccess,
+    /// Unsupported operation
+    #[error("Unsupported operation")]
+    Unimplemented,
+
+    /// Not enough data in the input buffer
+    #[error("Not enough data in the input buffer")]
+    NotEnoughData,
+
+    /// Output buffer too small
+    #[error("Output buffer too small")]
+    OutputBufferTooSmall,
 }
