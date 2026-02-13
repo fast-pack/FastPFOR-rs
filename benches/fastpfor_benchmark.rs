@@ -1,20 +1,22 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use fastpfor::rust::{FastPFOR, Integer, BLOCK_SIZE_128, BLOCK_SIZE_256, DEFAULT_PAGE_SIZE};
-use rand::RngExt as _;
+use rand::rngs::StdRng;
+use rand::{RngExt as _, SeedableRng};
 use std::hint::black_box;
 use std::io::Cursor;
 
 const SIZES: &[usize; 2] = &[1024, 4096];
+const SEED: u64 = 456;
 
 /// Generate uniformly distributed random data
 fn generate_uniform_data(size: usize, max_value: u32) -> Vec<u32> {
-    let mut rng = rand::rng();
+    let mut rng = StdRng::seed_from_u64(black_box(SEED));
     (0..size).map(|_| rng.random_range(0..max_value)).collect()
 }
 
 /// Generate clustered data - values tend to cluster around changing base values
 fn generate_clustered_data(size: usize) -> Vec<u32> {
-    let mut rng = rand::rng();
+    let mut rng = StdRng::seed_from_u64(black_box(SEED));
     let mut data = Vec::with_capacity(size);
     let mut base = 0u32;
 
@@ -35,7 +37,7 @@ fn generate_sequential_data(size: usize) -> Vec<u32> {
 
 /// Generate sparse data - mostly zeros with occasional random values
 fn generate_sparse_data(size: usize) -> Vec<u32> {
-    let mut rng = rand::rng();
+    let mut rng = StdRng::seed_from_u64(456);
     (0..size)
         .map(|_| {
             if rng.random_bool(0.9) {
@@ -239,10 +241,7 @@ fn benchmark_block_sizes(c: &mut Criterion) {
     let size = 65536;
     let data = generate_uniform_data(size, 1000);
 
-    let block_sizes = vec![
-        ("compress_block_128", BLOCK_SIZE_128),
-        ("compress_block_256", BLOCK_SIZE_256),
-    ];
+    let block_sizes = vec![BLOCK_SIZE_128, BLOCK_SIZE_256];
 
     for block_size in &block_sizes {
         group.throughput(Throughput::Elements(size as u64));
@@ -258,14 +257,13 @@ fn benchmark_block_sizes(c: &mut Criterion) {
     for block_size in &block_sizes {
         // Pre-compress the data once for this block size so the decompression
         // benchmark measures only decompression work inside `b.iter`.
-        let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, *block_size);
-        let compressed_size = compress_data(&mut codec, &data);
+        let compressed = prepare_compressed_data(&data);
 
         group.throughput(Throughput::Elements(size as u64));
         group.bench_function(format!("decompress_{block_size}"), |b| {
             b.iter(|| {
                 let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, *block_size);
-                black_box(decompress_data(&mut codec, compressed_size, size));
+                black_box(decompress_data(&mut codec, black_box(&compressed), size));
             });
         });
     }
