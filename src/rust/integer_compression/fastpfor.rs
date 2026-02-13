@@ -50,7 +50,7 @@ impl Skippable for FastPFOR {
         num: u32,
     ) -> FastPForResult<()> {
         if inlength == 0 && self.block_size == BLOCK_SIZE_128 {
-            // Return early if there is no data to compress and block size is 128
+            // Return early if there is no data to uncompress and block size is 128
             return Ok(());
         }
         let mynvalue = helpers::greatest_multiple(inlength, self.block_size);
