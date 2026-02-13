@@ -1,6 +1,6 @@
 #![no_main]
 
-use fastpfor::rust::{FastPFOR, Integer, DEFAULT_PAGE_SIZE};
+use fastpfor::rust::{DEFAULT_PAGE_SIZE, FastPFOR, Integer};
 use libfuzzer_sys::fuzz_target;
 use std::io::Cursor;
 use std::num::NonZeroU32;
@@ -9,7 +9,7 @@ fuzz_target!(|data: (u32, Vec<u32>)| {
     let (block_size, input_data) = data;
 
     let Ok(block_size) = NonZeroU32::try_from(block_size) else {
-      return;
+        return;
     };
 
     // Limit input size to avoid timeouts

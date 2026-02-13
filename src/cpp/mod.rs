@@ -162,7 +162,7 @@ macro_rules! implement_codecs {
 
             $(
                 #[test]
-                #[allow(non_snake_case)]
+                #[expect(non_snake_case)]
                 fn $name() {
                     $(
                         // hack to only expand this block if $is_64 is set
