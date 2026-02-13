@@ -13,6 +13,11 @@ keywords = ["fastpfor", "compression"]
 categories = ["compression"]
 rust-version = "1.86.0"
 
+[[bench]]
+name = "fastpfor_benchmark"
+required-features = ["rust"]
+harness = false
+
 [features]
 # Eventually we may want to build without the C++ bindings by default.
 # Keeping it on for now to simplify development.
@@ -29,13 +34,8 @@ cmake = { version = "0.1.57", optional = true }
 cxx-build = { version = "1.0.194", optional = true }
 
 [dev-dependencies]
-rand = "0.10.0"
 criterion = "0.8"
-
-[[bench]]
-name = "fastpfor_benchmark"
-required-features = ["rust"]
-harness = false
+rand = "0.10.0"
 
 [lints.rust]
 dead_code = "allow"
