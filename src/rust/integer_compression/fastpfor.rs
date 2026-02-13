@@ -92,7 +92,7 @@ impl Integer<u32> for FastPFOR {
         output_offset: &mut Cursor<u32>,
     ) -> FastPForResult<()> {
         if input_length == 0 {
-            // Return early if there is no data to compress
+            // Return early if there is no data to uncompress
             return Ok(());
         }
         let outlength = input[input_offset.position() as usize];
