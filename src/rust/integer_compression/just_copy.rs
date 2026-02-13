@@ -31,8 +31,11 @@ impl Skippable for JustCopy {
         let start_output = output_offset.position() as usize;
         let end_output = start_output + input_length as usize;
 
-        if end_input > input.len() || end_output > output.len() {
-            return FastPForResult::Err(FastPForError::OutOfBoundsAccess);
+        if end_input > input.len() {
+            return FastPForResult::Err(FastPForError::NotEnoughData);
+        }
+        if end_output > output.len() {
+            return FastPForResult::Err(FastPForError::OutputBufferTooSmall);
         }
 
         output[start_output..end_output].copy_from_slice(&input[start_input..end_input]);
@@ -57,8 +60,11 @@ impl Skippable for JustCopy {
         let start_output = output_offset.position() as usize;
         let end_output = start_output + num as usize;
 
-        if end_input > input.len() || end_output > output.len() {
-            return FastPForResult::Err(FastPForError::OutOfBoundsAccess);
+        if end_input > input.len() {
+            return FastPForResult::Err(FastPForError::NotEnoughData);
+        }
+        if end_output > output.len() {
+            return FastPForResult::Err(FastPForError::OutputBufferTooSmall);
         }
 
         output[start_output..end_output].copy_from_slice(&input[start_input..end_input]);
@@ -95,8 +101,11 @@ impl Integer<u32> for JustCopy {
         let end_output = start_output + input_length as usize;
 
         // Ensure we don't exceed the slice bounds
-        if end_input > input.len() || end_output > output.len() {
-            return FastPForResult::Err(FastPForError::OutOfBoundsAccess);
+        if end_input > input.len() {
+            return FastPForResult::Err(FastPForError::NotEnoughData);
+        }
+        if end_output > output.len() {
+            return FastPForResult::Err(FastPForError::OutputBufferTooSmall);
         }
 
         output[start_output..end_output].copy_from_slice(&input[start_input..end_input]);
