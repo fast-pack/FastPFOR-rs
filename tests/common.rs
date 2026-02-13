@@ -7,7 +7,7 @@ use fastpfor::rust::{
     DEFAULT_PAGE_SIZE,
 };
 use rand::rngs::StdRng;
-use rand::{Rng as _, SeedableRng as _};
+use rand::{RngExt as _, SeedableRng as _};
 
 pub enum TestCodec {
     VariableByte(VariableByte, String),
