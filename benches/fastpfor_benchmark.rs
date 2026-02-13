@@ -240,16 +240,31 @@ fn benchmark_block_sizes(c: &mut Criterion) {
         ("compress_block_256", BLOCK_SIZE_256),
     ];
 
-    for (name, block_size) in block_sizes {
+    for block_size in &block_sizes {
         group.throughput(Throughput::Elements(size as u64));
-        group.bench_function(name, |b| {
+        group.bench_function(format!("compress_{block_size}"), |b| {
             b.iter(|| {
-                let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, block_size);
+                let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, *block_size);
                 black_box(compress_data(&mut codec, black_box(&data)))
             });
         });
     }
 
+    // Also benchmark decompression performance for each block size
+    for block_size in &block_sizes {
+        // Pre-compress the data once for this block size so the decompression
+        // benchmark measures only decompression work inside `b.iter`.
+        let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, *block_size);
+        let compressed_size = compress_data(&mut codec, &data);
+
+        group.throughput(Throughput::Elements(size as u64));
+        group.bench_function(format!("decompress_{block_size}"), |b| {
+            b.iter(|| {
+                let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, *block_size);
+                black_box(decompress_data(&mut codec, compressed_size, size));
+            });
+        });
+    }
     group.finish();
 }
 
