@@ -26,12 +26,12 @@ impl ByteBuffer {
         self.buffer.is_empty()
     }
 
-    pub fn put(&mut self, byte: u8) {
+    pub fn put_u8(&mut self, byte: u8) {
         self.buffer.put_u8(byte);
     }
 
     #[must_use]
-    pub fn get(&mut self) -> u8 {
+    pub fn get_u8(&mut self) -> u8 {
         // move read cursor
         self.buffer.get_u8()
     }

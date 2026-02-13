@@ -39,29 +39,29 @@ impl Skippable for VariableByte {
         for k in input_offset.position()..(input_offset.position() + u64::from(input_length)) {
             let val = i64::from(input[k as usize]);
             if val < (1 << 7) {
-                buf.put((val | (1 << 7)) as u8);
+                buf.put_u8((val | (1 << 7)) as u8);
             } else if val < (1 << 14) {
-                buf.put(extract7bits(0, val));
-                buf.put(extract_7bits_maskless(1, val) | (1 << 7));
+                buf.put_u8(extract7bits(0, val));
+                buf.put_u8(extract_7bits_maskless(1, val) | (1 << 7));
             } else if val < (1 << 21) {
-                buf.put(extract7bits(0, val));
-                buf.put(extract7bits(1, val));
-                buf.put(extract_7bits_maskless(2, val) | (1 << 7));
+                buf.put_u8(extract7bits(0, val));
+                buf.put_u8(extract7bits(1, val));
+                buf.put_u8(extract_7bits_maskless(2, val) | (1 << 7));
             } else if val < (1 << 28) {
-                buf.put(extract7bits(0, val));
-                buf.put(extract7bits(1, val));
-                buf.put(extract7bits(2, val));
-                buf.put(extract_7bits_maskless(3, val) | (1 << 7));
+                buf.put_u8(extract7bits(0, val));
+                buf.put_u8(extract7bits(1, val));
+                buf.put_u8(extract7bits(2, val));
+                buf.put_u8(extract_7bits_maskless(3, val) | (1 << 7));
             } else {
-                buf.put(extract7bits(0, val));
-                buf.put(extract7bits(1, val));
-                buf.put(extract7bits(2, val));
-                buf.put(extract7bits(3, val));
-                buf.put(extract_7bits_maskless(4, val) | (1 << 7));
+                buf.put_u8(extract7bits(0, val));
+                buf.put_u8(extract7bits(1, val));
+                buf.put_u8(extract7bits(2, val));
+                buf.put_u8(extract7bits(3, val));
+                buf.put_u8(extract_7bits_maskless(4, val) | (1 << 7));
             }
         }
         while buf.len() % 4 != 0 {
-            buf.put(0);
+            buf.put_u8(0);
         }
         let length = buf.len();
         let output_position = output_offset.position() as usize;

@@ -188,10 +188,10 @@ impl FastPFOR {
         while tmp_input_offset <= final_input_offset {
             self.best_b_from_data(input, tmp_input_offset);
             let tmp_best_b = self.optimal_bits;
-            self.bytes_container.put(self.optimal_bits as u8);
-            self.bytes_container.put(self.exception_count as u8);
+            self.bytes_container.put_u8(self.optimal_bits as u8);
+            self.bytes_container.put_u8(self.exception_count as u8);
             if self.exception_count > 0 {
-                self.bytes_container.put(self.max_bits as u8);
+                self.bytes_container.put_u8(self.max_bits as u8);
                 let index = self.max_bits - self.optimal_bits;
                 if self.data_pointers[index as usize] + self.exception_count as usize
                     >= self.data_to_be_packed[index as usize].len()
@@ -204,7 +204,7 @@ impl FastPFOR {
                 }
                 for k in 0..self.block_size {
                     if (input[(k + tmp_input_offset) as usize] >> self.optimal_bits) != 0 {
-                        self.bytes_container.put(k as u8);
+                        self.bytes_container.put_u8(k as u8);
                         self.data_to_be_packed[index as usize]
                             [self.data_pointers[index as usize]] =
                             input[(k + tmp_input_offset) as usize] >> tmp_best_b;
@@ -228,7 +228,7 @@ impl FastPFOR {
         output[header_pos] = tmp_output_offset - header_pos as u32;
         let byte_size = self.bytes_container.len();
         while (self.bytes_container.len() & 3) != 0 {
-            self.bytes_container.put(0);
+            self.bytes_container.put_u8(0);
         }
         // Output should have 3 position as 4
         output[tmp_output_offset as usize] = byte_size as u32;
@@ -405,8 +405,8 @@ impl FastPFOR {
 
         let run_end = thissize / self.block_size;
         for _ in 0..run_end {
-            let b = u32::from(self.bytes_container.get());
-            let cexcept = self.bytes_container.get();
+            let b = u32::from(self.bytes_container.get_u8());
+            let cexcept = self.bytes_container.get_u8();
             for k in (0..self.block_size).step_by(32) {
                 bitpacking::fast_unpack(
                     input,
@@ -418,16 +418,16 @@ impl FastPFOR {
                 tmp_input_offset += b;
             }
             if cexcept > 0 {
-                let maxbits = u32::from(self.bytes_container.get());
+                let maxbits = u32::from(self.bytes_container.get_u8());
                 let index = maxbits - b;
                 if index == 1 {
                     for _ in 0..cexcept {
-                        let pos = self.bytes_container.get();
+                        let pos = self.bytes_container.get_u8();
                         output[pos as usize + tmp_output_offset as usize] |= 1 << b;
                     }
                 } else {
                     for _ in 0..cexcept {
-                        let pos = self.bytes_container.get();
+                        let pos = self.bytes_container.get_u8();
                         let except_value = self.data_to_be_packed[index as usize]
                             [self.data_pointers[index as usize]];
                         output[pos as usize + tmp_output_offset as usize] |= except_value << b;
