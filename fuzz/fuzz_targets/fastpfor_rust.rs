@@ -3,9 +3,14 @@
 use fastpfor::rust::{FastPFOR, Integer, DEFAULT_PAGE_SIZE};
 use libfuzzer_sys::fuzz_target;
 use std::io::Cursor;
+use std::num::NonZeroU32;
 
 fuzz_target!(|data: (u32, Vec<u32>)| {
     let (block_size, input_data) = data;
+
+    let Ok(block_size) = NonZeroU32::try_from(block_size) else {
+      return;
+    };
 
     // Limit input size to avoid timeouts
     let input_data: Vec<u32> = input_data.into_iter().take(10_000).collect();
