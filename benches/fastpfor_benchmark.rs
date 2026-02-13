@@ -109,7 +109,7 @@ fn decompress_data(codec: &mut FastPFOR, compressed: &[u32], original_size: usiz
     codec
         .uncompress(
             compressed,
-            original_size as u32,
+            compressed.len() as u32,
             &mut input_offset,
             &mut decompressed,
             &mut output_offset,
@@ -238,7 +238,7 @@ fn benchmark_roundtrip(c: &mut Criterion) {
 fn benchmark_block_sizes(c: &mut Criterion) {
     let mut group = c.benchmark_group("block_sizes");
 
-    let size = 65536;
+    let size = *SIZES.last().unwrap();
     let data = generate_uniform_data(size, 1000);
 
     let block_sizes = vec![BLOCK_SIZE_128, BLOCK_SIZE_256];
