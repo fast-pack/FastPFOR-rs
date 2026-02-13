@@ -197,8 +197,12 @@ impl FastPFOR {
         tmp_output_offset += 1;
         let how_many_ints = self.bytes_container.position() / 4;
 
-        for i in tmp_output_offset..tmp_output_offset + how_many_ints {
-            output[i as usize] = self.bytes_container.get_u32_le();
+        for it in output
+            .iter_mut()
+            .skip(tmp_output_offset as usize)
+            .take(how_many_ints as usize)
+        {
+            *it = self.bytes_container.get_u32_le();
         }
         tmp_output_offset += how_many_ints;
         let mut bitmap = 0;
