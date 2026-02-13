@@ -30,6 +30,12 @@ cxx-build = { version = "1.0.194", optional = true }
 
 [dev-dependencies]
 rand = "0.10.0"
+criterion = "0.8"
+
+[[bench]]
+name = "fastpfor_benchmark"
+required-features = ["rust"]
+harness = false
 
 [lints.rust]
 dead_code = "allow"
