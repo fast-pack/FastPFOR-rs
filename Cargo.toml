@@ -11,7 +11,7 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 keywords = ["fastpfor", "compression"]
 categories = ["compression"]
-rust-version = "1.83.0"
+rust-version = "1.85.0"
 
 [features]
 # Eventually we may want to build without the C++ bindings by default.
