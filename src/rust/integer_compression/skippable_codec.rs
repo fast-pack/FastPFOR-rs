@@ -2,7 +2,17 @@ use std::io::Cursor;
 
 use crate::rust::{Codec, FastPForResult};
 
+/// Headerless compression/decompression for seekable streams.
+///
+/// Methods operate without length headers, requiring external length tracking.
+/// Useful for random access and pre-sized buffer scenarios.
 pub trait Skippable {
+    /// Compresses integers without writing length header.
+    ///
+    /// # Arguments
+    /// * `input_length` - Number of integers to compress
+    /// * `input_offset` - Read position cursor, advanced by `input_length`
+    /// * `output_offset` - Write position cursor, advanced by bytes written
     fn headless_compress(
         &mut self,
         input: &[u32],
@@ -12,6 +22,13 @@ pub trait Skippable {
         output_offset: &mut Cursor<u32>,
     ) -> FastPForResult<()>;
 
+    /// Decompresses integers without reading length header.
+    ///
+    /// # Arguments
+    /// * `input_length` - Compressed data length
+    /// * `input_offset` - Read position cursor, advanced by bytes read
+    /// * `output_offset` - Write position cursor, advanced by `num`
+    /// * `num` - Expected number of integers to decompress
     fn headless_uncompress(
         &mut self,
         input: &[u32],
