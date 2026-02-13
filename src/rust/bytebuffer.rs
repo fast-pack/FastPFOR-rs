@@ -32,7 +32,6 @@ impl ByteBuffer {
 
     #[must_use]
     pub fn get_u8(&mut self) -> u8 {
-        // move read cursor
         self.buffer.get_u8()
     }
 
