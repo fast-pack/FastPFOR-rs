@@ -37,8 +37,9 @@ pub struct FastPFOR {
     /// Frequency count for each bit width:
     /// freqs[0..32] = count of values needing exactly i bits
     pub freqs: Vec<u32>,
-    /// [`optimal_bits`, `exception_count`, `max_bits`]
-    pub bestbbestcexceptmaxb: [u32; 3],
+    pub optimal_bits: u32,
+    pub exception_count: u32,
+    pub max_bits: u32,
     /// Integers per block (128 or 256)
     pub block_size: u32,
 }
@@ -149,7 +150,9 @@ impl FastPFOR {
             data_to_be_packed: vec![vec![0; page_size as usize / 32 * 4]; 33],
             data_pointers: vec![0; 33],
             freqs: vec![0; 33],
-            bestbbestcexceptmaxb: [0; 3],
+            optimal_bits: 0,
+            exception_count: 0,
+            max_bits: 0,
         }
     }
 
@@ -184,25 +187,23 @@ impl FastPFOR {
         let final_input_offset = tmp_input_offset + thissize - self.block_size;
         while tmp_input_offset <= final_input_offset {
             self.best_b_from_data(input, tmp_input_offset);
-            let tmp_best_b = self.bestbbestcexceptmaxb[0];
-            self.bytes_container.put(self.bestbbestcexceptmaxb[0] as u8);
-            self.bytes_container.put(self.bestbbestcexceptmaxb[1] as u8);
-            if self.bestbbestcexceptmaxb[1] > 0 {
-                self.bytes_container.put(self.bestbbestcexceptmaxb[2] as u8);
-                let index = self.bestbbestcexceptmaxb[2] - self.bestbbestcexceptmaxb[0];
-                if self.data_pointers[index as usize] + self.bestbbestcexceptmaxb[1] as usize
+            let tmp_best_b = self.optimal_bits;
+            self.bytes_container.put(self.optimal_bits as u8);
+            self.bytes_container.put(self.exception_count as u8);
+            if self.exception_count > 0 {
+                self.bytes_container.put(self.max_bits as u8);
+                let index = self.max_bits - self.optimal_bits;
+                if self.data_pointers[index as usize] + self.exception_count as usize
                     >= self.data_to_be_packed[index as usize].len()
                 {
                     let mut new_size = 2
-                        * (self.data_pointers[index as usize]
-                            + self.bestbbestcexceptmaxb[1] as usize)
+                        * (self.data_pointers[index as usize] + self.exception_count as usize)
                             as u32;
                     new_size = helpers::greatest_multiple(new_size + 31, 32);
                     self.data_to_be_packed[index as usize].resize(new_size as usize, 0);
                 }
                 for k in 0..self.block_size {
-                    if (input[(k + tmp_input_offset) as usize] >> self.bestbbestcexceptmaxb[0]) != 0
-                    {
+                    if (input[(k + tmp_input_offset) as usize] >> self.optimal_bits) != 0 {
                         self.bytes_container.put(k as u8);
                         self.data_to_be_packed[index as usize]
                             [self.data_pointers[index as usize]] =
@@ -287,32 +288,32 @@ impl FastPFOR {
             self.freqs[helpers::bits(input[k as usize])] += 1;
         }
 
-        self.bestbbestcexceptmaxb[0] = 32;
-        while self.freqs[self.bestbbestcexceptmaxb[0] as usize] == 0 {
-            self.bestbbestcexceptmaxb[0] -= 1;
+        self.optimal_bits = 32;
+        while self.freqs[self.optimal_bits as usize] == 0 {
+            self.optimal_bits -= 1;
         }
-        self.bestbbestcexceptmaxb[2] = self.bestbbestcexceptmaxb[0];
+        self.max_bits = self.optimal_bits;
 
-        let mut bestcost = self.bestbbestcexceptmaxb[0] * self.block_size;
+        let mut bestcost = self.optimal_bits * self.block_size;
         let mut cexcept: u32 = 0;
-        self.bestbbestcexceptmaxb[1] = cexcept;
+        self.exception_count = cexcept;
 
-        for b in (0..self.bestbbestcexceptmaxb[0]).rev() {
+        for b in (0..self.optimal_bits).rev() {
             cexcept += self.freqs[b as usize + 1];
             if cexcept == self.block_size {
                 break;
             }
             let mut thiscost = cexcept * OVERHEAD_OF_EACH_EXCEPT
-                + cexcept * (self.bestbbestcexceptmaxb[2] - b)
+                + cexcept * (self.max_bits - b)
                 + b * self.block_size
                 + 8;
-            if self.bestbbestcexceptmaxb[2] - b == 1 {
+            if self.max_bits - b == 1 {
                 thiscost -= cexcept;
             }
             if thiscost < bestcost {
                 bestcost = thiscost;
-                self.bestbbestcexceptmaxb[0] = b;
-                self.bestbbestcexceptmaxb[1] = cexcept;
+                self.optimal_bits = b;
+                self.exception_count = cexcept;
             }
         }
     }
