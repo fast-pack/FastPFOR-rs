@@ -21,6 +21,10 @@ impl ByteBuffer {
     pub fn len(&self) -> usize {
         self.buffer.len()
     }
+    
+    pub fn is_empty(&self) -> bool {
+        self.buffer.is_empty()
+    }
 
     pub fn put(&mut self, byte: u8) {
         self.buffer.put_u8(byte);
