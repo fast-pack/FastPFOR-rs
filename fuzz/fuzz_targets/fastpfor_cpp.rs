@@ -31,6 +31,7 @@ fuzz_target!(|data: FuzzInput| {
             );
         }
     }
+    assert_eq!(dec_slice, input.len());
 });
 
 #[derive(arbitrary::Arbitrary, Debug)]

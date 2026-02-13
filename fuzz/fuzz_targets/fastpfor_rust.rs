@@ -3,7 +3,7 @@
 use std::io::Cursor;
 use std::num::NonZeroU32;
 
-use fastpfor::rust::{DEFAULT_PAGE_SIZE, FastPFOR, Integer};
+use fastpfor::rust::{DEFAULT_PAGE_SIZE, FastPFOR};
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: (u32, Vec<u32>)| {
@@ -58,13 +58,14 @@ fuzz_target!(|data: (u32, Vec<u32>)| {
             "Decompressed length mismatch: expected {}, got {decompressed_length}",
             input_data.len()
         );
+    } else {
+        for (i, (&original, &decoded)) in input_data.iter().zip(decompressed.iter()).enumerate() {
+            assert_eq!(
+                original, decoded,
+                "Mismatch at position {}: expected {}, got {}",
+                i, original, decoded
+            );
+        }
     }
-
-    for (i, (&original, &decoded)) in input_data.iter().zip(decompressed.iter()).enumerate() {
-        assert_eq!(
-            original, decoded,
-            "Mismatch at position {}: expected {}, got {}",
-            i, original, decoded
-        );
-    }
+    assert_eq!(decompressed_length, input_data.len());
 });
