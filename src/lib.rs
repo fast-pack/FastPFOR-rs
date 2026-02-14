@@ -1,3 +1,4 @@
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc = include_str!("../README.md")]
 
 #[cfg(not(any(feature = "cpp", feature = "rust",)))]
