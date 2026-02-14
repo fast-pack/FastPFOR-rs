@@ -56,7 +56,7 @@ fuzz_target!(|data: FuzzInput| {
             let mut cpp_codec = cpp::CopyCodec::new();
             cpp_codec
                 .compress_to_slice(input, &mut cpp_compressed)
-                .expect("Rust compression failed")
+                .expect("C++ compression failed")
         }
     };
 
