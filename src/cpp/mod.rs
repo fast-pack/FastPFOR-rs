@@ -153,7 +153,7 @@ impl<C: Codec32> CodecToSlice<u32> for C {
         output: &'out mut [u32],
     ) -> Result<&'out [u32], Self::Error> {
         let result = self.encode32(input, output)?;
-        Ok(&*result)
+        Ok(result)
     }
 
     fn decompress_to_slice<'out>(
@@ -162,7 +162,7 @@ impl<C: Codec32> CodecToSlice<u32> for C {
         output: &'out mut [u32],
     ) -> Result<&'out [u32], Self::Error> {
         let result = self.decode32(input, output)?;
-        Ok(&*result)
+        Ok(result)
     }
 }
 
@@ -176,7 +176,7 @@ impl<C: Codec64> CodecToSlice<u64, u32> for C {
         output: &'out mut [u32],
     ) -> Result<&'out [u32], Self::Error> {
         let result = self.encode64(input, output)?;
-        Ok(&*result)
+        Ok(result)
     }
 
     fn decompress_to_slice<'out>(
@@ -185,7 +185,7 @@ impl<C: Codec64> CodecToSlice<u64, u32> for C {
         output: &'out mut [u64],
     ) -> Result<&'out [u64], Self::Error> {
         let result = self.decode64(input, output)?;
-        Ok(&*result)
+        Ok(result)
     }
 }
 
