@@ -113,7 +113,7 @@ See the [FastPFOR C++ library documentation](https://github.com/fast-pack/FastPF
 [`Codec32`]: https://docs.rs/fastpfor/latest/fastpfor/cpp/trait.Codec32.html
 [`Codec64`]: https://docs.rs/fastpfor/latest/fastpfor/cpp/trait.Codec64.html
 [`Exception`]: https://docs.rs/fastpfor/latest/fastpfor/cpp/type.Exception.html
-[`UniquePtr`]: https://docs.rs/fastpfor/latest/fastpfor/cpp/https://docs.rs/cxx/latest/cxx/struct.UniquePtr.html
+[`UniquePtr`]: https://docs.rs/cxx/latest/cxx/struct.UniquePtr.html
 [`BP32Codec`]: https://docs.rs/fastpfor/latest/fastpfor/cpp/struct.BP32Codec.html
 [`CopyCodec`]: https://docs.rs/fastpfor/latest/fastpfor/cpp/struct.CopyCodec.html
 [`FastBinaryPacking8Codec`]: https://docs.rs/fastpfor/latest/fastpfor/cpp/struct.FastBinaryPacking8Codec.html
