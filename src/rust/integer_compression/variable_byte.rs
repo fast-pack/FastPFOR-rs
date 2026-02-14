@@ -9,6 +9,21 @@ use crate::rust::{FastPForError, FastPForResult, Integer, Skippable};
 #[derive(Debug)]
 pub struct VariableByte;
 
+// Helper functions with const generics for extracting 7-bit chunks
+impl VariableByte {
+    /// Extract 7 bits from position i (with masking)
+    #[inline(always)]
+    const fn extract_7bits<const I: u32>(val: u32) -> u8 {
+        ((val >> (7 * I)) & ((1 << 7) - 1)) as u8
+    }
+
+    /// Extract 7 bits from position i (without masking, for last byte)
+    #[inline(always)]
+    const fn extract_7bits_maskless<const I: u32>(val: u32) -> u8 {
+        (val >> (7 * I)) as u8
+    }
+}
+
 // Implemented for consistency with other codecs
 impl VariableByte {
     /// Creates a new instance
@@ -41,25 +56,25 @@ impl Skippable for VariableByte {
         for k in input_offset.position()..(input_offset.position() + u64::from(input_length)) {
             let val = input[k as usize];
             if val < (1 << 7) {
-                buf.put_u8((val & 0x7F) as u8);
+                buf.put_u8(Self::extract_7bits::<0>(val));
             } else if val < (1 << 14) {
-                buf.put_u8(((val & 0x7F) | (1 << 7)) as u8);
-                buf.put_u8((val >> 7) as u8);
+                buf.put_u8(Self::extract_7bits::<0>(val) | (1 << 7));
+                buf.put_u8(Self::extract_7bits_maskless::<1>(val));
             } else if val < (1 << 21) {
-                buf.put_u8(((val & 0x7F) | (1 << 7)) as u8);
-                buf.put_u8((((val >> 7) & 0x7F) | (1 << 7)) as u8);
-                buf.put_u8((val >> 14) as u8);
+                buf.put_u8(Self::extract_7bits::<0>(val) | (1 << 7));
+                buf.put_u8(Self::extract_7bits::<1>(val) | (1 << 7));
+                buf.put_u8(Self::extract_7bits_maskless::<2>(val));
             } else if val < (1 << 28) {
-                buf.put_u8(((val & 0x7F) | (1 << 7)) as u8);
-                buf.put_u8((((val >> 7) & 0x7F) | (1 << 7)) as u8);
-                buf.put_u8((((val >> 14) & 0x7F) | (1 << 7)) as u8);
-                buf.put_u8((val >> 21) as u8);
+                buf.put_u8(Self::extract_7bits::<0>(val) | (1 << 7));
+                buf.put_u8(Self::extract_7bits::<1>(val) | (1 << 7));
+                buf.put_u8(Self::extract_7bits::<2>(val) | (1 << 7));
+                buf.put_u8(Self::extract_7bits_maskless::<3>(val));
             } else {
-                buf.put_u8(((val & 0x7F) | (1 << 7)) as u8);
-                buf.put_u8((((val >> 7) & 0x7F) | (1 << 7)) as u8);
-                buf.put_u8((((val >> 14) & 0x7F) | (1 << 7)) as u8);
-                buf.put_u8((((val >> 21) & 0x7F) | (1 << 7)) as u8);
-                buf.put_u8((val >> 28) as u8);
+                buf.put_u8(Self::extract_7bits::<0>(val) | (1 << 7));
+                buf.put_u8(Self::extract_7bits::<1>(val) | (1 << 7));
+                buf.put_u8(Self::extract_7bits::<2>(val) | (1 << 7));
+                buf.put_u8(Self::extract_7bits::<3>(val) | (1 << 7));
+                buf.put_u8(Self::extract_7bits_maskless::<4>(val));
             }
         }
         while buf.len() % 4 != 0 {
@@ -195,39 +210,39 @@ impl Integer<i8> for VariableByte {
         for k in input_offset.position() as u32..(input_offset.position() as u32 + input_length) {
             let val = input[k as usize];
             if val < (1 << 7) {
-                output[out_pos_tmp as usize] = (val & 0x7F) as i8;
+                output[out_pos_tmp as usize] = Self::extract_7bits::<0>(val) as i8;
                 out_pos_tmp += 1;
             } else if val < (1 << 14) {
-                output[out_pos_tmp as usize] = ((val & 0x7F) | (1 << 7)) as i8;
+                output[out_pos_tmp as usize] = (Self::extract_7bits::<0>(val) | (1 << 7)) as i8;
                 out_pos_tmp += 1;
-                output[out_pos_tmp as usize] = (val >> 7) as i8;
+                output[out_pos_tmp as usize] = Self::extract_7bits_maskless::<1>(val) as i8;
                 out_pos_tmp += 1;
             } else if val < (1 << 21) {
-                output[out_pos_tmp as usize] = ((val & 0x7F) | (1 << 7)) as i8;
+                output[out_pos_tmp as usize] = (Self::extract_7bits::<0>(val) | (1 << 7)) as i8;
                 out_pos_tmp += 1;
-                output[out_pos_tmp as usize] = (((val >> 7) & 0x7F) | (1 << 7)) as i8;
+                output[out_pos_tmp as usize] = (Self::extract_7bits::<1>(val) | (1 << 7)) as i8;
                 out_pos_tmp += 1;
-                output[out_pos_tmp as usize] = (val >> 14) as i8;
+                output[out_pos_tmp as usize] = Self::extract_7bits_maskless::<2>(val) as i8;
                 out_pos_tmp += 1;
             } else if val < (1 << 28) {
-                output[out_pos_tmp as usize] = ((val & 0x7F) | (1 << 7)) as i8;
+                output[out_pos_tmp as usize] = (Self::extract_7bits::<0>(val) | (1 << 7)) as i8;
                 out_pos_tmp += 1;
-                output[out_pos_tmp as usize] = (((val >> 7) & 0x7F) | (1 << 7)) as i8;
+                output[out_pos_tmp as usize] = (Self::extract_7bits::<1>(val) | (1 << 7)) as i8;
                 out_pos_tmp += 1;
-                output[out_pos_tmp as usize] = (((val >> 14) & 0x7F) | (1 << 7)) as i8;
+                output[out_pos_tmp as usize] = (Self::extract_7bits::<2>(val) | (1 << 7)) as i8;
                 out_pos_tmp += 1;
-                output[out_pos_tmp as usize] = (val >> 21) as i8;
+                output[out_pos_tmp as usize] = Self::extract_7bits_maskless::<3>(val) as i8;
                 out_pos_tmp += 1;
             } else {
-                output[out_pos_tmp as usize] = ((val & 0x7F) | (1 << 7)) as i8;
+                output[out_pos_tmp as usize] = (Self::extract_7bits::<0>(val) | (1 << 7)) as i8;
                 out_pos_tmp += 1;
-                output[out_pos_tmp as usize] = (((val >> 7) & 0x7F) | (1 << 7)) as i8;
+                output[out_pos_tmp as usize] = (Self::extract_7bits::<1>(val) | (1 << 7)) as i8;
                 out_pos_tmp += 1;
-                output[out_pos_tmp as usize] = (((val >> 14) & 0x7F) | (1 << 7)) as i8;
+                output[out_pos_tmp as usize] = (Self::extract_7bits::<2>(val) | (1 << 7)) as i8;
                 out_pos_tmp += 1;
-                output[out_pos_tmp as usize] = (((val >> 21) & 0x7F) | (1 << 7)) as i8;
+                output[out_pos_tmp as usize] = (Self::extract_7bits::<3>(val) | (1 << 7)) as i8;
                 out_pos_tmp += 1;
-                output[out_pos_tmp as usize] = (val >> 28) as i8;
+                output[out_pos_tmp as usize] = Self::extract_7bits_maskless::<4>(val) as i8;
                 out_pos_tmp += 1;
             }
         }
