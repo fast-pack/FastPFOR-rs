@@ -77,7 +77,7 @@ Best for unsorted data and small integers. Simple and widely compatible.
 ### Simple Encodings
 
 Efficient for small positive integers (typically < 2^16).
-**Does not support arbitrary u32 inputs.**.
+**Does not support arbitrary u32 inputs.**
 
 - [`Simple16Codec`] - 16 packing modes in 32-bit words
 - [`Simple9Codec`] - 9 packing modes for flexibility
