@@ -4,6 +4,8 @@
 pub use cxx::Exception;
 use cxx::UniquePtr;
 
+use crate::CodecToSlice;
+
 /// FFI bridge to the C++ FastPFOR library.
 ///
 /// This module contains the raw FFI declarations for interfacing with the C++ code.
@@ -139,6 +141,51 @@ pub trait Codec32: CodecWrapper {
     ) -> Result<&'out mut [u32], Exception> {
         let n = ffi::codec_decode32(self.codec(), input, output)?;
         Ok(&mut output[..n])
+    }
+}
+
+impl<C: Codec32> CodecToSlice<u32> for C {
+    type Error = Exception;
+
+    fn compress_to_slice<'out>(
+        &mut self,
+        input: &[u32],
+        output: &'out mut [u32],
+    ) -> Result<&'out [u32], Self::Error> {
+        let result = self.encode32(input, output)?;
+        Ok(&*result)
+    }
+
+    fn decompress_to_slice<'out>(
+        &mut self,
+        input: &[u32],
+        output: &'out mut [u32],
+    ) -> Result<&'out [u32], Self::Error> {
+        let result = self.decode32(input, output)?;
+        Ok(&*result)
+    }
+}
+
+// Note: 64-bit integers are compressed into 32-bit word arrays.
+impl<C: Codec64> CodecToSlice<u64, u32> for C {
+    type Error = Exception;
+
+    fn compress_to_slice<'out>(
+        &mut self,
+        input: &[u64],
+        output: &'out mut [u32],
+    ) -> Result<&'out [u32], Self::Error> {
+        let result = self.encode64(input, output)?;
+        Ok(&*result)
+    }
+
+    fn decompress_to_slice<'out>(
+        &mut self,
+        input: &[u32],
+        output: &'out mut [u64],
+    ) -> Result<&'out [u64], Self::Error> {
+        let result = self.decode64(input, output)?;
+        Ok(&*result)
     }
 }
 
@@ -419,5 +466,23 @@ mod tests {
         assert_eq!(decoded, decoded2);
 
         assert_eq!(decoded, input);
+    }
+
+    #[test]
+    fn supports_compress_to_slice() {
+        let mut cpp_codec = FastPFor128Codec::new();
+        let data = vec![1, 2, 3, 4, 5];
+        let mut compressed = vec![0u32; data.len() * 4];
+
+        let compressed_len = {
+            let result = cpp_codec.compress_to_slice(&data, &mut compressed).unwrap();
+            result.len()
+        };
+
+        let mut decompressed = vec![0u32; data.len()];
+        let result = cpp_codec
+            .decompress_to_slice(&compressed[..compressed_len], &mut decompressed)
+            .unwrap();
+        assert_eq!(result, &data[..]);
     }
 }
