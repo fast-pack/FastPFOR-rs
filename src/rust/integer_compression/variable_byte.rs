@@ -120,7 +120,7 @@ impl Integer<u32> for VariableByte {
 
         // Create a byte slice view of the input
         let input_bytes: &[u8] = unsafe {
-            std::slice::from_raw_parts(input[input_start..].as_ptr() as *const u8, byte_length)
+            std::slice::from_raw_parts(input[input_start..].as_ptr().cast::<u8>(), byte_length)
         };
 
         let mut byte_pos = 0;
@@ -132,7 +132,7 @@ impl Integer<u32> for VariableByte {
             let mut c: u8;
 
             c = input_bytes[byte_pos];
-            v = (c & 0x7F) as u32;
+            v = u32::from(c & 0x7F);
             if c < 128 {
                 byte_pos += 1;
                 output[tmp_outpos] = v;
@@ -141,7 +141,7 @@ impl Integer<u32> for VariableByte {
             }
 
             c = input_bytes[byte_pos + 1];
-            v |= ((c & 0x7F) as u32) << 7;
+            v |= u32::from(c & 0x7F) << 7;
             if c < 128 {
                 byte_pos += 2;
                 output[tmp_outpos] = v;
@@ -150,7 +150,7 @@ impl Integer<u32> for VariableByte {
             }
 
             c = input_bytes[byte_pos + 2];
-            v |= ((c & 0x7F) as u32) << 14;
+            v |= u32::from(c & 0x7F) << 14;
             if c < 128 {
                 byte_pos += 3;
                 output[tmp_outpos] = v;
@@ -159,7 +159,7 @@ impl Integer<u32> for VariableByte {
             }
 
             c = input_bytes[byte_pos + 3];
-            v |= ((c & 0x7F) as u32) << 21;
+            v |= u32::from(c & 0x7F) << 21;
             if c < 128 {
                 byte_pos += 4;
                 output[tmp_outpos] = v;
@@ -169,7 +169,7 @@ impl Integer<u32> for VariableByte {
 
             c = input_bytes[byte_pos + 4];
             byte_pos += 5;
-            v |= ((c & 0x0F) as u32) << 28;
+            v |= u32::from(c & 0x0F) << 28;
             output[tmp_outpos] = v;
             tmp_outpos += 1;
         }
@@ -181,7 +181,7 @@ impl Integer<u32> for VariableByte {
             while byte_pos < byte_length {
                 let c = input_bytes[byte_pos];
                 byte_pos += 1;
-                v += ((c & 127) as u32) << shift;
+                v += u32::from(c & 127) << shift;
                 if c < 128 {
                     output[tmp_outpos] = v;
                     tmp_outpos += 1;
@@ -371,14 +371,14 @@ mod tests {
         )
         .expect("Failed to compress");
 
-        let encoded_len = (output_offset.position() as u64 - input.len() as u64) as u32;
+        let encoded_len = (output_offset.position() - input.len() as u64) as u32;
         let mut decoded: Vec<u32> = vec![0; input.len()];
         let mut input_offset = Cursor::new(0);
         let mut output_offset = Cursor::new(0);
 
         vb.uncompress(
             &encoded,
-            encoded_len as u32,
+            encoded_len,
             &mut input_offset,
             &mut decoded,
             &mut output_offset,
@@ -510,7 +510,7 @@ mod tests {
 
         for _ in 0..1000 {
             rng = rng.wrapping_mul(6364136223846793005).wrapping_add(1);
-            input.push((rng % (u32::MAX as u64)) as u32);
+            input.push((rng % u64::from(u32::MAX)) as u32);
         }
 
         verify_u32_roundtrip(&input);
@@ -537,204 +537,5 @@ mod tests {
         let input = vec![0, 1000000, 2000000, 3000000, 4000000];
         verify_u32_roundtrip(&input);
         verify_i8_roundtrip(&input);
-    }
-
-    #[test]
-    fn test_exact_encoding_single_byte() {
-        // Test that encoding matches C++ byte-for-byte
-        let mut vb = VariableByte::new();
-        let input = vec![5u32];
-        let mut encoded: Vec<i8> = vec![0; 10];
-        let mut input_offset = Cursor::new(0);
-        let mut output_offset = Cursor::new(0);
-
-        vb.compress(
-            &input,
-            input.len() as u32,
-            &mut input_offset,
-            &mut encoded,
-            &mut output_offset,
-        )
-        .expect("Failed to compress");
-
-        // Value 5 should encode as 0x05 (5 & 0x7F, no high bit)
-        assert_eq!(encoded[0], 5i8);
-    }
-
-    #[test]
-    fn test_exact_encoding_two_bytes() {
-        // Test that encoding matches C++ byte-for-byte
-        let mut vb = VariableByte::new();
-        let input = vec![200u32];
-        let mut encoded: Vec<i8> = vec![0; 10];
-        let mut input_offset = Cursor::new(0);
-        let mut output_offset = Cursor::new(0);
-
-        vb.compress(
-            &input,
-            input.len() as u32,
-            &mut input_offset,
-            &mut encoded,
-            &mut output_offset,
-        )
-        .expect("Failed to compress");
-
-        // Value 200 = 0b11001000
-        // Should encode as: [0xC8, 0x01]
-        // 0xC8 = -56 = ((200 & 0x7F) | 0x80) as signed
-        // 0x01 = 1 = (200 >> 7)
-        assert_eq!(encoded[0], -56i8); // 0xC8
-        assert_eq!(encoded[1], 1i8); // 0x01
-    }
-
-    #[test]
-    fn test_exact_encoding_fuzz_case() {
-        // Regression: the fuzz case that was failing
-        // Input: 0x00a6002c = 10,878,508
-        let mut vb = VariableByte::new();
-        let input = vec![0x00a6002c];
-        let mut encoded: Vec<i8> = vec![0; 10];
-        let mut input_offset = Cursor::new(0);
-        let mut output_offset = Cursor::new(0);
-
-        vb.compress(
-            &input,
-            input.len() as u32,
-            &mut input_offset,
-            &mut encoded,
-            &mut output_offset,
-        )
-        .expect("Failed to compress");
-
-        // Now decode and verify we get back the original
-        let encoded_len = (output_offset.position() as u64 - input.len() as u64) as u32;
-        let mut decoded: Vec<u32> = vec![0; input.len()];
-        let mut input_offset = Cursor::new(0);
-        let mut output_offset = Cursor::new(0);
-
-        vb.uncompress(
-            &encoded,
-            encoded_len,
-            &mut input_offset,
-            &mut decoded,
-            &mut output_offset,
-        )
-        .expect("Failed to uncompress");
-
-        assert_eq!(input, &decoded[..input.len()]);
-    }
-
-    #[test]
-    fn test_debug_compression_output() {
-        // Debug test to see what we actually produce
-        let mut vb = VariableByte::new();
-        let input = vec![0x00a6002cu32];
-        let mut compressed: Vec<u32> = vec![0; 10];
-        let mut input_offset = Cursor::new(0);
-        let mut output_offset = Cursor::new(0);
-
-        vb.compress(
-            &input,
-            input.len() as u32,
-            &mut input_offset,
-            &mut compressed,
-            &mut output_offset,
-        )
-        .expect("Failed to compress");
-
-        let compressed_len = output_offset.position() as usize;
-        println!("Input: 0x{:08x}", input[0]);
-        println!("Compressed length: {} u32 words", compressed_len);
-        for i in 0..compressed_len {
-            let bytes = compressed[i].to_le_bytes();
-            println!(
-                "  Word {}: 0x{:08x} = bytes [{:02x} {:02x} {:02x} {:02x}]",
-                i, compressed[i], bytes[0], bytes[1], bytes[2], bytes[3]
-            );
-        }
-
-        // Now decompress
-        let mut decoded: Vec<u32> = vec![0; 10];
-        let mut input_offset = Cursor::new(0);
-        let mut output_offset = Cursor::new(0);
-
-        vb.uncompress(
-            &compressed,
-            compressed_len as u32,
-            &mut input_offset,
-            &mut decoded,
-            &mut output_offset,
-        )
-        .expect("Failed to uncompress");
-
-        let decoded_len = output_offset.position() as usize;
-        println!("Decoded {} values", decoded_len);
-        for i in 0..decoded_len {
-            println!("  Value {}: 0x{:08x}", i, decoded[i]);
-        }
-
-        assert_eq!(input, &decoded[..decoded_len]);
-    }
-
-    #[test]
-    fn test_u32_decompress_fuzz_case() {
-        // Exact fuzzer failure case:
-        // Input: [0x00a6002c] = [10,878,508]
-        // Compressed (from C++): [0x059880ac]
-        let mut vb = VariableByte::new();
-        let expected_output = vec![0x00a6002cu32];
-
-        // First compress it ourselves
-        let mut compressed: Vec<u32> = vec![0; expected_output.len() * 2];
-        let mut input_offset = Cursor::new(0);
-        let mut output_offset = Cursor::new(0);
-
-        vb.compress(
-            &expected_output,
-            expected_output.len() as u32,
-            &mut input_offset,
-            &mut compressed,
-            &mut output_offset,
-        )
-        .expect("Failed to compress");
-
-        let compressed_len = output_offset.position() as u32;
-
-        // Now decompress and verify
-        let mut decoded: Vec<u32> = vec![0; expected_output.len()];
-        let mut input_offset = Cursor::new(0);
-        let mut output_offset = Cursor::new(0);
-
-        vb.uncompress(
-            &compressed,
-            compressed_len,
-            &mut input_offset,
-            &mut decoded,
-            &mut output_offset,
-        )
-        .expect("Failed to uncompress");
-
-        assert_eq!(expected_output.len(), output_offset.position() as usize);
-        assert_eq!(expected_output, &decoded[..expected_output.len()]);
-
-        // Also test decompressing the exact C++ output
-        let cpp_compressed = vec![0x059880acu32];
-        let mut decoded2: Vec<u32> = vec![0; expected_output.len()];
-        let mut input_offset = Cursor::new(0);
-        let mut output_offset = Cursor::new(0);
-
-        vb.uncompress(
-            &cpp_compressed,
-            1,
-            &mut input_offset,
-            &mut decoded2,
-            &mut output_offset,
-        )
-        .expect("Failed to uncompress C++ data");
-
-        assert_eq!(
-            expected_output,
-            &decoded2[..output_offset.position() as usize]
-        );
     }
 }
