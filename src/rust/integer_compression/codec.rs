@@ -69,9 +69,9 @@ impl CodecToSlice<u32> for Codec {
     ) -> Result<&'out [u32], Self::Error> {
         let mut output_offset = Cursor::new(0);
         let input_length = input
-          .len()
-          .try_into()
-          .map_err(|_| Self::Error::InvalidInputLength(input.len()))?;
+            .len()
+            .try_into()
+            .map_err(|_| Self::Error::InvalidInputLength(input.len()))?;
 
         self.compress(
             input,
