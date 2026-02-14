@@ -1,4 +1,3 @@
-///! Rust re-implementation of `FastPFor` (work in progress)
 mod cursor;
 mod error;
 mod integer_compression;
