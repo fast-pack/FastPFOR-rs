@@ -370,7 +370,7 @@ implement_codecs! {
 
     // VarIntG8iuCodec => varintg8iu_codec,  // Conditional with #ifdef
 
-    /// Group Variable-length integer encoding encoding with optimizations.
+    /// Group Variable-length integer encoding with optimizations.
     VarIntGbCodec => varintgb_codec,
 
     // VsEncodingCodec => vsencoding_codec,  // This is leaking memory
