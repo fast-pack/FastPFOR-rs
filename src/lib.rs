@@ -1,4 +1,3 @@
-#![allow(clippy::needless_doctest_main)]
 #![doc = include_str!("../README.md")]
 
 #[cfg(not(any(feature = "cpp", feature = "rust",)))]
