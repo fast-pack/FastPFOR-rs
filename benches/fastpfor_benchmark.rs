@@ -1,10 +1,12 @@
 use core::ops::Range;
+use std::hint::black_box;
+use std::io::Cursor;
+use std::num::NonZeroU32;
+
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use fastpfor::rust::{FastPFOR, Integer, BLOCK_SIZE_128, BLOCK_SIZE_256, DEFAULT_PAGE_SIZE};
 use rand::rngs::StdRng;
 use rand::{RngExt as _, SeedableRng};
-use std::hint::black_box;
-use std::io::Cursor;
 
 const SIZES: &[usize; 2] = &[1024, 4096];
 const SEED: u64 = 456;
@@ -92,7 +94,7 @@ fn compress_data(codec: &mut FastPFOR, data: &[u32]) -> usize {
 }
 
 /// Helper function to compress data and return compressed buffer
-fn prepare_compressed_data(data: &[u32], block_size: u32) -> Vec<u32> {
+fn prepare_compressed_data(data: &[u32], block_size: NonZeroU32) -> Vec<u32> {
     let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, block_size);
     let mut compressed = vec![0u32; data.len() * 2];
     let mut input_offset = Cursor::new(0);

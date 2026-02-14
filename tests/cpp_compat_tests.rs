@@ -15,7 +15,7 @@ fn test_rust_decompresses_cpp_encoded_data() {
     let mut codec_rs = rust::FastPFOR::new(rust::DEFAULT_PAGE_SIZE, rust::BLOCK_SIZE_128);
 
     for n in test_input_sizes() {
-        for input in get_test_cases(n + rust::BLOCK_SIZE_128 as usize) {
+        for input in get_test_cases(n + rust::BLOCK_SIZE_128.get() as usize) {
             // Buffer for the C++ encoded
             let mut compressed_buffer = vec![0; input.len()];
 
@@ -58,7 +58,7 @@ fn test_rust_and_cpp_fastpfor32_compression_matches() {
     let mut codec_rs = rust::FastPFOR::new(rust::DEFAULT_PAGE_SIZE, rust::BLOCK_SIZE_128);
 
     for n in test_input_sizes() {
-        for input in get_test_cases(n + rust::BLOCK_SIZE_128 as usize) {
+        for input in get_test_cases(n + rust::BLOCK_SIZE_128.get() as usize) {
             // Buffer for the C++ encoded
             let mut compressed_buffer = vec![0; input.len()];
 

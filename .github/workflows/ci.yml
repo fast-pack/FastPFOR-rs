@@ -56,6 +56,45 @@ jobs:
           toolchain: ${{ steps.msrv.outputs.value }}
           components: rustfmt
       - run: just ci_mode=0 ci-test-msrv  # Ignore warnings in MSRV
+  fuzz:
+    runs-on: ubuntu-latest
+
+    env:
+      # The number of seconds to run the fuzz target.
+      FUZZ_TIME: 60
+
+    strategy:
+      matrix:
+        include:
+          - fuzz_target: fastpfor_cpp
+          - fuzz_target: fastpfor_rust
+
+    steps:
+      - uses: actions/checkout@v6
+        with: {persist-credentials: false, submodules: recursive}
+
+      # Install the nightly Rust channel.
+      - run: rustup toolchain install nightly
+      - run: rustup default nightly
+
+      # Install and cache `cargo-fuzz`.
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-binstall
+      - run: cargo binstall -y cargo-fuzz@0.13.1 # Pinned to avoid breakage.
+
+      # Build and then run the fuzz target.
+      #  --target x86_64-unknown-linux-gnu is necessary to not default to musl, which is not supported by cargo-fuzz.
+      - run: cargo fuzz build --target x86_64-unknown-linux-gnu ${{ matrix.fuzz_target }}
+      - run: cargo fuzz run --target x86_64-unknown-linux-gnu ${{ matrix.fuzz_target }} -- -max_total_time=${{ env.FUZZ_TIME }}
+        if: ${{ matrix.fuzz_target != 'fastpfor_rust' }} # fastpfor_rust does not pass this
+
+      # Upload fuzzing artifacts on failure for post-mortem debugging.
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fuzzing-artifacts-${{ matrix.fuzz_target }}-${{ github.sha }}
+          path: fuzz/artifacts
 
   coverage:
     name: Code Coverage
@@ -78,7 +117,7 @@ jobs:
   # This job checks if any of the previous jobs failed or were canceled.
   # This approach also allows some jobs to be skipped if they are not needed.
   ci-passed:
-    needs: [ test, test-nightly, test-msrv ]
+    needs: [ test, test-nightly, test-msrv, fuzz ]
     if: always()
     runs-on: ubuntu-latest
     steps:
