@@ -1,8 +1,6 @@
 #![no_main]
 
-use fastpfor::cpp;
-use fastpfor::rust;
-use fastpfor::CodecToSlice;
+use fastpfor::{CodecToSlice, cpp, rust};
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: FuzzInput| {
