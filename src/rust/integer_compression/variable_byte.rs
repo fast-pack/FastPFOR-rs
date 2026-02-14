@@ -129,47 +129,27 @@ impl Integer<u32> for VariableByte {
         // Fast path: process while we have at least 10 bytes remaining
         while byte_pos + 10 <= byte_length {
             let mut v: u32 = 0;
-            let mut c: u8;
+            let mut bytes_read = 0;
 
-            c = input_bytes[byte_pos];
-            v = u32::from(c & 0x7F);
-            if c < 128 {
-                byte_pos += 1;
-                output[tmp_outpos] = v;
-                tmp_outpos += 1;
-                continue;
+            // Decode up to 5 bytes for a u32 value
+            for i in 0..5 {
+                let c = input_bytes[byte_pos + i];
+
+                if i < 4 {
+                    // For bytes 0-3, use 7 bits each
+                    v |= u32::from(c & 0x7F) << (i * 7);
+                    if c < 128 {
+                        bytes_read = i + 1;
+                        break;
+                    }
+                } else {
+                    // For byte 4, use only 4 bits (total: 7*4 + 4 = 32 bits)
+                    v |= u32::from(c & 0x0F) << 28;
+                    bytes_read = 5;
+                }
             }
 
-            c = input_bytes[byte_pos + 1];
-            v |= u32::from(c & 0x7F) << 7;
-            if c < 128 {
-                byte_pos += 2;
-                output[tmp_outpos] = v;
-                tmp_outpos += 1;
-                continue;
-            }
-
-            c = input_bytes[byte_pos + 2];
-            v |= u32::from(c & 0x7F) << 14;
-            if c < 128 {
-                byte_pos += 3;
-                output[tmp_outpos] = v;
-                tmp_outpos += 1;
-                continue;
-            }
-
-            c = input_bytes[byte_pos + 3];
-            v |= u32::from(c & 0x7F) << 21;
-            if c < 128 {
-                byte_pos += 4;
-                output[tmp_outpos] = v;
-                tmp_outpos += 1;
-                continue;
-            }
-
-            c = input_bytes[byte_pos + 4];
-            byte_pos += 5;
-            v |= u32::from(c & 0x0F) << 28;
+            byte_pos += bytes_read;
             output[tmp_outpos] = v;
             tmp_outpos += 1;
         }
