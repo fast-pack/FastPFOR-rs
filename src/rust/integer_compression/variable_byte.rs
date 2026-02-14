@@ -6,11 +6,13 @@ use crate::rust::cursor::IncrementCursor;
 use crate::rust::integer_compression::helpers::{extract7bits, extract_7bits_maskless};
 use crate::rust::{FastPForError, FastPForResult, Integer, Skippable};
 
+/// Variable-byte encoding codec for integer compression.
 #[derive(Debug)]
 pub struct VariableByte;
 
 // Implemented for consistency with other codecs
 impl VariableByte {
+    /// Creates a new instance
     pub fn new() -> VariableByte {
         VariableByte
     }

@@ -1,3 +1,5 @@
+//! Basic tests for FastPFOR-rs.
+
 #![cfg(feature = "rust")]
 #![expect(clippy::needless_range_loop)]
 

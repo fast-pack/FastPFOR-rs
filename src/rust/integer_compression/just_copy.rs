@@ -2,10 +2,14 @@ use std::io::Cursor;
 
 use crate::rust::{FastPForError, FastPForResult, Integer, Skippable};
 
+/// A no-op codec that copies data without compression.
+///
+/// Useful as a baseline for benchmarking or when a codec interface is required.
 #[derive(Debug)]
 pub struct JustCopy;
 
 impl JustCopy {
+    /// Creates a new instance
     pub fn new() -> Self {
         JustCopy
     }

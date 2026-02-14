@@ -1,10 +1,10 @@
 #![no_main]
 
 use std::io::Cursor;
-
-use fastpfor::rust::{FastPFOR, Integer, BLOCK_SIZE_128, BLOCK_SIZE_256, DEFAULT_PAGE_SIZE};
-use libfuzzer_sys::fuzz_target;
 use std::num::NonZeroU32;
+
+use fastpfor::rust::{BLOCK_SIZE_128, BLOCK_SIZE_256, DEFAULT_PAGE_SIZE, FastPFOR, Integer};
+use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: FuzzInput| {
     let input = data.data;

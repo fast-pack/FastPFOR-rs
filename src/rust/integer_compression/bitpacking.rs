@@ -1,5 +1,6 @@
 #![expect(clippy::identity_op)]
 
+/// Packs 32 integers from `input` into `output` using `bit` bits per integer.
 pub fn fast_pack(input: &[u32], inpos: usize, output: &mut [u32], outpos: usize, bit: u8) {
     match bit {
         0 => (),
@@ -1299,6 +1300,7 @@ fn fast_pack32(input: &[u32], inpos: usize, output: &mut [u32], outpos: usize) {
     output[outpos..outpos + 32].copy_from_slice(&input[inpos..inpos + 32]);
 }
 
+/// Unpacks 32 integers from `input` into `output` using `bit` bits per integer.
 pub fn fast_unpack(input: &[u32], inpos: usize, output: &mut [u32], outpos: usize, bit: u8) {
     match bit {
         0 => fast_unpack0(output, outpos),

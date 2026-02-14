@@ -1,3 +1,5 @@
+//! Compatibility tests between Rust and C++ codec implementations.
+
 #![cfg(all(feature = "rust", feature = "cpp"))]
 
 use std::io::Cursor;
