@@ -40,8 +40,11 @@ pub struct FastPFOR {
     /// Frequency count for each bit width:
     /// `freqs[i]` = count of values needing exactly i bits
     pub freqs: [u32; 33],
+    /// Optimal number of bits chosen for the current block
     pub optimal_bits: u32,
+    /// Number of exceptions that don't fit in the optimal bit width
     pub exception_count: u32,
+    /// Maximum bit width required for any value in the block
     pub max_bits: u32,
     /// Integers per block (128 or 256)
     pub block_size: u32,

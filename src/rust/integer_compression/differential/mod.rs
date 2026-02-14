@@ -1,5 +1,6 @@
 use std::ops::{Add, AddAssign};
 
+/// Delta encoding/decoding utility for integer compression.
 pub struct Delta;
 
 impl Delta {
@@ -10,6 +11,7 @@ impl Delta {
 
     // C++ port as it supports any type of numeric data
     // source: https://github.com/fast-pack/FastPFor/blob/49d44d94773518ef26486f7a58f8da08e8a498bb/headers/deltautil.h#L274
+    /// Applies inverse delta encoding to decompress delta-encoded data in place.
     pub fn fast_inverse_delta<T>(data: &mut [T])
     where
         T: Copy + Add<Output = T> + AddAssign,

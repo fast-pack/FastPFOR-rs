@@ -1,3 +1,5 @@
+//! Build script for FastPFOR-rs.
+
 /// Builds the C++ FastPFOR library and bridge when the `cpp` feature is enabled.
 #[cfg(feature = "cpp")]
 fn build_fastpfor() {

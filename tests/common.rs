@@ -1,3 +1,5 @@
+//! Common test utilities for codec compatibility testing.
+
 #![cfg(all(feature = "rust", feature = "cpp"))]
 
 use std::io::Cursor;
@@ -9,13 +11,18 @@ use fastpfor::rust::{
 use rand::rngs::StdRng;
 use rand::{RngExt as _, SeedableRng as _};
 
+/// Wrapper enum for different codec implementations used in tests.
 pub enum TestCodec {
+    /// Variable-byte codec with name
     VariableByte(VariableByte, String),
+    /// Pass-through codec with name
     JustCopy(JustCopy, String),
+    /// Composite codec with name
     Composition(Box<Composition>, String),
 }
 
 impl TestCodec {
+    /// Returns the name of the codec.
     pub fn name(&self) -> &str {
         match self {
             TestCodec::Composition(_, name)
@@ -23,6 +30,7 @@ impl TestCodec {
             | TestCodec::VariableByte(_, name) => name,
         }
     }
+    /// Compresses input data using the wrapped codec.
     pub fn compress(
         &mut self,
         input: &[u32],
@@ -44,6 +52,7 @@ impl TestCodec {
         }
     }
 
+    /// Decompresses input data using the wrapped codec.
     pub fn uncompress(
         &mut self,
         input: &[u32],
@@ -66,6 +75,7 @@ impl TestCodec {
     }
 }
 
+/// Returns a collection of codec instances for testing.
 pub fn get_codecs() -> Vec<TestCodec> {
     vec![
         TestCodec::VariableByte(VariableByte::new(), "VariableByte".to_string()),
@@ -84,10 +94,12 @@ pub fn get_codecs() -> Vec<TestCodec> {
     ]
 }
 
+/// Returns various input sizes to test codec behavior.
 pub fn test_input_sizes() -> Vec<usize> {
     (1..=8).map(|exp| (1usize << exp) * 128).collect()
 }
 
+/// Generates test data vectors of size `n` with various patterns.
 pub fn get_test_cases(n: usize) -> Vec<Vec<u32>> {
     let mut rng = StdRng::seed_from_u64(14);
 
