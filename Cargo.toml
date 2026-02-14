@@ -13,6 +13,9 @@ keywords = ["fastpfor", "compression"]
 categories = ["compression"]
 rust-version = "1.86.0"
 
+[package.metadata.docs.rs]
+all-features = true
+
 [[bench]]
 name = "fastpfor_benchmark"
 required-features = ["rust"]

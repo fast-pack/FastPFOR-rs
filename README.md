@@ -74,11 +74,17 @@ fn main() {
 
 ## Build Requirements
 
-When using the Rust implementation, no additional dependencies are required.
-When using the C++ implementation, you need to have a C++ compiler that supports C++14 and SIMD intrinsics. See [FastPFor C++ requirements](https://github.com/fast-pack/FastPFor?tab=readme-ov-file#software-requirements).
+- When using the **Rust implementation**:
+  no additional dependencies are required.
+- When using the **C++ implementation**:
+  you need to have a C++ compiler that supports C++14 and SIMD intrinsics.
+  See [FastPFor C++ requirements](https://github.com/fast-pack/FastPFor?tab=readme-ov-file#software-requirements).
 
 ### Linux
-The default GitHub action runner for Linux has all the needed dependencies. For local development, you may need to install the following packages.
+
+The default GitHub action runner for Linux has all the needed dependencies.
+
+For local development, you may need to install the following packages:
 
 ```bash
 # This list may be incomplete
@@ -86,7 +92,8 @@ sudo apt-get install build-essential libsimde-dev
 ```
 
 ### macOS
-To build `FastPFor` on macOS, you'll need to install `SIMDe`. Since Homebrew installs packages in `/opt/homebrew` (for Apple Silicon), you'll also need to explicitly set the include paths.
+To build `FastPFor` on macOS, you'll need to install `SIMDe`.
+Since Homebrew installs packages in `/opt/homebrew` (for Apple Silicon), you'll also need to explicitly set the include paths.
 
 ```bash
 # install SIMDe via Homebrew

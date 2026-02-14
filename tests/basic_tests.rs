@@ -1,5 +1,5 @@
 #![cfg(feature = "rust")]
-#![allow(clippy::needless_range_loop)]
+#![expect(clippy::needless_range_loop)]
 
 use std::io::Cursor;
 use std::num::NonZeroU32;
