@@ -34,10 +34,29 @@ fuzz_target!(|data: FuzzInput| {
     assert_eq!(dec_slice.len(), input.len());
 });
 
-#[derive(arbitrary::Arbitrary, Debug)]
+#[derive(arbitrary::Arbitrary)]
 struct FuzzInput {
     data: Vec<u32>,
     codec: FuzzCodec,
+}
+
+impl Debug for FuzzInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FuzzInput")
+            .field(
+                "data",
+                if self.data.len() <= 5 {
+                    &self.data
+                } else {
+                    &self.data[..5]
+                        .map(|x| x.to_string())
+                        .extend(["..."])
+                        .collect::<Vec<_>>()
+                },
+            )
+            .field("codec", &self.codec)
+            .finish()
+    }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, arbitrary::Arbitrary, Debug)]
