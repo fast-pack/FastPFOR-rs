@@ -4,6 +4,8 @@
 pub use cxx::Exception;
 use cxx::UniquePtr;
 
+use crate::CodecToSlice;
+
 /// FFI bridge to the C++ FastPFOR library.
 ///
 /// This module contains the raw FFI declarations for interfacing with the C++ code.
@@ -139,6 +141,51 @@ pub trait Codec32: CodecWrapper {
     ) -> Result<&'out mut [u32], Exception> {
         let n = ffi::codec_decode32(self.codec(), input, output)?;
         Ok(&mut output[..n])
+    }
+}
+
+impl<C: Codec32> CodecToSlice<u32> for C {
+    type Error = Exception;
+
+    fn compress_to_slice<'out>(
+        &mut self,
+        input: &[u32],
+        output: &'out mut [u32],
+    ) -> Result<&'out [u32], Self::Error> {
+        let result = self.encode32(input, output)?;
+        Ok(result)
+    }
+
+    fn decompress_to_slice<'out>(
+        &mut self,
+        input: &[u32],
+        output: &'out mut [u32],
+    ) -> Result<&'out [u32], Self::Error> {
+        let result = self.decode32(input, output)?;
+        Ok(result)
+    }
+}
+
+// Note: 64-bit integers are compressed into 32-bit word arrays.
+impl<C: Codec64> CodecToSlice<u64, u32> for C {
+    type Error = Exception;
+
+    fn compress_to_slice<'out>(
+        &mut self,
+        input: &[u64],
+        output: &'out mut [u32],
+    ) -> Result<&'out [u32], Self::Error> {
+        let result = self.encode64(input, output)?;
+        Ok(result)
+    }
+
+    fn decompress_to_slice<'out>(
+        &mut self,
+        input: &[u32],
+        output: &'out mut [u64],
+    ) -> Result<&'out [u64], Self::Error> {
+        let result = self.decode64(input, output)?;
+        Ok(result)
     }
 }
 
@@ -385,38 +432,50 @@ mod tests {
 
     #[test]
     fn test_32() {
-        let codec = FastPFor128Codec::new();
+        let mut codec = FastPFor128Codec::new();
         let input = vec![1, 2, 3, 4, 5];
         let mut output = vec![0; 10];
         let mut output2 = vec![0; 10];
+        let mut output3 = vec![0; 10];
         let encoded = codec.encode32(&input, &mut output).unwrap();
         let encoded2 = codec.encode32(&input, &mut output2).unwrap();
+        let encoded3 = codec.compress_to_slice(&input, &mut output3).unwrap();
         assert_eq!(encoded, encoded2);
+        assert_eq!(encoded, encoded3);
 
         let mut decoded = vec![0; 10];
         let mut decoded2 = vec![0; 10];
+        let mut decoded3 = vec![0; 10];
         let decoded = codec.decode32(encoded, &mut decoded).unwrap();
         let decoded2 = codec.decode32(encoded, &mut decoded2).unwrap();
+        let decoded3 = codec.decompress_to_slice(encoded, &mut decoded3).unwrap();
         assert_eq!(decoded, decoded2);
+        assert_eq!(decoded, decoded3);
 
         assert_eq!(decoded, input);
     }
 
     #[test]
     fn test_64() {
-        let codec = FastPFor128Codec::new();
+        let mut codec = FastPFor128Codec::new();
         let input = vec![1, 2, 3, 4, 5];
         let mut output = vec![0; 10];
         let mut output2 = vec![0; 10];
+        let mut output3 = vec![0; 10];
         let encoded = codec.encode64(&input, &mut output).unwrap();
         let encoded2 = codec.encode64(&input, &mut output2).unwrap();
+        let encoded3 = codec.compress_to_slice(&input, &mut output3).unwrap();
         assert_eq!(encoded, encoded2);
+        assert_eq!(encoded, encoded3);
 
         let mut decoded = vec![0; 10];
         let mut decoded2 = vec![0; 10];
+        let mut decoded3 = vec![0; 10];
         let decoded = codec.decode64(encoded, &mut decoded).unwrap();
         let decoded2 = codec.decode64(encoded, &mut decoded2).unwrap();
+        let decoded3 = codec.decompress_to_slice(encoded, &mut decoded3).unwrap();
         assert_eq!(decoded, decoded2);
+        assert_eq!(decoded, decoded3);
 
         assert_eq!(decoded, input);
     }
