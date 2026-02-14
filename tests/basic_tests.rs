@@ -76,22 +76,24 @@ fn test_varying_length() {
             let mut data_copy = data.clone();
             data_copy.resize(l, 0);
             let mut output_compress = vec![0; data_copy.len() * 4];
+            let mut output_offset = Cursor::new(0);
             codec
                 .compress(
                     &data_copy,
                     data_copy.len() as u32,
                     &mut Cursor::new(0),
                     &mut output_compress,
-                    &mut Cursor::new(0),
+                    &mut output_offset,
                 )
                 .unwrap_or_else(|e| {
                     panic!("Failed to compress with {}: {e:?}", codec.name());
                 });
+            let compressed_len = output_offset.position() as u32;
             let mut answer = vec![0; l + 1024];
             codec
                 .uncompress(
                     &output_compress,
-                    output_compress.len() as u32,
+                    compressed_len,
                     &mut Cursor::new(0),
                     &mut answer,
                     &mut Cursor::new(0),
