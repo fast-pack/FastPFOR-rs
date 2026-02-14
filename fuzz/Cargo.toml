@@ -17,13 +17,19 @@ fastpfor = { path = "..", features = ["cpp", "rust"] }
 members = ["."]
 
 [[bin]]
-name = "fastpfor_rust"
-path = "fuzz_targets/fastpfor_rust.rs"
+name = "cpp_roundtrip"
+path = "fuzz_targets/cpp_roundtrip.rs"
 test = false
 doc = false
 
 [[bin]]
-name = "fastpfor_cpp"
-path = "fuzz_targets/fastpfor_cpp.rs"
+name = "rust_compress_oracle"
+path = "fuzz_targets/rust_compress_oracle.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "rust_decompress_oracle"
+path = "fuzz_targets/rust_decompress_oracle.rs"
 test = false
 doc = false
