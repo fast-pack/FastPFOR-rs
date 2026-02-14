@@ -11,6 +11,7 @@ pub struct VariableByte;
 
 // Implemented for consistency with other codecs
 impl VariableByte {
+    /// Creates a new instance
     pub fn new() -> VariableByte {
         VariableByte
     }

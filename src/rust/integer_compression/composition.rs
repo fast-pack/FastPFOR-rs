@@ -3,12 +3,16 @@ use std::io::Cursor;
 use crate::rust::cursor::IncrementCursor;
 use crate::rust::{Codec, FastPForResult, Integer};
 
+/// Chains two codecs together, applying them sequentially.
+///
+/// Compresses data first with `c1`, then with `c2` on the remaining data.
 pub struct Composition {
     c1: Codec,
     c2: Codec,
 }
 
 impl Composition {
+    /// Creates a new instance of the composition codec.
     pub fn new<C1, C2>(c1: C1, c2: C2) -> Self
     where
         C1: Into<Codec>,

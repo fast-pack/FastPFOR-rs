@@ -3,6 +3,7 @@ use std::ops::{Add, AddAssign};
 pub struct Delta;
 
 impl Delta {
+    /// Creates a new instance
     pub fn new() -> Delta {
         Delta
     }

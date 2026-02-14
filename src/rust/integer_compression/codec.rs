@@ -1,5 +1,8 @@
 use crate::rust::{FastPFOR, JustCopy, VariableByte};
 
+/// Type-erased wrapper for compression codecs.
+///
+/// Allows different codec types to be used interchangeably through a unified interface.
 pub enum Codec {
     FastPFor(Box<FastPFOR>),
     VariableByte(VariableByte),
