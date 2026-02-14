@@ -4,9 +4,9 @@ use crate::rust::{FastPFOR, JustCopy, VariableByte};
 ///
 /// Allows different codec types to be used interchangeably through a unified interface.
 pub enum Codec {
-    /// FastPFOR compression codec
+    /// [`FastPFOR`] compression codec
     FastPFor(Box<FastPFOR>),
-    /// Variable-byte compression codec
+    /// [`VariableByte`] compression codec
     VariableByte(VariableByte),
     /// Pass-through codec (no compression)
     JustCopy(JustCopy),

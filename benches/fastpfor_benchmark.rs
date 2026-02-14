@@ -1,4 +1,4 @@
-//! Benchmark suite for FastPFOR compression codecs.
+//! Benchmark suite for `FastPFOR` compression codecs.
 
 use core::ops::Range;
 use std::hint::black_box;
