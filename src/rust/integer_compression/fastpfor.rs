@@ -30,16 +30,16 @@ pub const DEFAULT_PAGE_SIZE: NonZeroU32 = NonZeroU32::new(65536).unwrap();
 #[derive(Debug)]
 pub struct FastPFOR {
     /// Exception values indexed by bit width difference
-    pub data_to_be_packed: Vec<Vec<u32>>,
+    pub data_to_be_packed: [Vec<u32>; 33],
     /// Metadata buffer for encoding/decoding
     pub bytes_container: BytesMut,
     /// Maximum integers per page
     pub page_size: u32,
     /// Position trackers for exception arrays
-    pub data_pointers: Vec<usize>,
+    pub data_pointers: [usize; 33],
     /// Frequency count for each bit width:
-    /// freqs[0..=32] = count of values needing exactly i bits
-    pub freqs: Vec<u32>,
+    /// `freqs[i]` = count of values needing exactly i bits
+    pub freqs: [u32; 33],
     pub optimal_bits: u32,
     pub exception_count: u32,
     pub max_bits: u32,
@@ -154,9 +154,9 @@ impl FastPFOR {
             bytes_container: BytesMut::with_capacity(
                 (3 * page_size / block_size + page_size) as usize,
             ),
-            data_to_be_packed: vec![vec![0; page_size as usize / 32 * 4]; 33],
-            data_pointers: vec![0; 33],
-            freqs: vec![0; 33],
+            data_to_be_packed: std::array::from_fn(|_| vec![0; page_size as usize / 32 * 4]),
+            data_pointers: [0; 33],
+            freqs: [0; 33],
             optimal_bits: 0,
             exception_count: 0,
             max_bits: 0,
