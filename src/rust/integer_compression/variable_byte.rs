@@ -10,13 +10,11 @@ pub struct VariableByte;
 // Helper functions with const generics for extracting 7-bit chunks
 impl VariableByte {
     /// Extract 7 bits from position i (with masking)
-    #[inline(always)]
     const fn extract_7bits<const I: u32>(val: u32) -> u8 {
         ((val >> (7 * I)) & ((1 << 7) - 1)) as u8
     }
 
     /// Extract 7 bits from position i (without masking, for last byte)
-    #[inline(always)]
     const fn extract_7bits_maskless<const I: u32>(val: u32) -> u8 {
         (val >> (7 * I)) as u8
     }
