@@ -67,8 +67,9 @@ jobs:
     strategy:
       matrix:
         include:
-          - fuzz_target: fastpfor_cpp
-          - fuzz_target: fastpfor_rust
+          - fuzz_target: cpp_roundtrip
+          - fuzz_target: rust_compress_oracle
+          - fuzz_target: rust_decompress_oracle
 
     steps:
       - uses: actions/checkout@v6
