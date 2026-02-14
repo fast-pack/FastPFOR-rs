@@ -432,57 +432,51 @@ mod tests {
 
     #[test]
     fn test_32() {
-        let codec = FastPFor128Codec::new();
+        let mut codec = FastPFor128Codec::new();
         let input = vec![1, 2, 3, 4, 5];
         let mut output = vec![0; 10];
         let mut output2 = vec![0; 10];
+        let mut output3 = vec![0; 10];
         let encoded = codec.encode32(&input, &mut output).unwrap();
         let encoded2 = codec.encode32(&input, &mut output2).unwrap();
+        let encoded3 = codec.compress_to_slice(&input, &mut output3).unwrap();
         assert_eq!(encoded, encoded2);
+        assert_eq!(encoded, encoded3);
 
         let mut decoded = vec![0; 10];
         let mut decoded2 = vec![0; 10];
+        let mut decoded3 = vec![0; 10];
         let decoded = codec.decode32(encoded, &mut decoded).unwrap();
         let decoded2 = codec.decode32(encoded, &mut decoded2).unwrap();
+        let decoded3 = codec.decompress_to_slice(encoded, &mut decoded3).unwrap();
         assert_eq!(decoded, decoded2);
+        assert_eq!(decoded, decoded3);
 
         assert_eq!(decoded, input);
     }
 
     #[test]
     fn test_64() {
-        let codec = FastPFor128Codec::new();
+        let mut codec = FastPFor128Codec::new();
         let input = vec![1, 2, 3, 4, 5];
         let mut output = vec![0; 10];
         let mut output2 = vec![0; 10];
+        let mut output3 = vec![0; 10];
         let encoded = codec.encode64(&input, &mut output).unwrap();
         let encoded2 = codec.encode64(&input, &mut output2).unwrap();
+        let encoded3 = codec.compress_to_slice(&input, &mut output3).unwrap();
         assert_eq!(encoded, encoded2);
+        assert_eq!(encoded, encoded3);
 
         let mut decoded = vec![0; 10];
         let mut decoded2 = vec![0; 10];
+        let mut decoded3 = vec![0; 10];
         let decoded = codec.decode64(encoded, &mut decoded).unwrap();
         let decoded2 = codec.decode64(encoded, &mut decoded2).unwrap();
+        let decoded3 = codec.decompress_to_slice(encoded, &mut decoded3).unwrap();
         assert_eq!(decoded, decoded2);
+        assert_eq!(decoded, decoded3);
 
         assert_eq!(decoded, input);
-    }
-
-    #[test]
-    fn supports_compress_to_slice() {
-        let mut cpp_codec = FastPFor128Codec::new();
-        let data = vec![1, 2, 3, 4, 5];
-        let mut compressed = vec![0u32; data.len() * 4];
-
-        let compressed_len = {
-            let result = cpp_codec.compress_to_slice(&data, &mut compressed).unwrap();
-            result.len()
-        };
-
-        let mut decompressed = vec![0u32; data.len()];
-        let result = cpp_codec
-            .decompress_to_slice(&compressed[..compressed_len], &mut decompressed)
-            .unwrap();
-        assert_eq!(result, &data[..]);
     }
 }
