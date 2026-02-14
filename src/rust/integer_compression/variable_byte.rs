@@ -1,7 +1,5 @@
 use std::io::Cursor;
 
-use bytes::{Buf as _, BufMut as _, BytesMut};
-
 use crate::rust::cursor::IncrementCursor;
 use crate::rust::{FastPForError, FastPForResult, Integer, Skippable};
 
@@ -52,40 +50,54 @@ impl Skippable for VariableByte {
             // Return early if there is no data to compress
             return Ok(());
         }
-        let mut buf = BytesMut::with_capacity(input_length as usize * 8);
+
+        // Get byte view of the output buffer
+        let output_start = output_offset.position() as usize;
+        let output_bytes: &mut [u8] = unsafe {
+            std::slice::from_raw_parts_mut(
+                output[output_start..].as_mut_ptr().cast::<u8>(),
+                (output.len() - output_start) * 4,
+            )
+        };
+
+        let mut byte_pos = 0;
         for k in input_offset.position()..(input_offset.position() + u64::from(input_length)) {
             let val = input[k as usize];
             if val < (1 << 7) {
-                buf.put_u8(Self::extract_7bits::<0>(val));
+                output_bytes[byte_pos] = Self::extract_7bits::<0>(val);
+                byte_pos += 1;
             } else if val < (1 << 14) {
-                buf.put_u8(Self::extract_7bits::<0>(val) | (1 << 7));
-                buf.put_u8(Self::extract_7bits_maskless::<1>(val));
+                output_bytes[byte_pos] = Self::extract_7bits::<0>(val) | (1 << 7);
+                output_bytes[byte_pos + 1] = Self::extract_7bits_maskless::<1>(val);
+                byte_pos += 2;
             } else if val < (1 << 21) {
-                buf.put_u8(Self::extract_7bits::<0>(val) | (1 << 7));
-                buf.put_u8(Self::extract_7bits::<1>(val) | (1 << 7));
-                buf.put_u8(Self::extract_7bits_maskless::<2>(val));
+                output_bytes[byte_pos] = Self::extract_7bits::<0>(val) | (1 << 7);
+                output_bytes[byte_pos + 1] = Self::extract_7bits::<1>(val) | (1 << 7);
+                output_bytes[byte_pos + 2] = Self::extract_7bits_maskless::<2>(val);
+                byte_pos += 3;
             } else if val < (1 << 28) {
-                buf.put_u8(Self::extract_7bits::<0>(val) | (1 << 7));
-                buf.put_u8(Self::extract_7bits::<1>(val) | (1 << 7));
-                buf.put_u8(Self::extract_7bits::<2>(val) | (1 << 7));
-                buf.put_u8(Self::extract_7bits_maskless::<3>(val));
+                output_bytes[byte_pos] = Self::extract_7bits::<0>(val) | (1 << 7);
+                output_bytes[byte_pos + 1] = Self::extract_7bits::<1>(val) | (1 << 7);
+                output_bytes[byte_pos + 2] = Self::extract_7bits::<2>(val) | (1 << 7);
+                output_bytes[byte_pos + 3] = Self::extract_7bits_maskless::<3>(val);
+                byte_pos += 4;
             } else {
-                buf.put_u8(Self::extract_7bits::<0>(val) | (1 << 7));
-                buf.put_u8(Self::extract_7bits::<1>(val) | (1 << 7));
-                buf.put_u8(Self::extract_7bits::<2>(val) | (1 << 7));
-                buf.put_u8(Self::extract_7bits::<3>(val) | (1 << 7));
-                buf.put_u8(Self::extract_7bits_maskless::<4>(val));
+                output_bytes[byte_pos] = Self::extract_7bits::<0>(val) | (1 << 7);
+                output_bytes[byte_pos + 1] = Self::extract_7bits::<1>(val) | (1 << 7);
+                output_bytes[byte_pos + 2] = Self::extract_7bits::<2>(val) | (1 << 7);
+                output_bytes[byte_pos + 3] = Self::extract_7bits::<3>(val) | (1 << 7);
+                output_bytes[byte_pos + 4] = Self::extract_7bits_maskless::<4>(val);
+                byte_pos += 5;
             }
         }
-        while buf.len() % 4 != 0 {
-            buf.put_u8(0xFF);
+
+        // Pad to 4-byte alignment with 0xFF
+        while byte_pos % 4 != 0 {
+            output_bytes[byte_pos] = 0xFF;
+            byte_pos += 1;
         }
-        let length = buf.len();
-        let output_position = output_offset.position() as usize;
-        for it in output.iter_mut().skip(output_position).take(length / 4) {
-            *it = buf.get_u32_le();
-        }
-        output_offset.add(length as u32 / 4);
+
+        output_offset.add(byte_pos as u32 / 4);
         input_offset.add(input_length);
 
         Ok(())
