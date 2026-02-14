@@ -2,8 +2,10 @@
 
 use fastpfor::{CodecToSlice, cpp, rust};
 use libfuzzer_sys::fuzz_target;
+mod common;
+use common::*;
 
-fuzz_target!(|data: FuzzInput| {
+fuzz_target!(|data: FuzzInput<RustCodec>| {
     let input = data.data;
 
     // TODO: Behaviour differs
@@ -12,16 +14,16 @@ fuzz_target!(|data: FuzzInput| {
     }
 
     // TODO: Behaviour differs
-    if data.codec == FuzzCodec::VariableByte {
+    if data.codec == RustCodec::VariableByte {
         return;
     }
 
     // TODO: To make the encoder not crash ->  Skip inputs smaller than block size
     let block_size = match data.codec {
-        FuzzCodec::FastPFOR256 => 256,
-        FuzzCodec::FastPFOR128 => 128,
-        FuzzCodec::VariableByte => 1,
-        FuzzCodec::JustCopy => 1,
+        RustCodec::FastPFOR256 => 256,
+        RustCodec::FastPFOR128 => 128,
+        RustCodec::VariableByte => 1,
+        RustCodec::JustCopy => 1,
     };
     if input.len() < block_size {
         return;
@@ -43,25 +45,25 @@ fuzz_target!(|data: FuzzInput| {
 
     // Compress with C++ implementation
     let cpp_result = match data.codec {
-        FuzzCodec::FastPFOR256 => {
+        RustCodec::FastPFOR256 => {
             let mut cpp_codec = cpp::FastPFor256Codec::new();
             cpp_codec
                 .compress_to_slice(input, &mut cpp_compressed)
                 .expect("C++ compression failed")
         }
-        FuzzCodec::FastPFOR128 => {
+        RustCodec::FastPFOR128 => {
             let mut cpp_codec = cpp::FastPFor128Codec::new();
             cpp_codec
                 .compress_to_slice(input, &mut cpp_compressed)
                 .expect("C++ compression failed")
         }
-        FuzzCodec::VariableByte => {
+        RustCodec::VariableByte => {
             let mut cpp_codec = cpp::VByteCodec::new();
             cpp_codec
                 .compress_to_slice(input, &mut cpp_compressed)
                 .expect("C++ compression failed")
         }
-        FuzzCodec::JustCopy => {
+        RustCodec::JustCopy => {
             let mut cpp_codec = cpp::CopyCodec::new();
             cpp_codec
                 .compress_to_slice(input, &mut cpp_compressed)
@@ -86,34 +88,3 @@ fuzz_target!(|data: FuzzInput| {
         );
     }
 });
-
-#[derive(arbitrary::Arbitrary, Debug)]
-struct FuzzInput {
-    data: Vec<u32>,
-    codec: FuzzCodec,
-}
-
-#[derive(arbitrary::Arbitrary, Debug, Clone, Copy, PartialEq, Eq)]
-enum FuzzCodec {
-    FastPFOR256,
-    FastPFOR128,
-    VariableByte,
-    JustCopy,
-}
-
-impl From<FuzzCodec> for rust::Codec {
-    fn from(codec: FuzzCodec) -> Self {
-        match codec {
-            FuzzCodec::FastPFOR256 => rust::Codec::from(rust::FastPFOR::new(
-                rust::DEFAULT_PAGE_SIZE,
-                rust::BLOCK_SIZE_256,
-            )),
-            FuzzCodec::FastPFOR128 => rust::Codec::from(rust::FastPFOR::new(
-                rust::DEFAULT_PAGE_SIZE,
-                rust::BLOCK_SIZE_128,
-            )),
-            FuzzCodec::VariableByte => rust::Codec::from(rust::VariableByte::new()),
-            FuzzCodec::JustCopy => rust::Codec::from(rust::JustCopy::new()),
-        }
-    }
-}
