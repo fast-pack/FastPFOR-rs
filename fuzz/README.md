@@ -31,7 +31,7 @@ cargo +nightly fuzz run rust_compress_oracle
 # or
 cargo +nightly fuzz run rust_decompress_oracle
 # or
-cargo +nightly fuzz run rust_roundtrip_oracle
+cargo +nightly fuzz run cpp_roundtrip
 ```
 
 Run for a specific duration (e.g., 60 seconds):
