@@ -57,6 +57,7 @@ jobs:
           components: rustfmt
       - run: just ci_mode=0 ci-test-msrv  # Ignore warnings in MSRV
   fuzz:
+    name: Fuzz
     runs-on: ubuntu-latest
 
     env:
