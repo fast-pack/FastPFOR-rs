@@ -18,4 +18,8 @@ pub enum FastPForError {
     /// Output buffer too small
     #[error("Output buffer too small")]
     OutputBufferTooSmall,
+
+    /// Invalid input length
+    #[error("Invalid input length {0}")]
+    InvalidInputLength(usize),
 }
