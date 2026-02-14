@@ -318,7 +318,7 @@ implement_codecs! {
     /// SIMD-optimized [`FastPFor128Codec`] with 128-value blocks.
     SimdFastPFor128Codec => simdfastpfor128_codec,
 
-    /// SIMD-optimized [`FastPFor128Codec`] with 256-value blocks.
+    /// SIMD-optimized [`FastPFor256Codec`] with 256-value blocks.
     SimdFastPFor256Codec => simdfastpfor256_codec,
 
     /// SIMD group simple codec.
