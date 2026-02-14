@@ -40,20 +40,10 @@ struct FuzzInput {
     codec: FuzzCodec,
 }
 
-impl Debug for FuzzInput {
+impl std::fmt::Debug for FuzzInput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FuzzInput")
-            .field(
-                "data",
-                if self.data.len() <= 5 {
-                    &self.data
-                } else {
-                    &self.data[..5]
-                        .map(|x| x.to_string())
-                        .extend(["..."])
-                        .collect::<Vec<_>>()
-                },
-            )
+            .field("data_length", &self.data.len())
             .field("codec", &self.codec)
             .finish()
     }

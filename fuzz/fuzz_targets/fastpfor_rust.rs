@@ -88,7 +88,7 @@ struct FuzzInput {
 impl std::fmt::Debug for FuzzInput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FuzzInput")
-            .field("data", &self.data.len())
+            .field("data_length", &self.data.len())
             .field("codec", &self.codec)
             .finish()
     }
