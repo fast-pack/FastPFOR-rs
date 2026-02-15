@@ -13,11 +13,6 @@ fuzz_target!(|data: FuzzInput<RustCodec>| {
         return;
     }
 
-    // TODO: Behaviour differs
-    if data.codec == RustCodec::VariableByte {
-        return;
-    }
-
     // TODO: To make the encoder not crash ->  Skip inputs smaller than block size
     let block_size = match data.codec {
         RustCodec::FastPFOR256 => 256,
@@ -44,7 +39,7 @@ fuzz_target!(|data: FuzzInput<RustCodec>| {
         .expect("Rust compression failed");
 
     // Compress with C++ implementation
-    let cpp_result = match data.codec {
+    let compressed_oracle_from_cpp = match data.codec {
         RustCodec::FastPFOR256 => {
             let mut cpp_codec = cpp::FastPFor256Codec::new();
             cpp_codec
@@ -58,7 +53,7 @@ fuzz_target!(|data: FuzzInput<RustCodec>| {
                 .expect("C++ compression failed")
         }
         RustCodec::VariableByte => {
-            let mut cpp_codec = cpp::VByteCodec::new();
+            let mut cpp_codec = cpp::MaskedVByteCodec::new();
             cpp_codec
                 .compress_to_slice(input, &mut cpp_compressed)
                 .expect("C++ compression failed")
@@ -74,13 +69,13 @@ fuzz_target!(|data: FuzzInput<RustCodec>| {
     // Compare compressed outputs
     assert_eq!(
         rust_result.len(),
-        cpp_result.len(),
+        compressed_oracle_from_cpp.len(),
         "Compressed length mismatch: Rust={}, C++={}",
         rust_result.len(),
-        cpp_result.len()
+        compressed_oracle_from_cpp.len()
     );
 
-    for (i, (&rust_val, &cpp_val)) in rust_result.iter().zip(cpp_result.iter()).enumerate() {
+    for (i, (&rust_val, &cpp_val)) in rust_result.iter().zip(compressed_oracle_from_cpp.iter()).enumerate() {
         assert_eq!(
             rust_val, cpp_val,
             "Compressed data mismatch at position {}: Rust={}, C++={}",

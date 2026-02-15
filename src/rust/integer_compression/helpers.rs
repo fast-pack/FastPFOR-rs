@@ -35,15 +35,3 @@ fn bitlen(x: u64) -> i32 {
     }
     64 - clz(x) as i32
 }
-
-/// Extracts 7 bits from `val` at the position specified by `i` (0-indexed, each position is 7 bits).
-/// The result is masked to ensure only 7 bits are returned.
-pub fn extract7bits(i: i32, val: i64) -> u8 {
-    ((val >> (7 * i)) & ((1 << 7) - 1)) as u8
-}
-
-/// Extracts 7 bits from `val` at the position specified by `i` without masking.
-/// Caller must ensure proper masking if needed.
-pub fn extract_7bits_maskless(i: i32, val: i64) -> u8 {
-    (val >> (7 * i)) as u8
-}

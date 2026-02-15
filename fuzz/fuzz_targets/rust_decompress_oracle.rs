@@ -1,6 +1,6 @@
 #![no_main]
 
-use fastpfor::{CodecToSlice, cpp, rust};
+use fastpfor::{cpp, rust, CodecToSlice};
 use libfuzzer_sys::fuzz_target;
 mod common;
 use common::*;
@@ -10,11 +10,6 @@ fuzz_target!(|data: FuzzInput<RustCodec>| {
 
     // TODO: Behaviour differs
     if input.is_empty() {
-        return;
-    }
-
-    // TODO: Behaviour differs
-    if data.codec == RustCodec::VariableByte {
         return;
     }
 
@@ -35,7 +30,7 @@ fuzz_target!(|data: FuzzInput<RustCodec>| {
 
     // First, compress with C++ implementation to get valid compressed data
     let mut cpp_compressed = vec![0u32; input.len() * 2 + 1024];
-    let compressed_data = match data.codec {
+    let compressed_oracle_from_cpp = match data.codec {
         RustCodec::FastPFOR256 => {
             let mut cpp_codec = cpp::FastPFor256Codec::new();
             cpp_codec
@@ -49,7 +44,7 @@ fuzz_target!(|data: FuzzInput<RustCodec>| {
                 .expect("C++ compression failed")
         }
         RustCodec::VariableByte => {
-            let mut cpp_codec = cpp::VByteCodec::new();
+            let mut cpp_codec = cpp::MaskedVByteCodec::new();
             cpp_codec
                 .compress_to_slice(input, &mut cpp_compressed)
                 .expect("C++ compression failed")
@@ -66,7 +61,7 @@ fuzz_target!(|data: FuzzInput<RustCodec>| {
     let mut rust_decompressed = vec![0u32; input.len()];
     let mut rust_codec = rust::Codec::from(data.codec);
     let rust_result = rust_codec
-        .decompress_to_slice(compressed_data, &mut rust_decompressed)
+        .decompress_to_slice(compressed_oracle_from_cpp, &mut rust_decompressed)
         .expect("Rust decompression failed");
 
     // Compare decompressed outputs

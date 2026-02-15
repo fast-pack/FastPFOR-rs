@@ -11,9 +11,9 @@ pub struct FuzzInput<C> {
 
 impl<C: std::fmt::Debug> std::fmt::Debug for FuzzInput<C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("FuzzInput<C>")
-            .field("data_length", &self.data.len())
+        f.debug_struct("FuzzInput")
             .field("codec", &self.codec)
+            .field("data", &HexSlice(&self.data))
             .finish()
     }
 }
@@ -115,5 +115,28 @@ impl From<CppCodec> for BoxedCppCodec {
             CppCodec::VarIntGb => Box::new(VarIntGbCodec::default()),
             // CppCodec::VsEncoding => Box::new(VsEncodingCodec::default()),
         }
+    }
+}
+
+pub struct HexSlice<'a>(pub &'a [u32]);
+
+impl<'a> std::fmt::Debug for HexSlice<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        const MAX: usize = 20;
+
+        let total = self.0.len();
+        let shown = total.min(MAX);
+
+        let mut list = f.debug_list();
+
+        for v in &self.0[..shown] {
+            list.entry(&format_args!("{:#010x}", v));
+        }
+
+        if total > MAX {
+            list.entry(&format_args!(".. out of {} total", total));
+        }
+
+        list.finish()
     }
 }
