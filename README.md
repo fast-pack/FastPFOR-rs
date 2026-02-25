@@ -91,22 +91,20 @@ For local development, you may need to install the following packages:
 sudo apt-get install build-essential
 ```
 
-`libsimde-dev` is optional. On ARM/aarch64, the C++ build fetches SIMDe via CMake,
+`libsimde-dev` is optional. On ARM/aarch64, the C++ build fetches `SIMDe` via `CMake`,
 and the Rust CXX bridge now reuses that fetched include path automatically.
 Install `libsimde-dev` only if you prefer a system package fallback.
 
 ### macOS
-On Apple Silicon, manual SIMDe installation is usually not required.
-The C++ build fetches SIMDe via CMake, and the Rust CXX bridge reuses that path.
+On Apple Silicon, manual `SIMDe` installation is usually not required.
+The C++ build fetches `SIMDe` via `CMake`, and the Rust CXX bridge reuses that path.
 
-If you prefer a system package fallback, install SIMDe with Homebrew and set include flags.
+If you prefer a system package fallback, install `SIMDe` with Homebrew and set include flags.
 
 ```bash
 # optional: install SIMDe via Homebrew
 brew install simde
-```
 
-```bash
 # optional fallback: ensure the compiler can find Homebrew headers
 export CXXFLAGS="-I/opt/homebrew/include"
 export CFLAGS="-I/opt/homebrew/include"
