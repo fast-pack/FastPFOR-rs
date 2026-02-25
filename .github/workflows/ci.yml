@@ -24,6 +24,15 @@ jobs:
         with: { tool: 'just,cargo-binstall' }
       - run: just ci-test
 
+  test-macos:
+    name: Test (macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+        with: { submodules: recursive }
+      - if: github.event_name != 'release' && github.event_name != 'workflow_dispatch'
+        uses: Swatinem/rust-cache@v2
+
   test-nightly:
     name: Nightly-specific tests
     runs-on: ubuntu-latest
@@ -118,7 +127,7 @@ jobs:
   # This job checks if any of the previous jobs failed or were canceled.
   # This approach also allows some jobs to be skipped if they are not needed.
   ci-passed:
-    needs: [ test, test-nightly, test-msrv, fuzz ]
+    needs: [ test, test-macos, test-nightly, test-msrv, fuzz ]
     if: always()
     runs-on: ubuntu-latest
     steps:
