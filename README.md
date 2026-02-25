@@ -88,20 +88,26 @@ For local development, you may need to install the following packages:
 
 ```bash
 # This list may be incomplete
-sudo apt-get install build-essential libsimde-dev
+sudo apt-get install build-essential
 ```
 
+`libsimde-dev` is optional. On ARM/aarch64, the C++ build fetches SIMDe via CMake,
+and the Rust CXX bridge now reuses that fetched include path automatically.
+Install `libsimde-dev` only if you prefer a system package fallback.
+
 ### macOS
-To build `FastPFor` on macOS, you'll need to install `SIMDe`.
-Since Homebrew installs packages in `/opt/homebrew` (for Apple Silicon), you'll also need to explicitly set the include paths.
+On Apple Silicon, manual SIMDe installation is usually not required.
+The C++ build fetches SIMDe via CMake, and the Rust CXX bridge reuses that path.
+
+If you prefer a system package fallback, install SIMDe with Homebrew and set include flags.
 
 ```bash
-# install SIMDe via Homebrew
+# optional: install SIMDe via Homebrew
 brew install simde
 ```
 
 ```bash
-# Ensure the compiler can find the required headers before building
+# optional fallback: ensure the compiler can find Homebrew headers
 export CXXFLAGS="-I/opt/homebrew/include"
 export CFLAGS="-I/opt/homebrew/include"
 ```
