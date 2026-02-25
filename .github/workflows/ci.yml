@@ -13,8 +13,14 @@ defaults:
 
 jobs:
   test:
-    name: Test
-    runs-on: ubuntu-latest
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: ubuntu-latest
+          - os: macos-latest
     steps:
       - uses: actions/checkout@v6
         with: { submodules: recursive }
@@ -22,7 +28,15 @@ jobs:
         uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
         with: { tool: 'just,cargo-binstall' }
-      - run: just ci-test
+      - if: runner.os == 'macOS'
+        run: brew install simde
+      - if: runner.os == 'macOS'
+        run: just ci-test
+        env:
+          CXXFLAGS: -I/opt/homebrew/include
+          CFLAGS: -I/opt/homebrew/include
+      - if: runner.os == 'Linux'
+        run: just ci-test
 
   test-nightly:
     name: Nightly-specific tests
