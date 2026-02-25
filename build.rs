@@ -33,6 +33,9 @@ fn build_fastpfor() {
         if simde_include.exists() {
             bridge
                 .include(simde_include)
+                // Mirror `cpp/cmake_modules/simde.cmake` for the bridge TU:
+                // FastPFOR headers use SSE names directly (e.g. __m128i, _mm_*),
+                // so we need SIMDe's native aliases enabled here as well.
                 .define("SIMDE_ENABLE_NATIVE_ALIASES", None);
         } else {
             println!(
