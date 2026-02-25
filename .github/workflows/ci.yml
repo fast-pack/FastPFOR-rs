@@ -33,7 +33,8 @@ jobs:
       - if: github.event_name != 'release' && github.event_name != 'workflow_dispatch'
         uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
-        with: { tool: 'just,cargo-binstall,simde' }
+        with: { tool: 'just,cargo-binstall' }
+      - run: brew install simde
       - run: just ci-test
 
   test-nightly:
