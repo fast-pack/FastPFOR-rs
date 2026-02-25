@@ -36,6 +36,9 @@ jobs:
         with: { tool: 'just,cargo-binstall' }
       - run: brew install simde
       - run: just ci-test
+        env:
+          CXXFLAGS: -I/opt/homebrew/include
+          CFLAGS: -I/opt/homebrew/include
 
   test-nightly:
     name: Nightly-specific tests
