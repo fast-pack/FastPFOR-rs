@@ -27,20 +27,22 @@ fn build_fastpfor() {
 
     // On ARM/aarch64, FastPFOR headers include SIMDe shims for SSE intrinsics.
     // CMake fetches SIMDe to build FastPFOR itself, but the Rust/CXX bridge is a
-    // separate compilation unit and needs the same include path + define.
+    // separate compilation unit and needs the same compile definition, plus an
+    // include path if CMake fetched SIMDe into the build tree.
     if env::var("CARGO_CFG_TARGET_ARCH").is_ok_and(|arch| arch == "aarch64") {
+        // Mirror `cpp/cmake_modules/simde.cmake` for the bridge TU:
+        // FastPFOR headers use SSE names directly (e.g. __m128i, _mm_*),
+        // so we need SIMDe's native aliases enabled here as well, regardless of
+        // where the SIMDe headers are provided from.
+        bridge.define("SIMDE_ENABLE_NATIVE_ALIASES", None);
+
         let simde_include = cmake_out.join("build").join("_deps").join("simde-src");
         if simde_include.exists() {
-            bridge
-                .include(simde_include)
-                // Mirror `cpp/cmake_modules/simde.cmake` for the bridge TU:
-                // FastPFOR headers use SSE names directly (e.g. __m128i, _mm_*),
-                // so we need SIMDe's native aliases enabled here as well.
-                .define("SIMDE_ENABLE_NATIVE_ALIASES", None);
+            bridge.include(simde_include);
         } else {
             println!(
                 "cargo:warning=SIMDe headers were not found in CMake build output; \
-                 install SIMDe (e.g. `brew install simde`) if bridge compilation fails."
+                 ensure SIMDe is available on the include path if bridge compilation fails."
             );
         }
     }
