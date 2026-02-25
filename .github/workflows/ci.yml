@@ -28,15 +28,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
         with: { tool: 'just,cargo-binstall' }
-      - if: runner.os == 'macOS'
-        run: brew install simde
-      - if: runner.os == 'macOS'
-        run: just ci-test
-        env:
-          CXXFLAGS: -I/opt/homebrew/include
-          CFLAGS: -I/opt/homebrew/include
-      - if: runner.os == 'Linux'
-        run: just ci-test
+      - run: just ci-test
 
   test-nightly:
     name: Nightly-specific tests
