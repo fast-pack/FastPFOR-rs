@@ -2,6 +2,7 @@
 *.pdb
 .idea/
 .vscode/
+Cargo.lock
 codecov*
 debug/
 target/
@@ -9,5 +10,4 @@ temp/
 tmp/
 venv/
 
-# This is a library, no lock
-Cargo.lock
+!codecov.yml
