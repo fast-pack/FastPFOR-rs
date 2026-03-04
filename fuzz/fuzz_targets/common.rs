@@ -1,5 +1,4 @@
-use fastpfor::cpp;
-use fastpfor::rust;
+use fastpfor::{cpp, rust};
 
 pub type BoxedCppCodec = Box<dyn cpp::Codec32>;
 

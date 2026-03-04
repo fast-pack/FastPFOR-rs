@@ -7,8 +7,8 @@ use std::io::Cursor;
 use std::num::NonZeroU32;
 
 use fastpfor::rust::{
-    fast_pack, fast_unpack, Composition, FastPFOR, Integer, VariableByte, BLOCK_SIZE_128,
-    DEFAULT_PAGE_SIZE,
+    BLOCK_SIZE_128, Composition, DEFAULT_PAGE_SIZE, FastPFOR, Integer, VariableByte, fast_pack,
+    fast_unpack,
 };
 use rand::RngExt as _;
 
@@ -337,8 +337,8 @@ fn test_increasing_sequence() {
 
 #[test]
 fn test_random_numbers() {
-    use rand::rngs::StdRng;
     use rand::SeedableRng;
+    use rand::rngs::StdRng;
 
     let n = 65536;
     let mut rng = StdRng::seed_from_u64(123456);

@@ -3,7 +3,8 @@
 /// Builds the C++ `FastPFOR` library and bridge when the `cpp` feature is enabled.
 #[cfg(feature = "cpp")]
 fn build_fastpfor() {
-    use std::{env, path::Path};
+    use std::env;
+    use std::path::Path;
 
     assert!(
         Path::new("cpp/CMakeLists.txt").exists(),

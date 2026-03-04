@@ -23,6 +23,7 @@ impl VariableByte {
 // Implemented for consistency with other codecs
 impl VariableByte {
     /// Creates a new instance
+    #[must_use]
     pub fn new() -> VariableByte {
         VariableByte
     }

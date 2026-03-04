@@ -23,7 +23,7 @@ mod ffi {
         fn fastbinarypacking16_codec() -> UniquePtr<IntegerCODEC>;
         fn fastbinarypacking32_codec() -> UniquePtr<IntegerCODEC>;
         fn BP32_codec() -> UniquePtr<IntegerCODEC>;
-        fn vsencoding_codec() -> UniquePtr<IntegerCODEC>;
+        // fn vsencoding_codec() -> UniquePtr<IntegerCODEC>;
         fn fastpfor128_codec() -> UniquePtr<IntegerCODEC>;
         fn fastpfor256_codec() -> UniquePtr<IntegerCODEC>;
         fn simdfastpfor128_codec() -> UniquePtr<IntegerCODEC>;

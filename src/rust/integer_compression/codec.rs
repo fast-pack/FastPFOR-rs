@@ -1,7 +1,7 @@
 use std::io::Cursor;
 
-use crate::rust::{FastPFOR, FastPForResult, Integer, JustCopy, VariableByte};
 use crate::CodecToSlice;
+use crate::rust::{FastPFOR, FastPForResult, Integer, JustCopy, VariableByte};
 
 /// Type-erased wrapper for compression codecs.
 ///

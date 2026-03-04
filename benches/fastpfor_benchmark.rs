@@ -5,8 +5,8 @@ use std::hint::black_box;
 use std::io::Cursor;
 use std::num::NonZeroU32;
 
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use fastpfor::rust::{FastPFOR, Integer, BLOCK_SIZE_128, BLOCK_SIZE_256, DEFAULT_PAGE_SIZE};
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
+use fastpfor::rust::{BLOCK_SIZE_128, BLOCK_SIZE_256, DEFAULT_PAGE_SIZE, FastPFOR, Integer};
 use rand::rngs::StdRng;
 use rand::{RngExt as _, SeedableRng};
 

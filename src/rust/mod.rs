@@ -9,7 +9,7 @@ pub use integer_compression::codec::Codec;
 pub use integer_compression::composition::Composition;
 pub use integer_compression::differential::Delta;
 pub use integer_compression::fastpfor::{
-    FastPFOR, BLOCK_SIZE_128, BLOCK_SIZE_256, DEFAULT_PAGE_SIZE,
+    BLOCK_SIZE_128, BLOCK_SIZE_256, DEFAULT_PAGE_SIZE, FastPFOR,
 };
 pub use integer_compression::integer_codec::Integer;
 pub use integer_compression::just_copy::JustCopy;
