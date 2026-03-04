@@ -10,6 +10,7 @@ pub struct JustCopy;
 
 impl JustCopy {
     /// Creates a new instance
+    #[must_use]
     pub fn new() -> Self {
         JustCopy
     }

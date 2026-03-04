@@ -1,12 +1,14 @@
 //! Common test utilities for codec compatibility testing.
 
 #![cfg(all(feature = "rust", feature = "cpp"))]
+// This file is shared by several test modules
+#![allow(dead_code)]
 
 use std::io::Cursor;
 
 use fastpfor::rust::{
-    Composition, FastPFOR, FastPForResult, Integer, JustCopy, VariableByte, BLOCK_SIZE_128,
-    DEFAULT_PAGE_SIZE,
+    BLOCK_SIZE_128, Composition, DEFAULT_PAGE_SIZE, FastPFOR, FastPForResult, Integer, JustCopy,
+    VariableByte,
 };
 use rand::rngs::StdRng;
 use rand::{RngExt as _, SeedableRng as _};
@@ -23,6 +25,7 @@ pub enum TestCodec {
 
 impl TestCodec {
     /// Returns the name of the codec.
+    #[must_use]
     pub fn name(&self) -> &str {
         match self {
             TestCodec::Composition(_, name)
@@ -76,6 +79,7 @@ impl TestCodec {
 }
 
 /// Returns a collection of codec instances for testing.
+#[must_use]
 pub fn get_codecs() -> Vec<TestCodec> {
     vec![
         TestCodec::VariableByte(VariableByte::new(), "VariableByte".to_string()),
@@ -95,11 +99,13 @@ pub fn get_codecs() -> Vec<TestCodec> {
 }
 
 /// Returns various input sizes to test codec behavior.
+#[must_use]
 pub fn test_input_sizes() -> Vec<usize> {
     (1..=8).map(|exp| (1usize << exp) * 128).collect()
 }
 
 /// Generates test data vectors of size `n` with various patterns.
+#[must_use]
 pub fn get_test_cases(n: usize) -> Vec<Vec<u32>> {
     let mut rng = StdRng::seed_from_u64(14);
 
@@ -120,11 +126,7 @@ pub fn get_test_cases(n: usize) -> Vec<Vec<u32>> {
         (0..n)
             .map(|i| {
                 let ui = i as u32;
-                if ui % 2 == 0 {
-                    1 << 30
-                } else {
-                    3
-                }
+                if ui % 2 == 0 { 1 << 30 } else { 3 }
             })
             .collect::<Vec<u32>>(),
         // Random u32 values

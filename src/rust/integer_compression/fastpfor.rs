@@ -148,6 +148,7 @@ impl FastPFOR {
     /// Creates codec with specified page and block sizes.
     ///
     /// Pre-allocates buffers for metadata and exception storage.
+    #[must_use]
     pub fn new(page_size: NonZeroU32, block_size: NonZeroU32) -> FastPFOR {
         let page_size = page_size.get();
         let block_size = block_size.get();

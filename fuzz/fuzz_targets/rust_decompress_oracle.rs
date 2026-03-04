@@ -1,6 +1,6 @@
 #![no_main]
 
-use fastpfor::{cpp, rust, CodecToSlice};
+use fastpfor::{CodecToSlice, cpp, rust};
 use libfuzzer_sys::fuzz_target;
 mod common;
 use common::*;

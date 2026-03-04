@@ -75,7 +75,11 @@ fuzz_target!(|data: FuzzInput<RustCodec>| {
         compressed_oracle_from_cpp.len()
     );
 
-    for (i, (&rust_val, &cpp_val)) in rust_result.iter().zip(compressed_oracle_from_cpp.iter()).enumerate() {
+    for (i, (&rust_val, &cpp_val)) in rust_result
+        .iter()
+        .zip(compressed_oracle_from_cpp.iter())
+        .enumerate()
+    {
         assert_eq!(
             rust_val, cpp_val,
             "Compressed data mismatch at position {}: Rust={}, C++={}",

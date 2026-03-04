@@ -5,6 +5,7 @@ pub struct Delta;
 
 impl Delta {
     /// Creates a new instance
+    #[must_use]
     pub fn new() -> Delta {
         Delta
     }
