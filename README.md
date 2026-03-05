@@ -58,9 +58,8 @@ The C++ backend can be compiled with different SIMD instruction sets. Control th
 |------|-------------|
 | `cpp_portable` | **Default.** Uses SSE4.2 baseline only. Binaries run on any x86-64 CPU from ~2008+. Best for distributable libraries. |
 | `cpp_native` | Uses `-march=native` to enable all SIMD instructions supported by the build machine (AVX, AVX2, etc.). Maximum performance but may crash on CPUs lacking those instructions. |
-| `cpp_runtime` | Experimental. Reserved for future runtime CPU dispatch. |
 
-Feature selection can be overridden with the `FASTPFOR_SIMD_MODE` environment variable set to "portable", "native", or "runtime".
+Feature selection can be overridden with the `FASTPFOR_SIMD_MODE` environment variable set to "portable" or "native".
 
 **Recommendation:** Use `portable` (default) for libraries and distributed binaries. Use `native` only when building for a specific machine where you need maximum performance.
 

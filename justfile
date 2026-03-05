@@ -116,7 +116,7 @@ test:
     cargo test --workspace --all-targets --features _all_compatible
     cargo test --workspace --doc --features _all_compatible
 
-# Test with a specific SIMD mode (portable, native, or runtime)
+# Test with a specific SIMD mode (portable, native)
 test-simd mode='portable':
     cargo test --workspace --all-targets --features cpp_{{mode}}
 
@@ -126,8 +126,6 @@ test-all-simd-modes:
     {{just}} test-simd portable
     cargo clean -p fastpfor
     {{just}} test-simd native
-    cargo clean -p fastpfor
-    {{just}} test-simd runtime
 
 # Test documentation generation
 test-doc:  (docs '')

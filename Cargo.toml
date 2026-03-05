@@ -31,8 +31,6 @@ _all_compatible = ["cpp_portable", "rust"]
 cpp_portable = ["cpp"]
 # Optimize FastPFOR for the current CPU.
 cpp_native = ["cpp"]
-# Experimental mode for dynamic dispatch of FastPFOR implementations.
-cpp_runtime = ["cpp"]
 cpp = ["dep:cmake", "dep:cxx", "dep:cxx-build"]
 rust = ["dep:thiserror", "dep:bytes"]
 
