@@ -13,19 +13,22 @@ defaults:
 
 jobs:
   test:
-    name: Test on ${{ matrix.os }}
+    name: Test ${{ matrix.os }} (${{ matrix.simd_mode }})
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-          - os: macos-latest
+        os: [ubuntu-latest, macos-latest]
+        simd_mode: [portable, native]
+    env:
+      FASTPFOR_SIMD_MODE: ${{ matrix.simd_mode }}
     steps:
       - uses: actions/checkout@v6
         with: { submodules: recursive }
       - if: github.event_name != 'release' && github.event_name != 'workflow_dispatch'
         uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: "v0-${{ matrix.simd_mode }}"
       - uses: taiki-e/install-action@v2
         with: { tool: 'just,cargo-binstall' }
       - run: just ci-test
@@ -60,42 +63,35 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ steps.msrv.outputs.value }}
-          components: rustfmt
       - run: just ci_mode=0 ci-test-msrv  # Ignore warnings in MSRV
+
   fuzz:
     name: Fuzz
     runs-on: ubuntu-latest
-
     env:
       # The number of seconds to run the fuzz target.
       FUZZ_TIME: 60
-
     strategy:
       matrix:
         include:
           - fuzz_target: cpp_roundtrip
           - fuzz_target: rust_compress_oracle
           - fuzz_target: rust_decompress_oracle
-
     steps:
       - uses: actions/checkout@v6
         with: {persist-credentials: false, submodules: recursive}
-
       # Install the nightly Rust channel.
       - run: rustup toolchain install nightly
       - run: rustup default nightly
-
       # Install and cache `cargo-fuzz`.
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-binstall
       - run: cargo binstall -y cargo-fuzz@0.13.1 # Pinned to avoid breakage.
-
       # Build and then run the fuzz target.
       #  --target x86_64-unknown-linux-gnu is necessary to not default to musl, which is not supported by cargo-fuzz.
       - run: cargo fuzz build --target x86_64-unknown-linux-gnu ${{ matrix.fuzz_target }}
       - run: cargo fuzz run --target x86_64-unknown-linux-gnu ${{ matrix.fuzz_target }} -- -max_total_time=${{ env.FUZZ_TIME }}
-
       # Upload fuzzing artifacts on failure for post-mortem debugging.
       - uses: actions/upload-artifact@v7
         if: failure()
@@ -130,7 +126,7 @@ jobs:
     steps:
       - name: Result of the needed steps
         run: echo "${{ toJSON(needs) }}"
-      - if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
         run: exit 1
 
   release:

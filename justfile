@@ -1,33 +1,33 @@
 #!/usr/bin/env just --justfile
 
 main_crate := 'fastpfor'
-features_flag := '--all-features'
+# How to call the current just executable. Note that just_executable() may have `\` in Windows paths, so we need to quote it.
+just := quote(just_executable())
+# cargo-binstall needs a workaround due to caching when used in CI
+binstall_args := if env('CI', '') != '' {'--no-confirm --no-track --disable-telemetry'} else {''}
 
 # if running in CI, treat warnings as errors by setting RUSTFLAGS and RUSTDOCFLAGS to '-D warnings' unless they are already set
 # Use `CI=true just ci-test` to run the same tests as in GitHub CI.
 # Use `just env-info` to see the current values of RUSTFLAGS and RUSTDOCFLAGS
 ci_mode := if env('CI', '') != '' {'1'} else {''}
-# cargo-binstall needs a workaround due to caching
-# ci_mode might be manually set by user, so re-check the env var
-binstall_args := if env('CI', '') != '' {'--no-track'} else {''}
 export RUSTFLAGS := env('RUSTFLAGS', if ci_mode == '1' {'-D warnings'} else {''})
 export RUSTDOCFLAGS := env('RUSTDOCFLAGS', if ci_mode == '1' {'-D warnings'} else {''})
-export RUST_BACKTRACE := env('RUST_BACKTRACE', if ci_mode == '1' {'1'} else {''})
+export RUST_BACKTRACE := env('RUST_BACKTRACE', if ci_mode == '1' {'1'} else {'0'})
 
 @_default:
-    {{just_executable()}} --list
+    {{just}} --list
 
 # Run integration tests and save its output as the new expected output
 bless *args:  (cargo-install 'cargo-insta')
-    cargo insta test --accept --unreferenced=delete {{features_flag}} {{args}}
+    cargo insta test --accept --unreferenced=delete --features _all_compatible {{args}}
 
 # Build the project
 build:
-    cargo build --workspace --all-targets {{features_flag}}
+    cargo build --workspace --all-targets --features _all_compatible
 
 # Quick compile without building a binary
 check:
-    cargo check --workspace --all-targets {{features_flag}}
+    cargo check --workspace --all-targets --features _all_compatible
 
 # Generate code coverage report to upload to codecov.io
 ci-coverage: env-info && \
@@ -48,21 +48,21 @@ clean:
 
 # Run cargo clippy to lint the code
 clippy *args:
-    cargo clippy --workspace --all-targets {{features_flag}} {{args}}
+    cargo clippy --workspace --all-targets --features _all_compatible {{args}}
 
 # Generate code coverage report. Will install `cargo llvm-cov` if missing.
 coverage *args='--no-clean --open':  (cargo-install 'cargo-llvm-cov')
-    cargo llvm-cov --workspace --all-targets {{features_flag}} --include-build-script {{args}}
+    cargo llvm-cov --workspace --all-targets --features _all_compatible --include-build-script {{args}}
 
 # Build and open code documentation
 docs *args='--open':
-    DOCS_RS=1 cargo doc --no-deps {{args}} --workspace {{features_flag}}
+    DOCS_RS=1 cargo doc --no-deps {{args}} --workspace --features _all_compatible
 
 # Print environment info
 env-info:
-    @echo "Running {{if ci_mode == '1' {'in CI mode'} else {'in dev mode'} }} on {{os()}} / {{arch()}}"
-    @echo "PWD $(pwd)"
-    {{just_executable()}} --version
+    @echo "Running for '{{main_crate}}' crate {{if ci_mode == '1' {'in CI mode'} else {'in dev mode'} }} on {{os()}} / {{arch()}}"
+    @echo "PWD {{justfile_directory()}}"
+    {{just}} --version
     rustc --version
     cargo --version
     rustup --version
@@ -92,16 +92,16 @@ fmt:
 fmt-toml *args:  (cargo-install 'cargo-sort')
     cargo sort --workspace --grouped {{args}}
 
-# Get any package's field from the metadata
+# Get a package field from the metadata
 get-crate-field field package=main_crate:  (assert-cmd 'jq')
-    cargo metadata --format-version 1 | jq -e -r '.packages | map(select(.name == "{{package}}")) | first | .{{field}} | select(. != null)'
+    cargo metadata --format-version 1 | jq -e -r '.packages | map(select(.name == "{{package}}")) | first | .{{field}} // error("Field \"{{field}}\" is missing in Cargo.toml for package {{package}}")'
 
 # Get the minimum supported Rust version (MSRV) for the crate
 get-msrv package=main_crate:  (get-crate-field 'rust_version' package)
 
 # Find the minimum supported Rust version (MSRV) using cargo-msrv extension, and update Cargo.toml
 msrv:  (cargo-install 'cargo-msrv')
-    cargo msrv find --write-msrv --component rustfmt {{features_flag}} --ignore-lockfile -- {{just_executable()}} ci-test-msrv
+    cargo msrv find --write-msrv --features _all_compatible --ignore-lockfile -- {{just}} ci-test-msrv
 
 # Run cargo-release
 release *args='':  (cargo-install 'release-plz')
@@ -109,12 +109,25 @@ release *args='':  (cargo-install 'release-plz')
 
 # Check semver compatibility with prior published version. Install it with `cargo install cargo-semver-checks`
 semver *args:  (cargo-install 'cargo-semver-checks')
-    cargo semver-checks {{features_flag}} {{args}}
+    cargo semver-checks --features _all_compatible {{args}}
 
 # Run all unit and integration tests
 test:
-    cargo test --workspace --all-targets {{features_flag}}
-    cargo test --workspace --doc {{features_flag}}
+    cargo test --workspace --all-targets --features _all_compatible
+    cargo test --workspace --doc --features _all_compatible
+
+# Test with a specific SIMD mode (portable, native, or runtime)
+test-simd mode='portable':
+    cargo test --workspace --all-targets --features cpp_{{mode}}
+
+# Test all SIMD modes
+test-all-simd-modes:
+    cargo clean -p fastpfor
+    {{just}} test-simd portable
+    cargo clean -p fastpfor
+    {{just}} test-simd native
+    cargo clean -p fastpfor
+    {{just}} test-simd runtime
 
 # Test documentation generation
 test-doc:  (docs '')
@@ -127,9 +140,9 @@ test-fmt: && (fmt-toml '--check' '--check-format')
 test-publish:
     cargo +nightly -Z package-workspace publish --dry-run
 
-# Find unused dependencies. Install it with `cargo install cargo-udeps`
+# Find unused dependencies. Uses `cargo-udeps`
 udeps:  (cargo-install 'cargo-udeps')
-    cargo +nightly udeps --workspace --all-targets {{features_flag}}
+    cargo +nightly udeps --workspace --all-targets --features _all_compatible
 
 # Update all dependencies, including breaking changes. Requires nightly toolchain (install with `rustup install nightly`)
 update:
@@ -161,11 +174,14 @@ cargo-install $COMMAND $INSTALL_CMD='' *args='':
     #!/usr/bin/env bash
     set -euo pipefail
     if ! command -v $COMMAND > /dev/null; then
+        echo "$COMMAND could not be found. Installing..."
         if ! command -v cargo-binstall > /dev/null; then
-            echo "$COMMAND could not be found. Installing it with    cargo install ${INSTALL_CMD:-$COMMAND} --locked {{args}}"
+            set -x
             cargo install ${INSTALL_CMD:-$COMMAND} --locked {{args}}
+            { set +x; } 2>/dev/null
         else
-            echo "$COMMAND could not be found. Installing it with    cargo binstall ${INSTALL_CMD:-$COMMAND} {{binstall_args}} --locked {{args}}"
+            set -x
             cargo binstall ${INSTALL_CMD:-$COMMAND} {{binstall_args}} --locked {{args}}
+            { set +x; } 2>/dev/null
         fi
     fi

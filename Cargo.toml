@@ -1,6 +1,6 @@
 [package]
 name = "fastpfor"
-version = "0.7.0"
+version = "0.8.0"
 description = "FastPFOR lib with C++ Rust wrapper and pure Rust implementation"
 authors = [
     "Francisco Jimenez <jjcfrank@gmail.com>",
@@ -25,6 +25,14 @@ harness = false
 # Eventually we may want to build without the C++ bindings by default.
 # Keeping it on for now to simplify development.
 default = ["cpp"]
+# Used internally for testing and benchmarking. Not intended for public use.
+_all_compatible = ["cpp_portable", "rust"]
+# Use portable C++ code that will not rely on the latest CPU features. This is the default for the C++ bindings.
+cpp_portable = ["cpp"]
+# Optimize FastPFOR for the current CPU.
+cpp_native = ["cpp"]
+# Experimental mode for dynamic dispatch of FastPFOR implementations.
+cpp_runtime = ["cpp"]
 cpp = ["dep:cmake", "dep:cxx", "dep:cxx-build"]
 rust = ["dep:thiserror", "dep:bytes"]
 

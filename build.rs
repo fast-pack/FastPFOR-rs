@@ -13,7 +13,57 @@ fn build_fastpfor() {
 
     // Compile FastPFOR using CMake
     println!("cargo:rerun-if-changed=cpp");
-    let cmake_out = cmake::Config::new("cpp").define("WITH_TEST", "OFF").build();
+
+    // Warn if more than one feature is enabled. The order is important, must match the if else block below.
+    let simd_features = [
+        (cfg!(feature = "cpp_portable"), "'cpp_portable'"),
+        (cfg!(feature = "cpp_runtime"), "'cpp_runtime'"),
+        (cfg!(feature = "cpp_native"), "'cpp_native'"),
+    ];
+    let enabled_simd_features: Vec<_> = simd_features
+        .into_iter()
+        .filter_map(|(enabled, name)| enabled.then_some(name))
+        .collect();
+
+    // SIMD mode configuration via environment variable:
+    // - native: Use -march=native for maximum performance (not portable across CPUs)
+    // - portable: Use baseline SSE4.2 only for maximum compatibility (default)
+    // - runtime: Use function multi-versioning for runtime CPU dispatch (experimental)
+    let simd_mode = env::var("FASTPFOR_SIMD_MODE");
+    if enabled_simd_features.len() > 1 {
+        let feats = enabled_simd_features.join(", ");
+        if let Ok(simd_mode) = &simd_mode {
+            println!(
+                "cargo::warning=Multiple SIMD mode features are enabled: {feats}, but FASTPFOR_SIMD_MODE overrides it with {simd_mode}."
+            );
+        } else {
+            println!(
+                "cargo::warning=Multiple SIMD mode features enabled: {feats}. Defaulting to {}.",
+                enabled_simd_features[0]
+            );
+        }
+    }
+
+    let simd_mode = simd_mode.as_deref().unwrap_or({
+        {
+            // The order is important, must match the list above.
+            if cfg!(feature = "cpp_portable") {
+                "portable"
+            } else if cfg!(feature = "cpp_runtime") {
+                "runtime"
+            } else if cfg!(feature = "cpp_native") {
+                "native"
+            } else {
+                "portable" // fallback
+            }
+        }
+    });
+    println!("cargo:rerun-if-env-changed=FASTPFOR_SIMD_MODE");
+
+    let cmake_out = cmake::Config::new("cpp")
+        .define("FASTPFOR_WITH_TEST", "OFF")
+        .define("FASTPFOR_SIMD_MODE", simd_mode)
+        .build();
     let lib_path = cmake_out.join("lib");
     let lib_path = lib_path.to_str().unwrap();
 
