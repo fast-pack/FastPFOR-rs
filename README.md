@@ -60,7 +60,7 @@ The C++ backend can be compiled with different SIMD instruction sets. Control th
 | `cpp-native` | Uses `-march=native` to enable all SIMD instructions supported by the build machine (AVX, AVX2, etc.). Maximum performance but may crash on CPUs lacking those instructions. |
 | `cpp-runtime` | Experimental. Reserved for future runtime CPU dispatch. |
 
-Feature selection can be overridden with the `FASTPFOR_SIMD_MODE` environment variable as "portable", "native", or "runtime". values.
+Feature selection can be overridden with the `FASTPFOR_SIMD_MODE` environment variable set to "portable", "native", or "runtime".
 
 **Recommendation:** Use `portable` (default) for libraries and distributed binaries. Use `native` only when building for a specific machine where you need maximum performance.
 
