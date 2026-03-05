@@ -24,19 +24,26 @@ fn build_fastpfor() {
         .into_iter()
         .filter_map(|(enabled, name)| enabled.then_some(name))
         .collect();
-    if enabled_simd_features.len() > 1 {
-        println!(
-            "cargo:warning=Multiple SIMD mode features enabled: {}. Defaulting to {}.",
-            enabled_simd_features.join(", "),
-            enabled_simd_features[0]
-        );
-    }
 
     // SIMD mode configuration via environment variable:
     // - native: Use -march=native for maximum performance (not portable across CPUs)
     // - portable: Use baseline SSE4.2 only for maximum compatibility (default)
     // - runtime: Use function multi-versioning for runtime CPU dispatch (experimental)
     let simd_mode = env::var("FASTPFOR_SIMD_MODE");
+    if enabled_simd_features.len() > 1 {
+        let feats = enabled_simd_features.join(", ");
+        if let Ok(simd_mode) = &simd_mode {
+            println!(
+                "cargo::warning=Multiple SIMD mode features are enabled: {feats}, but FASTPFOR_SIMD_MODE overrides it with {simd_mode}."
+            );
+        } else {
+            println!(
+                "cargo::warning=Multiple SIMD mode features enabled: {feats}. Defaulting to {}.",
+                enabled_simd_features[0]
+            );
+        }
+    }
+
     let simd_mode = simd_mode.as_deref().unwrap_or({
         {
             // The order is important, must match the list above.
