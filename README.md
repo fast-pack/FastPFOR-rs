@@ -56,9 +56,9 @@ Unless otherwise specified, all codecs support `&[u32]` only.
 The C++ backend can be compiled with different SIMD instruction sets. Control this by enabling one of these features:
 | Mode | Description |
 |------|-------------|
-| `cpp-portable` | **Default.** Uses SSE4.2 baseline only. Binaries run on any x86-64 CPU from ~2008+. Best for distributable libraries. |
-| `cpp-native` | Uses `-march=native` to enable all SIMD instructions supported by the build machine (AVX, AVX2, etc.). Maximum performance but may crash on CPUs lacking those instructions. |
-| `cpp-runtime` | Experimental. Reserved for future runtime CPU dispatch. |
+| `cpp_portable` | **Default.** Uses SSE4.2 baseline only. Binaries run on any x86-64 CPU from ~2008+. Best for distributable libraries. |
+| `cpp_native` | Uses `-march=native` to enable all SIMD instructions supported by the build machine (AVX, AVX2, etc.). Maximum performance but may crash on CPUs lacking those instructions. |
+| `cpp_runtime` | Experimental. Reserved for future runtime CPU dispatch. |
 
 Feature selection can be overridden with the `FASTPFOR_SIMD_MODE` environment variable set to "portable", "native", or "runtime".
 
