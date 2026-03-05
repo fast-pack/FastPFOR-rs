@@ -29,7 +29,7 @@ default = ["cpp"]
 _all_compatible = ["cpp_portable", "rust"]
 # Use portable C++ code that will not rely on the latest CPU features. This is the default for the C++ bindings.
 cpp_portable = ["cpp"]
-# Optmize FastPFOR for the current CPU.
+# Optimize FastPFOR for the current CPU.
 cpp_native = ["cpp"]
 # Experimental mode for dynamic dispatch of FastPFOR implementations.
 cpp_runtime = ["cpp"]
