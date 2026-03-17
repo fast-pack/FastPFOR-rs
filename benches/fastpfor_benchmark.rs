@@ -117,11 +117,7 @@ fn prepare_compressed_data(data: &[u32], block_size: NonZeroU32) -> Vec<u32> {
     compressed
 }
 
-/// Helper function to decompress data into a pre-allocated buffer.
-/// The caller must ensure the buffer is zeroed before the first call if
-/// it may contain non-zero data, because exceptions use `|=` patching.
-/// When decoding the same data repeatedly (as in benchmarks), the OR
-/// is idempotent and re-zeroing is unnecessary.
+/// The caller must ensure the buffer has sufficient capacity for the output.
 fn decompress_data(codec: &mut FastPFOR, compressed: &[u32], decompressed: &mut [u32]) -> usize {
     let mut input_offset = Cursor::new(0);
     let mut output_offset = Cursor::new(0);
