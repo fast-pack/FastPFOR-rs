@@ -5,7 +5,7 @@ use bytes::{Buf as _, BufMut as _, BytesMut};
 
 use crate::rust::cursor::IncrementCursor;
 use crate::rust::integer_compression::{bitpacking, bitunpacking, helpers};
-use crate::rust::{FastPForResult, Integer, Skippable};
+use crate::rust::{FastPForError, FastPForResult, Integer, Skippable};
 
 /// Block size constant for 256 integers per block
 pub const BLOCK_SIZE_256: NonZeroU32 = NonZeroU32::new(256).unwrap();
@@ -88,7 +88,7 @@ impl Skippable for FastPFOR {
         while output_offset.position() as u32 != final_out {
             let this_size =
                 std::cmp::min(self.page_size, final_out - output_offset.position() as u32);
-            self.decode_page(input, input_offset, output, output_offset, this_size);
+            self.decode_page(input, input_offset, output, output_offset, this_size)?;
         }
         Ok(())
     }
@@ -346,12 +346,21 @@ impl FastPFOR {
         output: &mut [u32],
         output_offset: &mut Cursor<u32>,
         thissize: u32,
-    ) {
+    ) -> FastPForResult<()> {
+        let n = u32::try_from(input.len())
+            .map_err(|_| FastPForError::InvalidInputLength(input.len()))?;
+        let get_u32 = |idx: u32| -> FastPForResult<u32> {
+            input
+                .get(idx as usize)
+                .copied()
+                .ok_or(FastPForError::NotEnoughData)
+        };
+
         let init_pos = input_offset.position() as u32;
-        let where_meta = input[input_offset.position() as usize];
+        let where_meta = get_u32(init_pos)?;
         input_offset.increment();
         let mut inexcept = init_pos + where_meta;
-        let bytesize = input[inexcept as usize];
+        let bytesize = get_u32(inexcept)?;
         inexcept += 1;
         // Point a byte cursor directly at the metadata region in `input`,
         // mirrors C++ `const uint8_t *bytep = reinterpret_cast<const uint8_t *>(inexcept)`.
@@ -359,16 +368,22 @@ impl FastPFOR {
         // conversion), and the decoder does a raw reinterpret_cast back -- both native byte
         // order. `cast_slice` is the exact Rust equivalent: a safe, zero-copy native view.
         let input_bytes: &[u8] = bytemuck::cast_slice(input);
+        let get_byte = |pos: usize| -> FastPForResult<u8> {
+            input_bytes
+                .get(pos)
+                .copied()
+                .ok_or(FastPForError::NotEnoughData)
+        };
         let mut byte_pos = inexcept as usize * 4;
         let length = bytesize.div_ceil(4);
         inexcept += length;
 
-        let bitmap = input[inexcept as usize];
+        let bitmap = get_u32(inexcept)?;
         inexcept += 1;
 
         for k in 2..=32 {
             if (bitmap & (1 << (k - 1))) != 0 {
-                let size = input[inexcept as usize];
+                let size = get_u32(inexcept)?;
                 inexcept += 1;
                 let rounded_up = helpers::greatest_multiple(size + 31, 32);
                 if self.data_to_be_packed[k as usize].len() < rounded_up as usize {
@@ -376,7 +391,7 @@ impl FastPFOR {
                 }
                 let mut j: u32 = 0;
                 // Process full groups directly from input
-                while j + 32 <= size && inexcept + k <= input.len() as u32 {
+                while j + 32 <= size && inexcept + k <= n {
                     bitunpacking::fast_unpack(
                         input,
                         inexcept as usize,
@@ -390,7 +405,7 @@ impl FastPFOR {
                 // Handle the final partial group using a stack buffer (mirrors C++ buffer[PACKSIZE*2])
                 if j < size {
                     let words_needed = ((size - j) * k).div_ceil(32);
-                    let avail = input.len() as u32 - inexcept;
+                    let avail = n - inexcept.min(n);
                     let copy_len = words_needed.min(avail) as usize;
                     let mut tail_buf = [0u32; 64];
                     tail_buf[..copy_len]
@@ -417,9 +432,9 @@ impl FastPFOR {
 
         let run_end = thissize / self.block_size;
         for _ in 0..run_end {
-            let b = u32::from(input_bytes[byte_pos]);
+            let b = u32::from(get_byte(byte_pos)?);
             byte_pos += 1;
-            let cexcept = input_bytes[byte_pos];
+            let cexcept = get_byte(byte_pos)?;
             byte_pos += 1;
             for k in (0..self.block_size).step_by(32) {
                 bitunpacking::fast_unpack(
@@ -432,18 +447,18 @@ impl FastPFOR {
                 tmp_input_offset += b;
             }
             if cexcept > 0 {
-                let maxbits = u32::from(input_bytes[byte_pos]);
+                let maxbits = u32::from(get_byte(byte_pos)?);
                 byte_pos += 1;
                 let index = maxbits - b;
                 if index == 1 {
                     for _ in 0..cexcept {
-                        let pos = input_bytes[byte_pos];
+                        let pos = get_byte(byte_pos)?;
                         byte_pos += 1;
                         output[pos as usize + tmp_output_offset as usize] |= 1 << b;
                     }
                 } else {
                     for _ in 0..cexcept {
-                        let pos = input_bytes[byte_pos];
+                        let pos = get_byte(byte_pos)?;
                         byte_pos += 1;
                         let except_value = self.data_to_be_packed[index as usize]
                             [self.data_pointers[index as usize]];
@@ -456,6 +471,7 @@ impl FastPFOR {
         }
         output_offset.set_position(u64::from(tmp_output_offset));
         input_offset.set_position(u64::from(inexcept));
+        Ok(())
     }
 }
 
