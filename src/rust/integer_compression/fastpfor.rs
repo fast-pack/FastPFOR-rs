@@ -380,7 +380,10 @@ impl FastPFOR {
                 .copied()
                 .ok_or(FastPForError::NotEnoughData)
         };
-        let mut byte_pos = inexcept as usize * 4;
+        let mut byte_pos = (inexcept as usize)
+            .checked_mul(4)
+            .filter(|&bp| bp <= input_bytes.len())
+            .ok_or(FastPForError::NotEnoughData)?;
         let length = bytesize.div_ceil(4);
         inexcept = inexcept
             .checked_add(length)
@@ -422,7 +425,10 @@ impl FastPFOR {
                         .saturating_mul(k)
                         .div_ceil(32);
                     let avail = n - inexcept.min(n);
-                    let copy_len = words_needed.min(avail) as usize;
+                    if avail < words_needed {
+                        return Err(FastPForError::NotEnoughData);
+                    }
+                    let copy_len = words_needed as usize;
                     let mut tail_buf = [0u32; 64];
                     if copy_len > 0 {
                         let start = inexcept as usize;
@@ -454,30 +460,38 @@ impl FastPFOR {
         let run_end = thissize / self.block_size;
         for _ in 0..run_end {
             let b = u32::from(get_byte(byte_pos)?);
+            if b > 32 {
+                return Err(FastPForError::NotEnoughData);
+            }
             byte_pos += 1;
             let cexcept = get_byte(byte_pos)?;
             byte_pos += 1;
             for k in (0..self.block_size).step_by(32) {
-                bitunpacking::fast_unpack(
-                    input,
-                    tmp_input_offset as usize,
-                    output,
-                    (tmp_output_offset + k) as usize,
-                    b as u8,
-                );
+                let in_start = tmp_input_offset as usize;
+                let out_start = (tmp_output_offset + k) as usize;
+                if in_start + b as usize > input.len() || out_start + 32 > output.len() {
+                    return Err(FastPForError::NotEnoughData);
+                }
+                bitunpacking::fast_unpack(input, in_start, output, out_start, b as u8);
                 tmp_input_offset += b;
             }
             if cexcept > 0 {
                 let maxbits = u32::from(get_byte(byte_pos)?);
                 byte_pos += 1;
-                let index = maxbits - b;
+                let index = maxbits.checked_sub(b).ok_or(FastPForError::NotEnoughData)?;
+                if maxbits > 32 || index == 0 || index > 32 {
+                    return Err(FastPForError::NotEnoughData);
+                }
                 if index == 1 {
                     for _ in 0..cexcept {
                         let pos = get_byte(byte_pos)?;
                         byte_pos += 1;
-                        let out_idx = tmp_output_offset as usize + pos as usize;
-                        if u32::from(pos) >= self.block_size || out_idx >= output.len() {
+                        if u32::from(pos) >= self.block_size {
                             return Err(FastPForError::NotEnoughData);
+                        }
+                        let out_idx = tmp_output_offset as usize + pos as usize;
+                        if out_idx >= output.len() {
+                            return Err(FastPForError::OutputBufferTooSmall);
                         }
                         output[out_idx] |= 1 << b;
                     }
@@ -485,9 +499,12 @@ impl FastPFOR {
                     for _ in 0..cexcept {
                         let pos = get_byte(byte_pos)?;
                         byte_pos += 1;
-                        let out_idx = tmp_output_offset as usize + pos as usize;
-                        if u32::from(pos) >= self.block_size || out_idx >= output.len() {
+                        if u32::from(pos) >= self.block_size {
                             return Err(FastPForError::NotEnoughData);
+                        }
+                        let out_idx = tmp_output_offset as usize + pos as usize;
+                        if out_idx >= output.len() {
+                            return Err(FastPForError::OutputBufferTooSmall);
                         }
                         let except_value = self.data_to_be_packed[index as usize]
                             [self.data_pointers[index as usize]];
