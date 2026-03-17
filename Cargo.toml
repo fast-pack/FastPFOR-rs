@@ -1,6 +1,6 @@
 [package]
 name = "fastpfor"
-version = "0.8.0"
+version = "0.8.1"
 description = "FastPFOR lib with C++ Rust wrapper and pure Rust implementation"
 authors = [
     "Francisco Jimenez <jjcfrank@gmail.com>",
