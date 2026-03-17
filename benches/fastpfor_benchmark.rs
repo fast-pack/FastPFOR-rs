@@ -122,7 +122,7 @@ fn prepare_compressed_data(data: &[u32], block_size: NonZeroU32) -> Vec<u32> {
 /// it may contain non-zero data, because exceptions use `|=` patching.
 /// When decoding the same data repeatedly (as in benchmarks), the OR
 /// is idempotent and re-zeroing is unnecessary.
-fn decompress_data(codec: &mut FastPFOR, compressed: &[u32], decompressed: &mut Vec<u32>) -> usize {
+fn decompress_data(codec: &mut FastPFOR, compressed: &[u32], decompressed: &mut [u32]) -> usize {
     let mut input_offset = Cursor::new(0);
     let mut output_offset = Cursor::new(0);
 
