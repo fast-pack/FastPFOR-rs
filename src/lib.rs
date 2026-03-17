@@ -1,3 +1,4 @@
+#![cfg_attr(not(feature = "cpp"), deny(unsafe_code))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc = include_str!("../README.md")]
 

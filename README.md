@@ -6,7 +6,9 @@
 [![license](https://img.shields.io/crates/l/fastpfor.svg)](https://github.com/jjcfrancisco/fastpfor/blob/main/LICENSE-APACHE)
 [![CI build](https://github.com/jjcfrancisco/fastpfor/actions/workflows/ci.yml/badge.svg)](https://github.com/jjcfrancisco/fastpfor/actions)
 
-This is a Rust wrapper for the [C++ FastPFor library](https://github.com/fast-pack/FastPFor), as well as a pure Rust re-implementation (work in progress).  Supports 32-bit and 64-bit integers, and SIMD-optimized codecs for 128-bit and 256-bit vectors. Based on the [Decoding billions of integers per second through vectorization, 2012](https://arxiv.org/abs/1209.2137) paper.
+This is a Rust wrapper for the [C++ FastPFor library](https://github.com/fast-pack/FastPFor), as well as a pure Rust re-implementation.  Supports 32-bit and 64-bit integers, and SIMD-optimized codecs for 128-bit and 256-bit vectors. Based on the [Decoding billions of integers per second through vectorization, 2012](https://arxiv.org/abs/1209.2137) paper.
+
+The Rust **decoder** is about 29% faster than the C++ version. Rust code prohibits `unsafe` keyword.
 
 ### Supported algorithms
 Unless otherwise specified, all codecs support `&[u32]` only.
@@ -44,6 +46,26 @@ Unless otherwise specified, all codecs support `&[u32]` only.
 * VarInt (both `&[u32]` and `&[u64]`)
 * VarIntGb
 ```
+
+## Benchmarks
+### Decoding speed (lower is better)
+
+Using Linux x86-64 running `just bench::cpp-vs-rust-decode native`
+
+| name                                  | cpp    | rust   | % faster |
+|---------------------------------------|--------|--------|----------|
+| clustered/1024                        | 643.24 | 392.93 | 38.91%   |
+| clustered/4096                        | 1986   | 1414.8 | 28.76%   |
+| sequential/1024                       | 653.69 | 396.02 | 39.42%   |
+| sequential/4096                       | 2106   | 1476.2 | 29.91%   |
+| sparse/1024                           | 428.8  | 352.38 | 17.82%   |
+| sparse/4096                           | 1114   | 1179.5 | -5.88%   |
+| uniform_large_value_distribution/1024 | 286.74 | 153.06 | 46.62%   |
+| uniform_large_value_distribution/4096 | 748.19 | 558.05 | 25.41%   |
+| uniform_small_value_distribution/1024 | 606.4  | 405.44 | 33.14%   |
+| uniform_small_value_distribution/4096 | 2017.3 | 1403.7 | 30.42%   |
+
+Rust Encoding has not yet been either optimized or even fully verified.
 
 ## Usage
 
