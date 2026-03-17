@@ -339,6 +339,7 @@ impl FastPFOR {
     /// * `thissize` - Expected decompressed integer count
     /// * `input_offset` - Advanced by bytes read
     /// * `output_offset` - Advanced by `thissize`
+    #[expect(clippy::too_many_lines)]
     fn decode_page(
         &mut self,
         input: &[u32],
