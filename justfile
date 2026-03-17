@@ -15,6 +15,7 @@ export RUSTDOCFLAGS := env('RUSTDOCFLAGS', if ci_mode == '1' {'-D warnings'} els
 export RUST_BACKTRACE := env('RUST_BACKTRACE', if ci_mode == '1' {'1'} else {'0'})
 
 mod bench 'benches/justfile'
+mod fuzz 'fuzz/justfile'
 
 @_default:
     {{just}} --list

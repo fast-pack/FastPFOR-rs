@@ -32,9 +32,10 @@ cpp_portable = ["cpp"]
 # Optimize FastPFOR for the current CPU.
 cpp_native = ["cpp"]
 cpp = ["dep:cmake", "dep:cxx", "dep:cxx-build"]
-rust = ["dep:thiserror", "dep:bytes"]
+rust = ["dep:thiserror", "dep:bytes", "dep:bytemuck"]
 
 [dependencies]
+bytemuck = { version = "1.25.0", optional = true }
 bytes = { version = "1.11", optional = true }
 cxx = { version = "1.0.194", optional = true }
 thiserror = { version = "2.0.18", optional = true }
