@@ -4,7 +4,7 @@ use std::num::NonZeroU32;
 use bytes::{Buf as _, BufMut as _, BytesMut};
 
 use crate::rust::cursor::IncrementCursor;
-use crate::rust::integer_compression::{bitpacking, helpers};
+use crate::rust::integer_compression::{bitpacking, bitunpacking, helpers};
 use crate::rust::{FastPForResult, Integer, Skippable};
 
 /// Block size constant for 256 integers per block
@@ -353,11 +353,14 @@ impl FastPFOR {
         let mut inexcept = init_pos + where_meta;
         let bytesize = input[inexcept as usize];
         inexcept += 1;
-        self.bytes_container.clear();
+        // Point a byte cursor directly at the metadata region in `input`,
+        // mirrors C++ `const uint8_t *bytep = reinterpret_cast<const uint8_t *>(inexcept)`.
+        // The C++ encoder uses a raw `memcpy` of bytes into the u32 output (no endian
+        // conversion), and the decoder does a raw reinterpret_cast back -- both native byte
+        // order. `cast_slice` is the exact Rust equivalent: a safe, zero-copy native view.
+        let input_bytes: &[u8] = bytemuck::cast_slice(input);
+        let mut byte_pos = inexcept as usize * 4;
         let length = bytesize.div_ceil(4);
-        for i in inexcept..inexcept + length {
-            self.bytes_container.put_u32_le(input[i as usize]);
-        }
         inexcept += length;
 
         let bitmap = input[inexcept as usize];
@@ -369,44 +372,42 @@ impl FastPFOR {
                 inexcept += 1;
                 let rounded_up = helpers::greatest_multiple(size + 31, 32);
                 if self.data_to_be_packed[k as usize].len() < rounded_up as usize {
-                    self.data_to_be_packed[k as usize] = vec![0; rounded_up as usize];
+                    self.data_to_be_packed[k as usize].resize(rounded_up as usize, 0);
                 }
-                if inexcept + rounded_up / 32 * k <= input.len() as u32 {
-                    let mut j = 0;
-                    while j < size {
-                        bitpacking::fast_unpack(
-                            input,
-                            inexcept as usize,
-                            &mut self.data_to_be_packed[k as usize],
-                            j as usize,
-                            k as u8,
-                        );
-                        inexcept += k;
-                        j += 32;
-                    }
-                    let overflow = j - size;
-                    inexcept -= (overflow * k) / 32;
-                } else {
-                    let mut j = 0;
-                    let mut buf = vec![0; rounded_up as usize / 32 * k as usize];
-                    let init_inexcept = inexcept;
-                    // Ensure length is the same as the buffer
-                    let length = input.len() - init_inexcept as usize;
-                    buf[..length].copy_from_slice(&input[init_inexcept as usize..]);
-                    while j < size {
-                        bitpacking::fast_unpack(
-                            &buf,
-                            (inexcept - init_inexcept) as usize,
-                            &mut self.data_to_be_packed[k as usize],
-                            j as usize,
-                            k as u8,
-                        );
-                        inexcept += k;
-                        j += 32;
-                    }
-                    let overflow = j - size;
-                    inexcept -= (overflow * k) / 32;
+                let mut j: u32 = 0;
+                // Process full groups directly from input
+                while j + 32 <= size && inexcept + k <= input.len() as u32 {
+                    bitunpacking::fast_unpack(
+                        input,
+                        inexcept as usize,
+                        &mut self.data_to_be_packed[k as usize],
+                        j as usize,
+                        k as u8,
+                    );
+                    inexcept += k;
+                    j += 32;
                 }
+                // Handle the final partial group using a stack buffer (mirrors C++ buffer[PACKSIZE*2])
+                if j < size {
+                    let words_needed = ((size - j) * k).div_ceil(32);
+                    let avail = input.len() as u32 - inexcept;
+                    let copy_len = words_needed.min(avail) as usize;
+                    let mut tail_buf = [0u32; 64];
+                    tail_buf[..copy_len]
+                        .copy_from_slice(&input[inexcept as usize..inexcept as usize + copy_len]);
+                    let tail_inpos = 0;
+                    bitunpacking::fast_unpack(
+                        &tail_buf,
+                        tail_inpos,
+                        &mut self.data_to_be_packed[k as usize],
+                        j as usize,
+                        k as u8,
+                    );
+                    inexcept += k;
+                    j += 32;
+                }
+                let overflow = j - size;
+                inexcept -= (overflow * k) / 32;
             }
         }
 
@@ -416,10 +417,12 @@ impl FastPFOR {
 
         let run_end = thissize / self.block_size;
         for _ in 0..run_end {
-            let b = u32::from(self.bytes_container.get_u8());
-            let cexcept = self.bytes_container.get_u8();
+            let b = u32::from(input_bytes[byte_pos]);
+            byte_pos += 1;
+            let cexcept = input_bytes[byte_pos];
+            byte_pos += 1;
             for k in (0..self.block_size).step_by(32) {
-                bitpacking::fast_unpack(
+                bitunpacking::fast_unpack(
                     input,
                     tmp_input_offset as usize,
                     output,
@@ -429,16 +432,19 @@ impl FastPFOR {
                 tmp_input_offset += b;
             }
             if cexcept > 0 {
-                let maxbits = u32::from(self.bytes_container.get_u8());
+                let maxbits = u32::from(input_bytes[byte_pos]);
+                byte_pos += 1;
                 let index = maxbits - b;
                 if index == 1 {
                     for _ in 0..cexcept {
-                        let pos = self.bytes_container.get_u8();
+                        let pos = input_bytes[byte_pos];
+                        byte_pos += 1;
                         output[pos as usize + tmp_output_offset as usize] |= 1 << b;
                     }
                 } else {
                     for _ in 0..cexcept {
-                        let pos = self.bytes_container.get_u8();
+                        let pos = input_bytes[byte_pos];
+                        byte_pos += 1;
                         let except_value = self.data_to_be_packed[index as usize]
                             [self.data_pointers[index as usize]];
                         output[pos as usize + tmp_output_offset as usize] |= except_value << b;

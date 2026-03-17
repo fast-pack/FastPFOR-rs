@@ -15,6 +15,7 @@ use rand::RngExt as _;
 mod common;
 
 #[test]
+#[cfg(feature = "cpp")]
 fn saul_test() {
     let codecs = common::get_codecs();
 
@@ -64,6 +65,7 @@ fn saul_test() {
 }
 
 #[test]
+#[cfg(feature = "cpp")]
 fn test_varying_length() {
     let n = 4096;
     let mut data = vec![0u32; n];
@@ -109,6 +111,7 @@ fn test_varying_length() {
 }
 
 #[test]
+#[cfg(feature = "cpp")]
 fn test_varying_length_two() {
     let n = 128;
     let mut data = vec![0u32; n];
@@ -215,9 +218,9 @@ fn test_spurious<C: Integer<u32>>(codec: &mut C) {
     let mut i0 = Cursor::new(0);
     let mut i1 = Cursor::new(0);
 
-    for inlength in 0..32 {
+    for inp_length in 0..32 {
         codec
-            .compress(&x, inlength, &mut i0, &mut y, &mut i1)
+            .compress(&x, inp_length, &mut i0, &mut y, &mut i1)
             .unwrap_or_else(|e| panic!("Compression failed: {e:?}"));
 
         assert_eq!(
@@ -258,15 +261,15 @@ fn test_zero_in_zero_out<C: Integer<u32>>(codec: &mut C) {
 
     // Test decompression
     let mut out: Vec<u32> = Vec::new();
-    let mut outpos = Cursor::new(0);
+    let mut out_pos = Cursor::new(0);
     codec
-        .uncompress(&y, 0, &mut i1, &mut out, &mut outpos)
+        .uncompress(&y, 0, &mut i1, &mut out, &mut out_pos)
         .unwrap_or_else(|e| panic!("Decompression failed: {e:?}"));
     assert_eq!(
-        outpos.position(),
+        out_pos.position(),
         0,
         "Expected output cursor position to be 0 after decompression, but got {}",
-        outpos.position()
+        out_pos.position()
     );
 }
 
@@ -427,7 +430,7 @@ fn test_exception_value_vector_resizes() {
     let page_size = NonZeroU32::new(512).unwrap();
     let test_input_size = page_size.get() * 2;
 
-    // every even index value is large which will trigger exception buffer to be resize
+    // every even index value is large which will trigger exception buffer to be resized
     let input: Vec<u32> = (0..test_input_size)
         .map(|i| if i % 2 == 0 { 1 << 30 } else { 3 })
         .collect();

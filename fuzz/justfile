@@ -1,0 +1,44 @@
+#!/usr/bin/env just --justfile
+# Fuzz testing recipes. All commands must be run from the repo root:
+#   just fuzz::run rust_compress_oracle
+# cargo-fuzz requires nightly Rust and must be run from inside the fuzz/ directory.
+
+fuzz_dir := justfile_directory()
+
+# List available fuzz targets
+list:
+    @cd {{fuzz_dir}} && cargo +nightly fuzz list
+
+# Run a fuzz target indefinitely  (Ctrl-C to stop)
+# Targets: rust_compress_oracle, rust_decompress_oracle, cpp_roundtrip
+run target *args:
+    cd {{fuzz_dir}} && cargo +nightly fuzz run --target x86_64-unknown-linux-gnu {{target}} {{args}}
+
+# Run a fuzz target for a fixed number of seconds
+run-time target seconds='60' *args:
+    cd {{fuzz_dir}} && cargo +nightly fuzz run {{target}} {{args}} -- -max_total_time={{seconds}}
+
+# Run a fuzz target for a fixed number of iterations
+run-iters target iters='10000' *args:
+    cd {{fuzz_dir}} && cargo +nightly fuzz run {{target}} {{args}} -- -runs={{iters}}
+
+# Run rust_compress_oracle (Rust only, no C++ required)
+rust-compress *args: (run 'rust_compress_oracle' args)
+
+# Run rust_decompress_oracle (uses C++ as oracle)
+rust-decompress *args: (run 'rust_decompress_oracle' args)
+
+# Run cpp_roundtrip (C++ roundtrip)
+cpp-roundtrip *args: (run 'cpp_roundtrip' args)
+
+# Reproduce a specific crash artifact
+repro target artifact:
+    cd {{fuzz_dir}} && cargo +nightly fuzz run {{target}} {{artifact}}
+
+# Build all fuzz targets without running them
+build:
+    cd {{fuzz_dir}} && cargo +nightly fuzz build --target x86_64-unknown-linux-gnu
+
+# Print coverage for a fuzz target (requires llvm-tools)
+coverage target:
+    cd {{fuzz_dir}} && cargo +nightly fuzz coverage --target x86_64-unknown-linux-gnu {{target}}

@@ -1,5 +1,7 @@
 use std::io::Cursor;
 
+use bytemuck::{cast_slice, cast_slice_mut};
+
 use crate::rust::cursor::IncrementCursor;
 use crate::rust::{FastPForError, FastPForResult, Integer, Skippable};
 
@@ -52,12 +54,7 @@ impl Skippable for VariableByte {
 
         // Get byte view of the output buffer
         let output_start = output_offset.position() as usize;
-        let output_bytes: &mut [u8] = unsafe {
-            std::slice::from_raw_parts_mut(
-                output[output_start..].as_mut_ptr().cast::<u8>(),
-                (output.len() - output_start) * 4,
-            )
-        };
+        let output_bytes: &mut [u8] = &mut cast_slice_mut::<u32, u8>(output)[output_start * 4..];
 
         let mut byte_pos = 0;
         for k in input_offset.position()..(input_offset.position() + u64::from(input_length)) {
@@ -145,9 +142,8 @@ impl Integer<u32> for VariableByte {
         let input_start = input_offset.position() as usize;
 
         // Create a byte slice view of the input
-        let input_bytes: &[u8] = unsafe {
-            std::slice::from_raw_parts(input[input_start..].as_ptr().cast::<u8>(), byte_length)
-        };
+        let input_bytes: &[u8] =
+            &cast_slice::<u32, u8>(input)[input_start * 4..input_start * 4 + byte_length];
 
         let mut byte_pos = 0;
         let mut tmp_outpos = output_offset.position() as usize;

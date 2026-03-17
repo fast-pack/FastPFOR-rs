@@ -15,6 +15,7 @@ export RUSTDOCFLAGS := env('RUSTDOCFLAGS', if ci_mode == '1' {'-D warnings'} els
 export RUST_BACKTRACE := env('RUST_BACKTRACE', if ci_mode == '1' {'1'} else {'0'})
 
 mod bench 'benches/justfile'
+mod fuzz 'fuzz/justfile'
 
 @_default:
     {{just}} --list
@@ -30,6 +31,8 @@ build:
 # Quick compile without building a binary
 check:
     cargo check --workspace --all-targets --features _all_compatible
+    cargo check --workspace --all-targets --no-default-features --features cpp
+    cargo check --workspace --all-targets --no-default-features --features rust
 
 # Generate code coverage report to upload to codecov.io
 ci-coverage: env-info && \
@@ -38,7 +41,7 @@ ci-coverage: env-info && \
     mkdir -p target/llvm-cov
 
 # Run all tests as expected by CI
-ci-test: env-info test-fmt build clippy test test-doc && assert-git-is-clean
+ci-test: env-info test-fmt check build clippy test test-doc && assert-git-is-clean
 
 # Run minimal subset of tests to ensure compatibility with MSRV
 ci-test-msrv: env-info test
