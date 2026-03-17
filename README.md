@@ -52,18 +52,18 @@ Unless otherwise specified, all codecs support `&[u32]` only.
 
 Using Linux x86-64 running `just bench::cpp-vs-rust-decode native`
 
-| name                                  | cpp    | rust   | % faster |
-|---------------------------------------|--------|--------|----------|
-| clustered/1024                        | 643.24 | 392.93 | 38.91%   |
-| clustered/4096                        | 1986   | 1414.8 | 28.76%   |
-| sequential/1024                       | 653.69 | 396.02 | 39.42%   |
-| sequential/4096                       | 2106   | 1476.2 | 29.91%   |
-| sparse/1024                           | 428.8  | 352.38 | 17.82%   |
-| sparse/4096                           | 1114   | 1179.5 | -5.88%   |
-| uniform_large_value_distribution/1024 | 286.74 | 153.06 | 46.62%   |
-| uniform_large_value_distribution/4096 | 748.19 | 558.05 | 25.41%   |
-| uniform_small_value_distribution/1024 | 606.4  | 405.44 | 33.14%   |
-| uniform_small_value_distribution/4096 | 2017.3 | 1403.7 | 30.42%   |
+| name                                    | cpp    | rust   | % faster |
+|-----------------------------------------|--------|--------|----------|
+| `clustered/1024`                        | 643.24 | 392.93 | 38.91%   |
+| `clustered/4096`                        | 1986   | 1414.8 | 28.76%   |
+| `sequential/1024`                       | 653.69 | 396.02 | 39.42%   |
+| `sequential/4096`                       | 2106   | 1476.2 | 29.91%   |
+| `sparse/1024`                           | 428.8  | 352.38 | 17.82%   |
+| `sparse/4096`                           | 1114   | 1179.5 | -5.88%   |
+| `uniform_large_value_distribution/1024` | 286.74 | 153.06 | 46.62%   |
+| `uniform_large_value_distribution/4096` | 748.19 | 558.05 | 25.41%   |
+| `uniform_small_value_distribution/1024` | 606.4  | 405.44 | 33.14%   |
+| `uniform_small_value_distribution/4096` | 2017.3 | 1403.7 | 30.42%   |
 
 Rust Encoding has not yet been either optimized or even fully verified.
 
