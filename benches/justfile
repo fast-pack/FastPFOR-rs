@@ -2,7 +2,7 @@
 
 # Run all benchmarks (Rust only)
 all:
-    cargo bench --bench fastpfor_benchmark --features rust
+    cargo bench --bench fastpfor_benchmark --no-default-features --features rust
 
 # Run all benchmarks with C++ comparison enabled using portable SIMD
 all-with-cpp-portable: (_all-with-cpp 'portable')
