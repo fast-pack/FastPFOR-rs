@@ -56,7 +56,8 @@ clippy *args:
     cargo clippy --workspace --all-targets --features _all_compatible {{args}}
 
 # Generate code coverage report. Will install `cargo llvm-cov` if missing.
-coverage *args='--no-clean --open':  (cargo-install 'cargo-llvm-cov')
+coverage *args='--open':  (cargo-install 'cargo-llvm-cov')
+    cargo llvm-cov clean --workspace
     cargo llvm-cov --workspace --all-targets --features _all_compatible --include-build-script {{args}}
 
 # Build and open code documentation

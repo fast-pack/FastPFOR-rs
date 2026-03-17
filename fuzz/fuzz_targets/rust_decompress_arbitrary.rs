@@ -75,5 +75,7 @@ fuzz_target!(|data: FuzzInput| {
     };
 
     // The decoder must either succeed or return an error.  A panic is a bug.
+    // We are ok if not all data is consumed because it tries to parse
+    // garbage - as long as we don't panic, we are good
     let _ = codec.decompress_to_slice(&compressed, &mut output);
 });

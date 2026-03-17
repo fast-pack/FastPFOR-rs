@@ -158,7 +158,10 @@ impl FastPFOR {
             bytes_container: BytesMut::with_capacity(
                 (3 * page_size / block_size + page_size) as usize,
             ),
-            data_to_be_packed: std::array::from_fn(|_| vec![0; page_size as usize / 32 * 4]),
+            // Each slot holds at most `page_size` exceptions (one per integer in the page).
+            // Since page_size is always a multiple of 32, this is also the rounded-up capacity,
+            // so no resize is ever needed during decoding.
+            data_to_be_packed: std::array::from_fn(|_| vec![0; page_size as usize]),
             data_pointers: [0; 33],
             freqs: [0; 33],
             optimal_bits: 0,
@@ -204,15 +207,6 @@ impl FastPFOR {
             if self.exception_count > 0 {
                 self.bytes_container.put_u8(self.max_bits as u8);
                 let index = self.max_bits - self.optimal_bits;
-                if self.data_pointers[index as usize] + self.exception_count as usize
-                    >= self.data_to_be_packed[index as usize].len()
-                {
-                    let mut new_size = 2
-                        * (self.data_pointers[index as usize] + self.exception_count as usize)
-                            as u32;
-                    new_size = helpers::greatest_multiple(new_size + 31, 32);
-                    self.data_to_be_packed[index as usize].resize(new_size as usize, 0);
-                }
                 for k in 0..self.block_size {
                     if (input[(k + tmp_input_offset) as usize] >> self.optimal_bits) != 0 {
                         self.bytes_container.put_u8(k as u8);
@@ -400,9 +394,11 @@ impl FastPFOR {
                 inexcept = inexcept
                     .checked_add(1)
                     .ok_or(FastPForError::NotEnoughData)?;
-                let rounded_up = helpers::greatest_multiple(size + 31, 32);
-                if self.data_to_be_packed[k as usize].len() < rounded_up as usize {
-                    self.data_to_be_packed[k as usize].resize(rounded_up as usize, 0);
+                // Each integer in the page can be an exception at most once, so `size`
+                // can never exceed `page_size`. The buffer is pre-allocated to `page_size`
+                // in `new()`, so no resize is needed here.
+                if size > self.page_size {
+                    return Err(FastPForError::NotEnoughData);
                 }
                 let mut j: u32 = 0;
                 // Process full groups directly from input
@@ -430,13 +426,15 @@ impl FastPFOR {
                     }
                     let copy_len = words_needed as usize;
                     let mut tail_buf = [0u32; 64];
-                    if copy_len > 0 {
-                        let start = inexcept as usize;
-                        let src = input
-                            .get(start..start + copy_len)
-                            .ok_or(FastPForError::NotEnoughData)?;
-                        tail_buf[..copy_len].copy_from_slice(src);
-                    }
+                    debug_assert!(
+                        copy_len > 0,
+                        "j < size and k >= 2 guarantee words_needed >= 1"
+                    );
+                    let start = inexcept as usize;
+                    let src = input
+                        .get(start..start + copy_len)
+                        .ok_or(FastPForError::NotEnoughData)?;
+                    tail_buf[..copy_len].copy_from_slice(src);
                     let tail_inpos = 0;
                     bitunpacking::fast_unpack(
                         &tail_buf,
@@ -469,8 +467,11 @@ impl FastPFOR {
             for k in (0..self.block_size).step_by(32) {
                 let in_start = tmp_input_offset as usize;
                 let out_start = (tmp_output_offset + k) as usize;
-                if in_start + b as usize > input.len() || out_start + 32 > output.len() {
-                    return Err(FastPForError::NotEnoughData);
+                // in_start + b <= input.len(): packed values physically precede the
+                // metadata in the stream, so a truncated packed region makes the
+                // earlier bytesize/bitmap reads fail before this loop is reached.
+                if out_start + 32 > output.len() {
+                    return Err(FastPForError::OutputBufferTooSmall);
                 }
                 bitunpacking::fast_unpack(input, in_start, output, out_start, b as u8);
                 tmp_input_offset += b;
@@ -490,9 +491,9 @@ impl FastPFOR {
                             return Err(FastPForError::NotEnoughData);
                         }
                         let out_idx = tmp_output_offset as usize + pos as usize;
-                        if out_idx >= output.len() {
-                            return Err(FastPForError::OutputBufferTooSmall);
-                        }
+                        // out_idx < output.len(): pos < block_size and the bitunpack
+                        // guard above already confirmed output.len() >= tmp_output_offset + block_size.
+                        debug_assert!(out_idx < output.len());
                         output[out_idx] |= 1 << b;
                     }
                 } else {
@@ -503,11 +504,12 @@ impl FastPFOR {
                             return Err(FastPForError::NotEnoughData);
                         }
                         let out_idx = tmp_output_offset as usize + pos as usize;
-                        if out_idx >= output.len() {
-                            return Err(FastPForError::OutputBufferTooSmall);
-                        }
-                        let except_value = self.data_to_be_packed[index as usize]
-                            [self.data_pointers[index as usize]];
+                        // out_idx < output.len(): same invariant as index==1 branch above.
+                        debug_assert!(out_idx < output.len());
+                        let ptr = self.data_pointers[index as usize];
+                        // ptr < data_to_be_packed[index].len(): size <= page_size was
+                        // validated above, and the buffer is pre-allocated to page_size.
+                        let except_value = self.data_to_be_packed[index as usize][ptr];
                         output[out_idx] |= except_value << b;
                         self.data_pointers[index as usize] += 1;
                     }
