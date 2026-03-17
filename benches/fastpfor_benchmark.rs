@@ -271,10 +271,8 @@ fn benchmark_block_sizes(c: &mut Criterion) {
     for block_size in block_sizes {
         group.throughput(Throughput::Elements(size as u64));
         group.bench_function(format!("compress_{block_size}"), |b| {
-            b.iter(|| {
-                let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, block_size);
-                black_box(compress_data(&mut codec, black_box(&data)))
-            });
+            let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, block_size);
+            b.iter(|| black_box(compress_data(&mut codec, black_box(&data))));
         });
     }
 
@@ -286,8 +284,8 @@ fn benchmark_block_sizes(c: &mut Criterion) {
 
         group.throughput(Throughput::Elements(size as u64));
         group.bench_function(format!("decompress_{block_size}"), |b| {
+            let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, block_size);
             b.iter(|| {
-                let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, block_size);
                 black_box(decompress_data(&mut codec, black_box(&compressed), size));
             });
         });
@@ -335,12 +333,124 @@ fn benchmark_compression_ratio(c: &mut Criterion) {
     group.finish();
 }
 
+/// Compare encoding and decoding speed of the C++ `FastPFor128` codec against
+/// the pure-Rust `FastPFOR` codec with `BLOCK_SIZE_128`.
+///
+/// Both implementations process identical input data so the numbers are directly
+/// comparable.  The benchmark is only compiled when the `cpp` feature is enabled.
+///
+/// Each sub-benchmark is labelled `cpp/<pattern>/<size>` or
+/// `rust/<pattern>/<size>` so Criterion can show them side-by-side.
+#[cfg(feature = "cpp")]
+fn benchmark_cpp_vs_rust(c: &mut Criterion) {
+    use fastpfor::cpp::{Codec32, FastPFor128Codec};
+
+    fn cpp_encode(codec: &FastPFor128Codec, data: &[u32]) -> Vec<u32> {
+        let mut out = vec![0u32; data.len() * 2 + 1024];
+        let encoded = codec.encode32(data, &mut out).unwrap();
+        let new_len = encoded.len();
+        out.truncate(new_len);
+        out
+    }
+
+    fn cpp_decode(codec: &FastPFor128Codec, compressed: &[u32], original_len: usize) -> usize {
+        let mut out = vec![0u32; original_len];
+        codec.decode32(compressed, &mut out).unwrap().len()
+    }
+
+    let patterns: &[(&str, DataGeneratorFn)] = &[
+        (
+            "uniform_small_value_distribution",
+            generate_uniform_data_small_value_distribution,
+        ),
+        (
+            "uniform_large_value_distribution",
+            generate_uniform_data_large_value_distribution,
+        ),
+        ("clustered", generate_clustered_data),
+        ("sequential", generate_sequential_data),
+        ("sparse", generate_sparse_data),
+    ];
+
+    // Encoding
+
+    let mut group = c.benchmark_group("cpp_vs_rust/encode");
+    for &size in SIZES {
+        for (name, generator) in patterns {
+            let data = generator(size);
+            group.throughput(Throughput::Elements(size as u64));
+
+            group.bench_with_input(
+                BenchmarkId::new(format!("cpp/{name}"), size),
+                &data,
+                |b, data| {
+                    let codec = FastPFor128Codec::new();
+                    b.iter(|| black_box(cpp_encode(&codec, black_box(data))));
+                },
+            );
+
+            group.bench_with_input(
+                BenchmarkId::new(format!("rust/{name}"), size),
+                &data,
+                |b, data| {
+                    let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, BLOCK_SIZE_128);
+                    b.iter(|| black_box(compress_data(&mut codec, black_box(data))));
+                },
+            );
+        }
+    }
+    group.finish();
+
+    // Decoding
+
+    let mut group = c.benchmark_group("cpp_vs_rust/decode");
+    for &size in SIZES {
+        for (name, generator) in patterns {
+            let data = generator(size);
+
+            // Pre-compress once outside the timed loop for each implementation.
+            let cpp_codec = FastPFor128Codec::new();
+            let cpp_compressed = cpp_encode(&cpp_codec, &data);
+            let rust_compressed = prepare_compressed_data(&data, BLOCK_SIZE_128);
+
+            group.throughput(Throughput::Elements(size as u64));
+
+            group.bench_with_input(
+                BenchmarkId::new(format!("cpp/{name}"), size),
+                &cpp_compressed,
+                |b, compressed| {
+                    let codec = FastPFor128Codec::new();
+                    b.iter(|| black_box(cpp_decode(&codec, black_box(compressed), size)));
+                },
+            );
+
+            group.bench_with_input(
+                BenchmarkId::new(format!("rust/{name}"), size),
+                &rust_compressed,
+                |b, compressed| {
+                    let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, BLOCK_SIZE_128);
+                    b.iter(|| black_box(decompress_data(&mut codec, black_box(compressed), size)));
+                },
+            );
+        }
+    }
+    group.finish();
+}
+
 criterion_group!(
     benches,
     benchmark_compression,
     benchmark_decompression,
     benchmark_roundtrip,
     benchmark_block_sizes,
-    benchmark_compression_ratio
+    benchmark_compression_ratio,
 );
+
+#[cfg(feature = "cpp")]
+criterion_group!(cpp_benches, benchmark_cpp_vs_rust);
+
+#[cfg(not(feature = "cpp"))]
 criterion_main!(benches);
+
+#[cfg(feature = "cpp")]
+criterion_main!(benches, cpp_benches);

@@ -1,0 +1,46 @@
+#!/usr/bin/env just --justfile
+
+# Run all benchmarks (Rust only)
+all:
+    cargo bench --bench fastpfor_benchmark --no-default-features --features rust
+
+# Run all benchmarks with C++ comparison enabled using portable SIMD
+all-with-cpp-portable: (_all-with-cpp 'portable')
+
+# Run all benchmarks with C++ comparison enabled using native SIMD
+all-with-cpp-native: (_all-with-cpp 'native')
+
+_all-with-cpp mode:
+    cargo bench --bench fastpfor_benchmark --features cpp_{{mode}},rust
+
+# Benchmark compression speed across data patterns
+compression:
+    cargo bench --bench fastpfor_benchmark --features rust -- compression
+
+# Benchmark decompression speed across data patterns
+decompression:
+    cargo bench --bench fastpfor_benchmark --features rust -- decompression
+
+# Benchmark full compress+decompress roundtrip
+roundtrip:
+    cargo bench --bench fastpfor_benchmark --features rust -- roundtrip
+
+# Benchmark BLOCK_SIZE_128 vs BLOCK_SIZE_256
+block-sizes:
+    cargo bench --bench fastpfor_benchmark --features rust -- block_sizes
+
+# Benchmark compression ratio across data patterns
+compression-ratio:
+    cargo bench --bench fastpfor_benchmark --features rust -- compression_ratio
+
+# Benchmark C++ FastPFor128 vs pure-Rust FastPFOR
+cpp-vs-rust mode='portable':
+    cargo bench --bench fastpfor_benchmark --features rust,cpp_{{mode}} -- cpp_vs_rust
+
+# Benchmark C++ vs Rust encoding speed only
+cpp-vs-rust-encode mode='portable':
+    cargo bench --bench fastpfor_benchmark --features rust,cpp_{{mode}} -- "cpp_vs_rust/encode"
+
+# Benchmark C++ vs Rust decoding speed only
+cpp-vs-rust-decode mode='portable':
+    cargo bench --bench fastpfor_benchmark --features rust,cpp_{{mode}} -- "cpp_vs_rust/decode"
