@@ -5,7 +5,7 @@ use bytes::{Buf as _, BufMut as _, BytesMut};
 
 use crate::rust::cursor::IncrementCursor;
 use crate::rust::integer_compression::{bitpacking, bitunpacking, helpers};
-use crate::rust::{FastPForResult, Integer, Skippable};
+use crate::rust::{FastPForError, FastPForResult, Integer, Skippable};
 
 /// Block size constant for 256 integers per block
 pub const BLOCK_SIZE_256: NonZeroU32 = NonZeroU32::new(256).unwrap();
@@ -88,7 +88,7 @@ impl Skippable for FastPFOR {
         while output_offset.position() as u32 != final_out {
             let this_size =
                 std::cmp::min(self.page_size, final_out - output_offset.position() as u32);
-            self.decode_page(input, input_offset, output, output_offset, this_size);
+            self.decode_page(input, input_offset, output, output_offset, this_size)?;
         }
         Ok(())
     }
@@ -339,6 +339,7 @@ impl FastPFOR {
     /// * `thissize` - Expected decompressed integer count
     /// * `input_offset` - Advanced by bytes read
     /// * `output_offset` - Advanced by `thissize`
+    #[expect(clippy::too_many_lines)]
     fn decode_page(
         &mut self,
         input: &[u32],
@@ -346,37 +347,68 @@ impl FastPFOR {
         output: &mut [u32],
         output_offset: &mut Cursor<u32>,
         thissize: u32,
-    ) {
-        let init_pos = input_offset.position() as u32;
-        let where_meta = input[input_offset.position() as usize];
+    ) -> FastPForResult<()> {
+        let n = u32::try_from(input.len())
+            .map_err(|_| FastPForError::InvalidInputLength(input.len()))?;
+        let get_u32 = |idx: u32| -> FastPForResult<u32> {
+            input
+                .get(idx as usize)
+                .copied()
+                .ok_or(FastPForError::NotEnoughData)
+        };
+
+        let init_pos =
+            u32::try_from(input_offset.position()).map_err(|_| FastPForError::NotEnoughData)?;
+        let where_meta = get_u32(init_pos)?;
         input_offset.increment();
-        let mut inexcept = init_pos + where_meta;
-        let bytesize = input[inexcept as usize];
-        inexcept += 1;
+        let mut inexcept = init_pos
+            .checked_add(where_meta)
+            .ok_or(FastPForError::NotEnoughData)?;
+        let bytesize = get_u32(inexcept)?;
+        inexcept = inexcept
+            .checked_add(1)
+            .ok_or(FastPForError::NotEnoughData)?;
         // Point a byte cursor directly at the metadata region in `input`,
         // mirrors C++ `const uint8_t *bytep = reinterpret_cast<const uint8_t *>(inexcept)`.
         // The C++ encoder uses a raw `memcpy` of bytes into the u32 output (no endian
         // conversion), and the decoder does a raw reinterpret_cast back -- both native byte
         // order. `cast_slice` is the exact Rust equivalent: a safe, zero-copy native view.
         let input_bytes: &[u8] = bytemuck::cast_slice(input);
-        let mut byte_pos = inexcept as usize * 4;
+        let get_byte = |pos: usize| -> FastPForResult<u8> {
+            input_bytes
+                .get(pos)
+                .copied()
+                .ok_or(FastPForError::NotEnoughData)
+        };
+        let mut byte_pos = (inexcept as usize)
+            .checked_mul(4)
+            .filter(|&bp| bp <= input_bytes.len())
+            .ok_or(FastPForError::NotEnoughData)?;
         let length = bytesize.div_ceil(4);
-        inexcept += length;
+        inexcept = inexcept
+            .checked_add(length)
+            .ok_or(FastPForError::NotEnoughData)?;
 
-        let bitmap = input[inexcept as usize];
-        inexcept += 1;
+        let bitmap = get_u32(inexcept)?;
+        inexcept = inexcept
+            .checked_add(1)
+            .ok_or(FastPForError::NotEnoughData)?;
 
         for k in 2..=32 {
             if (bitmap & (1 << (k - 1))) != 0 {
-                let size = input[inexcept as usize];
-                inexcept += 1;
+                let size = get_u32(inexcept)?;
+                inexcept = inexcept
+                    .checked_add(1)
+                    .ok_or(FastPForError::NotEnoughData)?;
                 let rounded_up = helpers::greatest_multiple(size + 31, 32);
                 if self.data_to_be_packed[k as usize].len() < rounded_up as usize {
                     self.data_to_be_packed[k as usize].resize(rounded_up as usize, 0);
                 }
                 let mut j: u32 = 0;
                 // Process full groups directly from input
-                while j + 32 <= size && inexcept + k <= input.len() as u32 {
+                while j.checked_add(32).is_some_and(|j32| j32 <= size)
+                    && inexcept.checked_add(k).is_some_and(|ie| ie <= n)
+                {
                     bitunpacking::fast_unpack(
                         input,
                         inexcept as usize,
@@ -384,17 +416,27 @@ impl FastPFOR {
                         j as usize,
                         k as u8,
                     );
-                    inexcept += k;
-                    j += 32;
+                    inexcept += k; // safe: loop guard checked inexcept + k <= n <= u32::MAX
+                    j += 32; // safe: loop guard checked j + 32 <= size
                 }
                 // Handle the final partial group using a stack buffer (mirrors C++ buffer[PACKSIZE*2])
                 if j < size {
-                    let words_needed = ((size - j) * k).div_ceil(32);
-                    let avail = input.len() as u32 - inexcept;
-                    let copy_len = words_needed.min(avail) as usize;
+                    let words_needed = (size - j) // safe: j < size
+                        .saturating_mul(k)
+                        .div_ceil(32);
+                    let avail = n - inexcept.min(n);
+                    if avail < words_needed {
+                        return Err(FastPForError::NotEnoughData);
+                    }
+                    let copy_len = words_needed as usize;
                     let mut tail_buf = [0u32; 64];
-                    tail_buf[..copy_len]
-                        .copy_from_slice(&input[inexcept as usize..inexcept as usize + copy_len]);
+                    if copy_len > 0 {
+                        let start = inexcept as usize;
+                        let src = input
+                            .get(start..start + copy_len)
+                            .ok_or(FastPForError::NotEnoughData)?;
+                        tail_buf[..copy_len].copy_from_slice(src);
+                    }
                     let tail_inpos = 0;
                     bitunpacking::fast_unpack(
                         &tail_buf,
@@ -417,37 +459,56 @@ impl FastPFOR {
 
         let run_end = thissize / self.block_size;
         for _ in 0..run_end {
-            let b = u32::from(input_bytes[byte_pos]);
+            let b = u32::from(get_byte(byte_pos)?);
+            if b > 32 {
+                return Err(FastPForError::NotEnoughData);
+            }
             byte_pos += 1;
-            let cexcept = input_bytes[byte_pos];
+            let cexcept = get_byte(byte_pos)?;
             byte_pos += 1;
             for k in (0..self.block_size).step_by(32) {
-                bitunpacking::fast_unpack(
-                    input,
-                    tmp_input_offset as usize,
-                    output,
-                    (tmp_output_offset + k) as usize,
-                    b as u8,
-                );
+                let in_start = tmp_input_offset as usize;
+                let out_start = (tmp_output_offset + k) as usize;
+                if in_start + b as usize > input.len() || out_start + 32 > output.len() {
+                    return Err(FastPForError::NotEnoughData);
+                }
+                bitunpacking::fast_unpack(input, in_start, output, out_start, b as u8);
                 tmp_input_offset += b;
             }
             if cexcept > 0 {
-                let maxbits = u32::from(input_bytes[byte_pos]);
+                let maxbits = u32::from(get_byte(byte_pos)?);
                 byte_pos += 1;
-                let index = maxbits - b;
+                let index = maxbits.checked_sub(b).ok_or(FastPForError::NotEnoughData)?;
+                if maxbits > 32 || index == 0 || index > 32 {
+                    return Err(FastPForError::NotEnoughData);
+                }
                 if index == 1 {
                     for _ in 0..cexcept {
-                        let pos = input_bytes[byte_pos];
+                        let pos = get_byte(byte_pos)?;
                         byte_pos += 1;
-                        output[pos as usize + tmp_output_offset as usize] |= 1 << b;
+                        if u32::from(pos) >= self.block_size {
+                            return Err(FastPForError::NotEnoughData);
+                        }
+                        let out_idx = tmp_output_offset as usize + pos as usize;
+                        if out_idx >= output.len() {
+                            return Err(FastPForError::OutputBufferTooSmall);
+                        }
+                        output[out_idx] |= 1 << b;
                     }
                 } else {
                     for _ in 0..cexcept {
-                        let pos = input_bytes[byte_pos];
+                        let pos = get_byte(byte_pos)?;
                         byte_pos += 1;
+                        if u32::from(pos) >= self.block_size {
+                            return Err(FastPForError::NotEnoughData);
+                        }
+                        let out_idx = tmp_output_offset as usize + pos as usize;
+                        if out_idx >= output.len() {
+                            return Err(FastPForError::OutputBufferTooSmall);
+                        }
                         let except_value = self.data_to_be_packed[index as usize]
                             [self.data_pointers[index as usize]];
-                        output[pos as usize + tmp_output_offset as usize] |= except_value << b;
+                        output[out_idx] |= except_value << b;
                         self.data_pointers[index as usize] += 1;
                     }
                 }
@@ -456,6 +517,7 @@ impl FastPFOR {
         }
         output_offset.set_position(u64::from(tmp_output_offset));
         input_offset.set_position(u64::from(inexcept));
+        Ok(())
     }
 }
 
@@ -667,4 +729,72 @@ mod tests {
     //     let mut rng = thread_rng();
     //     (0..size).map(|_| rng.gen()).collect()
     // }
+
+    /// Compress one block of data and return the compressed words.
+    fn compress_one_block(data: &[u32]) -> Vec<u32> {
+        let mut codec = FastPFOR::default();
+        let mut compressed = vec![0u32; data.len() * 4];
+        let mut in_off = Cursor::new(0);
+        let mut out_off = Cursor::new(0);
+        codec
+            .compress(
+                data,
+                data.len() as u32,
+                &mut in_off,
+                &mut compressed,
+                &mut out_off,
+            )
+            .unwrap();
+        compressed[..out_off.position() as usize].to_vec()
+    }
+
+    #[test]
+    fn test_truncated_input_returns_error() {
+        let data = vec![42u32; BLOCK_SIZE_256.get() as usize];
+        let compressed = compress_one_block(&data);
+
+        // Try decompressing with progressively shorter inputs — all must error, never panic.
+        for truncated_len in [1, 2, compressed.len() / 2, compressed.len() - 1] {
+            let truncated = &compressed[..truncated_len];
+            let mut codec = FastPFOR::default();
+            let mut out = vec![0u32; data.len()];
+            let mut in_off = Cursor::new(0);
+            let mut out_off = Cursor::new(0);
+            let result = codec.uncompress(
+                truncated,
+                truncated.len() as u32,
+                &mut in_off,
+                &mut out,
+                &mut out_off,
+            );
+            assert!(
+                result.is_err(),
+                "expected error for truncated len {truncated_len}, got Ok"
+            );
+        }
+    }
+
+    #[test]
+    fn test_corrupted_where_meta_returns_error() {
+        let data = vec![1u32; BLOCK_SIZE_256.get() as usize];
+        let mut compressed = compress_one_block(&data);
+
+        // The first word after the length header is `where_meta` — point it far past the end.
+        if compressed.len() > 1 {
+            compressed[1] = u32::MAX;
+        }
+
+        let mut codec = FastPFOR::default();
+        let mut out = vec![0u32; data.len()];
+        let mut in_off = Cursor::new(0);
+        let mut out_off = Cursor::new(0);
+        let result = codec.uncompress(
+            &compressed,
+            compressed.len() as u32,
+            &mut in_off,
+            &mut out,
+            &mut out_off,
+        );
+        assert!(result.is_err(), "expected error for corrupted where_meta");
+    }
 }
