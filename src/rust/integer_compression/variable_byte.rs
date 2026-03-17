@@ -1,6 +1,6 @@
 use std::io::Cursor;
 
-use bytemuck::{self, cast_slice, cast_slice_mut};
+use bytemuck::{cast_slice, cast_slice_mut};
 
 use crate::rust::cursor::IncrementCursor;
 use crate::rust::{FastPForError, FastPForResult, Integer, Skippable};

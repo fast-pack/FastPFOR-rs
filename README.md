@@ -8,7 +8,7 @@
 
 This is a Rust wrapper for the [C++ FastPFor library](https://github.com/fast-pack/FastPFor), as well as a pure Rust re-implementation.  Supports 32-bit and 64-bit integers, and SIMD-optimized codecs for 128-bit and 256-bit vectors. Based on the [Decoding billions of integers per second through vectorization, 2012](https://arxiv.org/abs/1209.2137) paper.
 
-The Rust **decoder** is about 29% faster than the C++ version. Rust code prohibits `unsafe` keyword.
+The Rust **decoder** is about 29% faster than the C++ version. The Rust implementation contains no `unsafe` code, and when built without the `cpp` feature this crate has `#![forbid(unsafe_code)]`.
 
 ### Supported algorithms
 Unless otherwise specified, all codecs support `&[u32]` only.
@@ -48,30 +48,30 @@ Unless otherwise specified, all codecs support `&[u32]` only.
 ```
 
 ## Benchmarks
-### Decoding speed (lower is better)
+### Decoding
 
-Using Linux x86-64 running `just bench::cpp-vs-rust-decode native`
+Using Linux x86-64 running `just bench::cpp-vs-rust-decode native`. The values below are time measurements; smaller values indicate faster decoding.
 
-| name                                    | cpp    | rust   | % faster |
-|-----------------------------------------|--------|--------|----------|
-| `clustered/1024`                        | 643.24 | 392.93 | 38.91%   |
-| `clustered/4096`                        | 1986   | 1414.8 | 28.76%   |
-| `sequential/1024`                       | 653.69 | 396.02 | 39.42%   |
-| `sequential/4096`                       | 2106   | 1476.2 | 29.91%   |
-| `sparse/1024`                           | 428.8  | 352.38 | 17.82%   |
-| `sparse/4096`                           | 1114   | 1179.5 | -5.88%   |
-| `uniform_large_value_distribution/1024` | 286.74 | 153.06 | 46.62%   |
-| `uniform_large_value_distribution/4096` | 748.19 | 558.05 | 25.41%   |
-| `uniform_small_value_distribution/1024` | 606.4  | 405.44 | 33.14%   |
-| `uniform_small_value_distribution/4096` | 2017.3 | 1403.7 | 30.42%   |
+| name                                    | cpp (ns) | rust (ns) | % faster |
+|-----------------------------------------|----------|-----------|----------|
+| `clustered/1024`                        | 643.24   | 392.93    | 38.91%   |
+| `clustered/4096`                        | 1986     | 1414.8    | 28.76%   |
+| `sequential/1024`                       | 653.69   | 396.02    | 39.42%   |
+| `sequential/4096`                       | 2106     | 1476.2    | 29.91%   |
+| `sparse/1024`                           | 428.8    | 352.38    | 17.82%   |
+| `sparse/4096`                           | 1114     | 1179.5    | -5.88%   |
+| `uniform_large_value_distribution/1024` | 286.74   | 153.06    | 46.62%   |
+| `uniform_large_value_distribution/4096` | 748.19   | 558.05    | 25.41%   |
+| `uniform_small_value_distribution/1024` | 606.4    | 405.44    | 33.14%   |
+| `uniform_small_value_distribution/4096` | 2017.3   | 1403.7    | 30.42%   |
 
 Rust Encoding has not yet been either optimized or even fully verified.
 
 ## Usage
 
 ### Crate Features
-* `cpp` - C++ implementation (default, uses portable SIMD mode)
-* `rust` - Rust implementation (work in progress, opt-in)
+* `cpp` - C++ implementation (uses portable SIMD mode)
+* `rust` - Rust implementation (safe Rust code, no `unsafe` blocks)
 
 #### SIMD Mode Configuration
 

@@ -117,7 +117,7 @@ fn prepare_compressed_data(data: &[u32], block_size: NonZeroU32) -> Vec<u32> {
     compressed
 }
 
-/// The caller must ensure the buffer has sufficient capacity for the output.
+/// The caller must ensure that the `decompressed` slice is large enough to hold the output.
 fn decompress_data(codec: &mut FastPFOR, compressed: &[u32], decompressed: &mut [u32]) -> usize {
     let mut input_offset = Cursor::new(0);
     let mut output_offset = Cursor::new(0);

@@ -1,7 +1,6 @@
 use std::io::Cursor;
 use std::num::NonZeroU32;
 
-use bytemuck;
 use bytes::{Buf as _, BufMut as _, BytesMut};
 
 use crate::rust::cursor::IncrementCursor;
@@ -355,7 +354,10 @@ impl FastPFOR {
         let bytesize = input[inexcept as usize];
         inexcept += 1;
         // Point a byte cursor directly at the metadata region in `input`,
-        // avoiding a copy into bytes_container entirely (mirrors C++ `const uint8_t *bytep`).
+        // mirrors C++ `const uint8_t *bytep = reinterpret_cast<const uint8_t *>(inexcept)`.
+        // The C++ encoder uses a raw `memcpy` of bytes into the u32 output (no endian
+        // conversion), and the decoder does a raw reinterpret_cast back -- both native byte
+        // order. `cast_slice` is the exact Rust equivalent: a safe, zero-copy native view.
         let input_bytes: &[u8] = bytemuck::cast_slice(input);
         let mut byte_pos = inexcept as usize * 4;
         let length = bytesize.div_ceil(4);

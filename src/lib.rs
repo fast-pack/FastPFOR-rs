@@ -1,4 +1,4 @@
-#![cfg_attr(not(feature = "cpp"), deny(unsafe_code))]
+#![cfg_attr(not(feature = "cpp"), forbid(unsafe_code))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc = include_str!("../README.md")]
 
@@ -15,6 +15,7 @@ compile_error!("At least one of the features 'cpp' or 'rust' must be enabled");
 pub mod cpp;
 
 #[cfg(feature = "rust")]
+#[forbid(unsafe_code, reason = "Rust code must always be safe")]
 /// Rust re-implementation of `FastPFor` (work in progress)
 pub mod rust;
 
