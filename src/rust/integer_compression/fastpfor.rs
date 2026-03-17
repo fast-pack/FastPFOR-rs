@@ -5,7 +5,7 @@ use bytemuck;
 use bytes::{Buf as _, BufMut as _, BytesMut};
 
 use crate::rust::cursor::IncrementCursor;
-use crate::rust::integer_compression::{bitpacking, helpers};
+use crate::rust::integer_compression::{bitpacking, bitunpacking, helpers};
 use crate::rust::{FastPForResult, Integer, Skippable};
 
 /// Block size constant for 256 integers per block
@@ -375,7 +375,7 @@ impl FastPFOR {
                 let mut j: u32 = 0;
                 // Process full groups directly from input
                 while j + 32 <= size && inexcept + k <= input.len() as u32 {
-                    bitpacking::fast_unpack(
+                    bitunpacking::fast_unpack(
                         input,
                         inexcept as usize,
                         &mut self.data_to_be_packed[k as usize],
@@ -394,7 +394,7 @@ impl FastPFOR {
                     tail_buf[..copy_len]
                         .copy_from_slice(&input[inexcept as usize..inexcept as usize + copy_len]);
                     let tail_inpos = 0;
-                    bitpacking::fast_unpack(
+                    bitunpacking::fast_unpack(
                         &tail_buf,
                         tail_inpos,
                         &mut self.data_to_be_packed[k as usize],
@@ -420,7 +420,7 @@ impl FastPFOR {
             let cexcept = input_bytes[byte_pos];
             byte_pos += 1;
             for k in (0..self.block_size).step_by(32) {
-                bitpacking::fast_unpack(
+                bitunpacking::fast_unpack(
                     input,
                     tmp_input_offset as usize,
                     output,

@@ -1,4 +1,5 @@
 pub mod bitpacking;
+pub mod bitunpacking;
 pub mod codec;
 pub mod composition;
 pub mod differential;
