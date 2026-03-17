@@ -59,7 +59,13 @@ fn try_decode(compressed: &[u32]) -> Result<(), impl std::fmt::Debug> {
     let mut out = vec![0u32; 256 + 64];
     let mut in_off = Cursor::new(0u32);
     let mut out_off = Cursor::new(0u32);
-    codec.uncompress(compressed, compressed.len() as u32, &mut in_off, &mut out, &mut out_off)
+    codec.uncompress(
+        compressed,
+        compressed.len() as u32,
+        &mut in_off,
+        &mut out,
+        &mut out_off,
+    )
 }
 
 // ── Wire format reference ─────────────────────────────────────────────────────
@@ -107,7 +113,13 @@ fn uncompress_zero_input_length_ok() {
     let mut codec = FastPFOR::default();
     let mut out = vec![];
     codec
-        .uncompress(&[], 0, &mut Cursor::new(0u32), &mut out, &mut Cursor::new(0u32))
+        .uncompress(
+            &[],
+            0,
+            &mut Cursor::new(0u32),
+            &mut out,
+            &mut Cursor::new(0u32),
+        )
         .expect("empty uncompress must succeed");
 }
 
@@ -117,7 +129,14 @@ fn headless_uncompress_zero_inlength_128_ok() {
     let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, BLOCK_SIZE_128);
     let mut out = vec![];
     codec
-        .headless_uncompress(&[], 0, &mut Cursor::new(0u32), &mut out, &mut Cursor::new(0u32), 0)
+        .headless_uncompress(
+            &[],
+            0,
+            &mut Cursor::new(0u32),
+            &mut out,
+            &mut Cursor::new(0u32),
+            0,
+        )
         .expect("zero-length headless uncompress must succeed");
 }
 
@@ -338,7 +357,13 @@ fn decode_index1_pos_out_of_block() {
     let mut buf = vec![0u32; 1024];
     let mut out_off = Cursor::new(0u32);
     codec
-        .compress(&data, data.len() as u32, &mut Cursor::new(0u32), &mut buf, &mut out_off)
+        .compress(
+            &data,
+            data.len() as u32,
+            &mut Cursor::new(0u32),
+            &mut buf,
+            &mut out_off,
+        )
         .unwrap();
     buf.truncate(out_off.position() as usize);
 
@@ -395,7 +420,15 @@ fn decode_exception_pos_out_of_block() {
     let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, BLOCK_SIZE_128);
     let mut buf = vec![0u32; 2048];
     let mut out_off = Cursor::new(0u32);
-    codec.compress(&data, data.len() as u32, &mut Cursor::new(0u32), &mut buf, &mut out_off).unwrap();
+    codec
+        .compress(
+            &data,
+            data.len() as u32,
+            &mut Cursor::new(0u32),
+            &mut buf,
+            &mut out_off,
+        )
+        .unwrap();
     buf.truncate(out_off.position() as usize);
 
     let start = meta_byte_start(&buf);
@@ -432,4 +465,3 @@ fn decode_exception_output_out_of_bounds() {
     );
     assert!(result.is_err());
 }
-
