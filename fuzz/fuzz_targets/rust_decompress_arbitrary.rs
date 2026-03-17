@@ -20,9 +20,8 @@
 //! running it against the `dont-panic` branch will produce only `Ok`/`Err` outcomes.
 
 use arbitrary::Arbitrary;
-use fastpfor::rust;
 use fastpfor::rust::{BLOCK_SIZE_128, BLOCK_SIZE_256, DEFAULT_PAGE_SIZE, FastPFOR, VariableByte};
-use fastpfor::CodecToSlice;
+use fastpfor::{CodecToSlice, rust};
 use libfuzzer_sys::fuzz_target;
 
 /// Which Rust FastPFOR codec variant to exercise.

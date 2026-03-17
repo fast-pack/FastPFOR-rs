@@ -172,24 +172,41 @@ impl Integer<u32> for VariableByte {
             }
 
             byte_pos += bytes_read;
+            if tmp_outpos >= output.len() {
+                return Err(FastPForError::OutputBufferTooSmall);
+            }
             output[tmp_outpos] = v;
             tmp_outpos += 1;
         }
 
         // Slow path: process remaining bytes
         while byte_pos < byte_length {
-            let mut shift = 0;
             let mut v: u32 = 0;
-            while byte_pos < byte_length {
-                let c = input_bytes[byte_pos];
-                byte_pos += 1;
-                v += u32::from(c & 127) << shift;
-                if c < 128 {
-                    output[tmp_outpos] = v;
-                    tmp_outpos += 1;
+            let mut decoded = false;
+            for i in 0..5usize {
+                if byte_pos >= byte_length {
                     break;
                 }
-                shift += 7;
+                let c = input_bytes[byte_pos];
+                byte_pos += 1;
+                if i < 4 {
+                    v |= u32::from(c & 0x7F) << (i * 7);
+                    if c < 128 {
+                        decoded = true;
+                        break;
+                    }
+                } else {
+                    // 5th byte: only 4 bits contribute (7*4 bits already used)
+                    v |= u32::from(c & 0x0F) << 28;
+                    decoded = true;
+                }
+            }
+            if decoded {
+                if tmp_outpos >= output.len() {
+                    return Err(FastPForError::OutputBufferTooSmall);
+                }
+                output[tmp_outpos] = v;
+                tmp_outpos += 1;
             }
         }
 
