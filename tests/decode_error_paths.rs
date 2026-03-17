@@ -43,7 +43,7 @@ fn compressed_with_exceptions() -> (Vec<u32>, Vec<u32>) {
 }
 
 /// Build compressed data whose exception group uses bit-width difference == 1
-/// (maxbits - optimal_bits == 1), triggering the `index == 1` branch.
+/// `(maxbits - optimal_bits == 1)`, triggering the `index == 1` branch.
 /// Returns `(compressed_words, original_data)`.
 fn compressed_with_index1_exceptions() -> (Vec<u32>, Vec<u32>) {
     // Almost all values fit in 1 bit except one value needing exactly 2 bits.
@@ -123,7 +123,7 @@ fn uncompress_zero_input_length_ok() {
         .expect("empty uncompress must succeed");
 }
 
-/// `headless_uncompress` with `inlength == 0` and BLOCK_SIZE_128 returns Ok immediately.
+/// `headless_uncompress` with `inlength == 0` and `BLOCK_SIZE_128` returns Ok immediately.
 #[test]
 fn headless_uncompress_zero_inlength_128_ok() {
     let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, BLOCK_SIZE_128);
@@ -296,7 +296,7 @@ fn decode_exception_maxbits_too_large() {
     assert!(try_decode(&compressed).is_err());
 }
 
-/// `maxbits < b` (checked_sub underflows → index is None).
+/// `maxbits < b` (`checked_sub` underflows → index is None).
 #[test]
 fn decode_exception_index_underflow() {
     let (mut compressed, _) = compressed_with_exceptions();
@@ -396,7 +396,7 @@ fn decode_index1_output_out_of_bounds() {
         &compressed,
         compressed.len() as u32,
         &mut Cursor::new(0u32),
-        &mut vec![0u32; 16], // too small
+        &mut [0u32; 16], // too small
         &mut Cursor::new(0u32),
     );
     assert!(result.is_err());
@@ -451,7 +451,7 @@ fn decode_exception_pos_out_of_block() {
     assert!(result.is_err());
 }
 
-/// `index > 1`: output buffer too small (out_idx >= output.len()).
+/// `index > 1`: output buffer too small (`out_idx` >= `output.len()`).
 #[test]
 fn decode_exception_output_out_of_bounds() {
     let (compressed, _) = compressed_with_exceptions();
@@ -460,7 +460,7 @@ fn decode_exception_output_out_of_bounds() {
         &compressed,
         compressed.len() as u32,
         &mut Cursor::new(0u32),
-        &mut vec![0u32; 32], // too small for a 256-block
+        &mut [0u32; 32], // too small for a 256-block
         &mut Cursor::new(0u32),
     );
     assert!(result.is_err());
