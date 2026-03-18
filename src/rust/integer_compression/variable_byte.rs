@@ -3,6 +3,7 @@ use std::io::Cursor;
 use bytemuck::{cast_slice, cast_slice_mut};
 
 use crate::rust::cursor::IncrementCursor;
+use crate::rust::integer_compression::helpers::AsUsize;
 use crate::rust::{FastPForError, FastPForResult, Integer, Skippable};
 
 /// Variable-byte encoding codec for integer compression.
@@ -138,7 +139,7 @@ impl Integer<u32> for VariableByte {
         }
 
         // Convert u32 array to byte view
-        let byte_length = (input_length as usize) * 4;
+        let byte_length = (input_length.as_usize()) * 4;
         let input_start = input_offset.position() as usize;
 
         // Create a byte slice view of the input
@@ -232,7 +233,7 @@ impl Integer<i8> for VariableByte {
         }
         let mut out_pos_tmp = output_offset.position();
         for k in input_offset.position() as u32..(input_offset.position() as u32 + input_length) {
-            let val = input[k as usize];
+            let val = input[k.as_usize()];
             if val < (1 << 7) {
                 output[out_pos_tmp as usize] = Self::extract_7bits::<0>(val) as i8;
                 out_pos_tmp += 1;
@@ -287,8 +288,8 @@ impl Integer<i8> for VariableByte {
         let mut tmp_outpos = output_offset.position();
 
         while p < final_p {
-            let mut v = i32::from(input[p as usize] & 0x7F);
-            if input[p as usize] >= 0 {
+            let mut v = i32::from(input[p.as_usize()] & 0x7F);
+            if input[p.as_usize()] >= 0 {
                 // High bit is NOT set, this is the last byte
                 p += 1;
                 output[tmp_outpos as usize] = v as u32;
@@ -296,8 +297,8 @@ impl Integer<i8> for VariableByte {
                 continue;
             }
 
-            v |= i32::from(input[p as usize + 1] & 0x7F) << 7;
-            if input[p as usize + 1] >= 0 {
+            v |= i32::from(input[p.as_usize() + 1] & 0x7F) << 7;
+            if input[p.as_usize() + 1] >= 0 {
                 // High bit is NOT set, this is the last byte
                 p += 2;
                 output[tmp_outpos as usize] = v as u32;
@@ -305,8 +306,8 @@ impl Integer<i8> for VariableByte {
                 continue;
             }
 
-            v |= i32::from(input[p as usize + 2] & 0x7F) << 14;
-            if input[p as usize + 2] >= 0 {
+            v |= i32::from(input[p.as_usize() + 2] & 0x7F) << 14;
+            if input[p.as_usize() + 2] >= 0 {
                 // High bit is NOT set, this is the last byte
                 p += 3;
                 output[tmp_outpos as usize] = v as u32;
@@ -314,8 +315,8 @@ impl Integer<i8> for VariableByte {
                 continue;
             }
 
-            v |= i32::from(input[p as usize + 3] & 0x7F) << 21;
-            if input[p as usize + 3] >= 0 {
+            v |= i32::from(input[p.as_usize() + 3] & 0x7F) << 21;
+            if input[p.as_usize() + 3] >= 0 {
                 // High bit is NOT set, this is the last byte
                 p += 4;
                 output[tmp_outpos as usize] = v as u32;
@@ -323,7 +324,7 @@ impl Integer<i8> for VariableByte {
                 continue;
             }
 
-            v |= i32::from(input[p as usize + 4] & 0x0F) << 28;
+            v |= i32::from(input[p.as_usize() + 4] & 0x0F) << 28;
             p += 5;
             output[tmp_outpos as usize] = v as u32;
             tmp_outpos += 1;

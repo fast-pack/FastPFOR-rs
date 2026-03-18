@@ -9,29 +9,27 @@ pub fn bits(i: u32) -> usize {
     32 - i.leading_zeros() as usize
 }
 
-/// Extracts a byte from an i32 array treated as packed bytes in big-endian order.
-#[expect(dead_code)]
-pub fn grab_byte(input: &[i32], index: u32) -> u8 {
-    (input[(index / 4) as usize] >> (24 - (index % 4) * 8)) as u8
+pub trait AsUsize: Eq + Copy {
+    fn as_usize(self) -> usize;
 }
 
-/// Returns the position of the most significant bit in `x` (1-indexed).
-/// Returns 0 for input 0.
-#[expect(dead_code)]
-pub fn leading_bit_position(x: u32) -> i32 {
-    bitlen(u64::from(x))
-}
-
-/// Counts the number of leading zeros in `x`.
-fn clz(x: u64) -> u64 {
-    u64::from(x.leading_zeros())
-}
-
-/// Returns the bit length of `x` (number of bits needed to represent it).
-/// Returns 0 for input 0.
-fn bitlen(x: u64) -> i32 {
-    if x == 0 {
-        return 0;
+impl AsUsize for usize {
+    #[inline]
+    fn as_usize(self) -> usize {
+        self
     }
-    64 - clz(x) as i32
+}
+
+impl AsUsize for u32 {
+    #[inline]
+    fn as_usize(self) -> usize {
+        const _: () = {
+            // Some day Rust may support usize smaller than u32?
+            assert!(
+                size_of::<u32>() <= size_of::<usize>(),
+                "usize must be able to hold all u32 values"
+            );
+        };
+        self as usize
+    }
 }
