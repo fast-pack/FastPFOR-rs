@@ -30,6 +30,10 @@ impl AsUsize for u32 {
                 "usize must be able to hold all u32 values"
             );
         };
-        self as usize
+
+        #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+        {
+            self as usize
+        }
     }
 }
