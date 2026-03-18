@@ -28,15 +28,14 @@ fn roundtrip(mut codec: Codec, data: &[u32]) {
     assert_eq!(decompressed, data);
 }
 
-// ── VariableByte::default() ───────────────────────────────────────────────────
+// ── VariableByte round-trip ───────────────────────────────────────────────────
 
-/// `VariableByte::default()` must produce a usable codec (exercises the
-/// `Default` impl that was previously uncovered).
+/// `VariableByte` round-trips values spanning all varint byte widths
+/// (1- through 5-byte encodings).
 #[test]
-fn variable_byte_default_roundtrip() {
-    // VariableByte::default() hits the previously-uncovered Default impl
+fn variable_byte_roundtrip_all_widths() {
     roundtrip(
-        Codec::from(VariableByte::default()),
+        Codec::from(VariableByte::new()),
         &[1u32, 127, 128, 16383, 16384, u32::MAX],
     );
 }
@@ -155,7 +154,7 @@ fn fastpfor_encode_exception_index1() {
 
 // ── FastPFOR encoding: 128-element block size ─────────────────────────────────
 
-/// BLOCK_SIZE_128 uses different inner-loop bounds in `encode_page`; verify
+/// `BLOCK_SIZE_128` uses different inner-loop bounds in `encode_page`; verify
 /// it compresses and decompresses correctly with exceptions present.
 #[test]
 fn fastpfor_encode_128_block_with_exceptions() {
