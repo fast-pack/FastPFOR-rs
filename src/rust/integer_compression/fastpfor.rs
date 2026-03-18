@@ -152,6 +152,10 @@ impl FastPFOR {
     pub fn new(page_size: NonZeroU32, block_size: NonZeroU32) -> FastPFOR {
         let page_size = page_size.get();
         let block_size = block_size.get();
+        // Exceptions are processed in groups of 32; we therefore allocate each
+        // per-page buffer to the next multiple of 32 to avoid out-of-bounds
+        // accesses when handling the final (possibly partial) group.
+        let exceptions_capacity = page_size.div_ceil(32) * 32;
         FastPFOR {
             page_size,
             block_size,
@@ -161,7 +165,7 @@ impl FastPFOR {
             // Each slot holds at most `page_size` exceptions (one per integer in the page).
             // Since page_size is always a multiple of 32, this is also the rounded-up capacity,
             // so no resize is ever needed during decoding.
-            data_to_be_packed: std::array::from_fn(|_| vec![0; page_size as usize]),
+            data_to_be_packed: std::array::from_fn(|_| vec![0; exceptions_capacity as usize]),
             data_pointers: [0; 33],
             freqs: [0; 33],
             optimal_bits: 0,
