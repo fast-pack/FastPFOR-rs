@@ -1,10 +1,12 @@
 # `FastPFor` for Rust
 
-[![GitHub](https://img.shields.io/badge/github-fastpfor-8da0cb?logo=github)](https://github.com/jjcfrancisco/fastpfor)
-[![crates.io version](https://img.shields.io/crates/v/fastpfor.svg)](https://crates.io/crates/fastpfor)
-[![docs.rs docs](https://docs.rs/fastpfor/badge.svg)](https://docs.rs/fastpfor)
-[![license](https://img.shields.io/crates/l/fastpfor.svg)](https://github.com/jjcfrancisco/fastpfor/blob/main/LICENSE-APACHE)
-[![CI build](https://github.com/jjcfrancisco/fastpfor/actions/workflows/ci.yml/badge.svg)](https://github.com/jjcfrancisco/fastpfor/actions)
+[![GitHub repo](https://img.shields.io/badge/github-fast--pack/FastPFOR--rs-8da0cb?logo=github)](https://github.com/fast-pack/FastPFOR-rs)
+[![crates.io version](https://img.shields.io/crates/v/fastpfor)](https://crates.io/crates/fastpfor)
+[![crate usage](https://img.shields.io/crates/d/fastpfor)](https://crates.io/crates/fastpfor)
+[![docs.rs status](https://img.shields.io/docsrs/fastpfor)](https://docs.rs/fastpfor)
+[![crates.io license](https://img.shields.io/crates/l/fastpfor)](https://github.com/fast-pack/FastPFOR-rs/blob/main/LICENSE-APACHE)
+[![CI build status](https://github.com/fast-pack/FastPFOR-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/fast-pack/FastPFOR-rs/actions)
+[![Codecov](https://img.shields.io/codecov/c/github/fast-pack/FastPFOR-rs)](https://app.codecov.io/gh/fast-pack/FastPFOR-rs)
 
 This is a Rust wrapper for the [C++ FastPFor library](https://github.com/fast-pack/FastPFor), as well as a pure Rust re-implementation.  Supports 32-bit and 64-bit integers, and SIMD-optimized codecs for 128-bit and 256-bit vectors. Based on the [Decoding billions of integers per second through vectorization, 2012](https://arxiv.org/abs/1209.2137) paper.
 
