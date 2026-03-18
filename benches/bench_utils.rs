@@ -13,9 +13,9 @@ use core::ops::Range;
 use std::num::NonZeroU32;
 
 pub use fastpfor::rust::{BLOCK_SIZE_128, BLOCK_SIZE_256, DEFAULT_PAGE_SIZE, FastPFOR, Integer};
-pub use std::io::Cursor;
 use rand::rngs::StdRng;
 use rand::{RngExt as _, SeedableRng};
+pub use std::io::Cursor;
 
 const SEED: u64 = 456;
 
@@ -60,7 +60,13 @@ fn generate_sequential_data(size: usize) -> Vec<u32> {
 fn generate_sparse_data(size: usize) -> Vec<u32> {
     let mut rng = StdRng::seed_from_u64(SEED);
     (0..size)
-        .map(|_| if rng.random_bool(0.9) { 0 } else { rng.random() })
+        .map(|_| {
+            if rng.random_bool(0.9) {
+                0
+            } else {
+                rng.random()
+            }
+        })
         .collect()
 }
 
@@ -195,7 +201,11 @@ impl CompressFixture {
     fn new(name: &'static str, generator: DataGeneratorFn, size: usize) -> Self {
         let data = generator(size);
         let rust_compressed = prepare_compressed_data(&data, BLOCK_SIZE_128);
-        Self { name, data, rust_compressed }
+        Self {
+            name,
+            data,
+            rust_compressed,
+        }
     }
 }
 
@@ -230,7 +240,11 @@ impl BlockSizeFixture {
     fn new(block_size: NonZeroU32, size: usize) -> Self {
         let data = generate_uniform_data_small_value_distribution(size);
         let compressed = prepare_compressed_data(&data, block_size);
-        Self { block_size, data, compressed }
+        Self {
+            block_size,
+            data,
+            compressed,
+        }
     }
 }
 
@@ -259,7 +273,12 @@ impl CppDecodeFixture {
         let codec = FastPFor128Codec::new();
         let cpp_compressed = cpp_encode(&codec, &data);
         let rust_compressed = prepare_compressed_data(&data, BLOCK_SIZE_128);
-        Self { name, cpp_compressed, rust_compressed, original_len: size }
+        Self {
+            name,
+            cpp_compressed,
+            rust_compressed,
+            original_len: size,
+        }
     }
 }
 
