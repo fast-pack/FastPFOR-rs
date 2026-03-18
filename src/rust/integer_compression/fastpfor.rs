@@ -1,3 +1,4 @@
+use std::array;
 use std::io::Cursor;
 use std::num::NonZeroU32;
 
@@ -146,26 +147,17 @@ impl Default for FastPFOR {
 
 impl FastPFOR {
     /// Creates codec with specified page and block sizes.
-    ///
-    /// Pre-allocates buffers for metadata and exception storage.
     #[must_use]
     pub fn new(page_size: NonZeroU32, block_size: NonZeroU32) -> FastPFOR {
         let page_size = page_size.get();
         let block_size = block_size.get();
-        // Exceptions are processed in groups of 32; we therefore allocate each
-        // per-page buffer to the next multiple of 32 to avoid out-of-bounds
-        // accesses when handling the final (possibly partial) group.
-        let exceptions_capacity = page_size.div_ceil(32) * 32;
         FastPFOR {
             page_size,
             block_size,
             bytes_container: BytesMut::with_capacity(
                 (3 * page_size / block_size + page_size) as usize,
             ),
-            // Each slot holds at most `page_size` exceptions (one per integer in the page).
-            // Since page_size is always a multiple of 32, this is also the rounded-up capacity,
-            // so no resize is ever needed during decoding.
-            data_to_be_packed: std::array::from_fn(|_| vec![0; exceptions_capacity as usize]),
+            data_to_be_packed: array::from_fn(|_| Vec::new()),
             data_pointers: [0; 33],
             freqs: [0; 33],
             optimal_bits: 0,
@@ -210,6 +202,12 @@ impl FastPFOR {
             if self.exception_count > 0 {
                 self.bytes_container.put_u8(self.max_bits);
                 let index = usize::from(self.max_bits - self.optimal_bits);
+                let needed = self.data_pointers[index] + usize::from(self.exception_count);
+                if needed > self.data_to_be_packed[index].len() {
+                    // Grow to the next multiple of 32 above 2×needed, to amortize resizes.
+                    let new_cap = needed.saturating_mul(2).next_multiple_of(32);
+                    self.data_to_be_packed[index].resize(new_cap, 0);
+                }
                 for k in 0..self.block_size {
                     if (input[(k + tmp_input_offset) as usize] >> self.optimal_bits) != 0 {
                         self.bytes_container.put_u8(k as u8);
@@ -395,11 +393,15 @@ impl FastPFOR {
                 inexcept = inexcept
                     .checked_add(1)
                     .ok_or(FastPForError::NotEnoughData)?;
-                // Each integer in the page can be an exception at most once, so `size`
-                // can never exceed `page_size`. The buffer is pre-allocated to `page_size`
-                // in `new()`, so no resize is needed here.
+                // Reject adversarial inputs: exceptions can't exceed the page size.
                 if size > self.page_size {
                     return Err(FastPForError::NotEnoughData);
+                }
+                // Ensure the buffer is large enough for `size` values, rounded up
+                // to the next group of 32 for the bitunpacking calls.
+                let rounded_up = size.next_multiple_of(32) as usize;
+                if self.data_to_be_packed[k as usize].len() < rounded_up {
+                    self.data_to_be_packed[k as usize].resize(rounded_up, 0);
                 }
                 let mut j: u32 = 0;
                 // Process full groups directly from input
