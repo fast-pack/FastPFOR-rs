@@ -32,7 +32,7 @@ pub const DEFAULT_PAGE_SIZE: NonZeroU32 = NonZeroU32::new(65536).unwrap();
 #[derive(Debug)]
 pub struct FastPFOR {
     /// Exception values indexed by bit width difference
-    pub data_to_be_packed: [Vec<u32>; 33],
+    pub exception_buffers: [Vec<u32>; 33],
     /// Metadata buffer for encoding/decoding
     pub bytes_container: BytesMut,
     /// Maximum integers per page
@@ -158,7 +158,7 @@ impl FastPFOR {
             bytes_container: BytesMut::with_capacity(
                 (3 * page_size / block_size + page_size) as usize,
             ),
-            data_to_be_packed: array::from_fn(|_| Vec::new()),
+            exception_buffers: array::from_fn(|_| Vec::new()),
             data_pointers: [0; 33],
             freqs: [0; 33],
             optimal_bits: 0,
@@ -204,15 +204,15 @@ impl FastPFOR {
                 self.bytes_container.put_u8(self.max_bits);
                 let index = usize::from(self.max_bits - self.optimal_bits);
                 let needed = self.data_pointers[index] + usize::from(self.exception_count);
-                if needed > self.data_to_be_packed[index].len() {
+                if needed > self.exception_buffers[index].len() {
                     // Grow to the next multiple of 32 above 2×needed, to amortize resizes.
                     let new_cap = needed.saturating_mul(2).next_multiple_of(32);
-                    self.data_to_be_packed[index].resize(new_cap, 0);
+                    self.exception_buffers[index].resize(new_cap, 0);
                 }
                 for k in 0..self.block_size {
                     if (input[(k + tmp_input_offset) as usize] >> self.optimal_bits) != 0 {
                         self.bytes_container.put_u8(k as u8);
-                        self.data_to_be_packed[index][self.data_pointers[index]] =
+                        self.exception_buffers[index][self.data_pointers[index]] =
                             input[(k + tmp_input_offset) as usize] >> self.optimal_bits;
                         self.data_pointers[index] += 1;
                     }
@@ -265,7 +265,7 @@ impl FastPFOR {
                 let mut j = 0;
                 while j < self.data_pointers[k] {
                     bitpacking::fast_pack(
-                        &self.data_to_be_packed[k],
+                        &self.exception_buffers[k],
                         j,
                         output,
                         tmp_output_offset as usize,
@@ -389,8 +389,8 @@ impl FastPFOR {
                 // Ensure the buffer is large enough for `size` values, rounded up
                 // to the next group of 32 for the bitunpacking calls.
                 let rounded_up = size.next_multiple_of(32) as usize;
-                if self.data_to_be_packed[k as usize].len() < rounded_up {
-                    self.data_to_be_packed[k as usize].resize(rounded_up, 0);
+                if self.exception_buffers[k as usize].len() < rounded_up {
+                    self.exception_buffers[k as usize].resize(rounded_up, 0);
                 }
                 let mut j: u32 = 0;
                 // Process full groups directly from input
@@ -400,7 +400,7 @@ impl FastPFOR {
                     bitunpacking::fast_unpack(
                         input,
                         inexcept as usize,
-                        &mut self.data_to_be_packed[k as usize],
+                        &mut self.exception_buffers[k as usize],
                         j as usize,
                         k as u8,
                     );
@@ -431,7 +431,7 @@ impl FastPFOR {
                     bitunpacking::fast_unpack(
                         &tail_buf,
                         tail_inpos,
-                        &mut self.data_to_be_packed[k as usize],
+                        &mut self.exception_buffers[k as usize],
                         j as usize,
                         k as u8,
                     );
@@ -502,7 +502,7 @@ impl FastPFOR {
                         // out_idx < output.len(): same invariant as index==1 branch above.
                         debug_assert!(out_idx < output.len());
                         let ptr = self.data_pointers[index];
-                        let except_value = self.data_to_be_packed[index].get_val(ptr)?;
+                        let except_value = self.exception_buffers[index].get_val(ptr)?;
                         output[out_idx] |= except_value << bits;
                         self.data_pointers[index] += 1;
                     }
