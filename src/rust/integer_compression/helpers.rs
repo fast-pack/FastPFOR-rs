@@ -1,3 +1,5 @@
+use crate::rust::{FastPForError, FastPForResult};
+
 /// Finds the greatest multiple of `factor` that is less than or equal to `value`.
 pub fn greatest_multiple(value: u32, factor: u32) -> u32 {
     value - value % factor
@@ -35,5 +37,25 @@ impl AsUsize for u32 {
         {
             self as usize
         }
+    }
+}
+
+pub trait GetWithErr<T> {
+    fn get_val(&self, pos: impl AsUsize) -> FastPForResult<T>;
+}
+
+impl<T: Copy> GetWithErr<T> for &[T] {
+    #[inline]
+    fn get_val(&self, pos: impl AsUsize) -> FastPForResult<T> {
+        self.get(pos.as_usize())
+            .copied()
+            .ok_or(FastPForError::NotEnoughData)
+    }
+}
+
+impl<T: Copy> GetWithErr<T> for Vec<T> {
+    #[inline]
+    fn get_val(&self, pos: impl AsUsize) -> FastPForResult<T> {
+        self.as_slice().get_val(pos)
     }
 }

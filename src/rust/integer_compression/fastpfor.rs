@@ -5,6 +5,7 @@ use std::num::NonZeroU32;
 use bytes::{Buf as _, BufMut as _, BytesMut};
 
 use crate::rust::cursor::IncrementCursor;
+use crate::rust::integer_compression::helpers::GetWithErr;
 use crate::rust::integer_compression::{bitpacking, bitunpacking, helpers};
 use crate::rust::{FastPForError, FastPForResult, Integer, Skippable};
 
@@ -343,21 +344,15 @@ impl FastPFOR {
     ) -> FastPForResult<()> {
         let n = u32::try_from(input.len())
             .map_err(|_| FastPForError::InvalidInputLength(input.len()))?;
-        let get_u32 = |idx: u32| -> FastPForResult<u32> {
-            input
-                .get(idx as usize)
-                .copied()
-                .ok_or(FastPForError::NotEnoughData)
-        };
 
         let init_pos =
             u32::try_from(input_offset.position()).map_err(|_| FastPForError::NotEnoughData)?;
-        let where_meta = get_u32(init_pos)?;
+        let where_meta = input.get_val(init_pos)?;
         input_offset.increment();
         let mut inexcept = init_pos
             .checked_add(where_meta)
             .ok_or(FastPForError::NotEnoughData)?;
-        let bytesize = get_u32(inexcept)?;
+        let bytesize = input.get_val(inexcept)?;
         inexcept = inexcept
             .checked_add(1)
             .ok_or(FastPForError::NotEnoughData)?;
@@ -367,12 +362,6 @@ impl FastPFOR {
         // conversion), and the decoder does a raw reinterpret_cast back -- both native byte
         // order. `cast_slice` is the exact Rust equivalent: a safe, zero-copy native view.
         let input_bytes: &[u8] = bytemuck::cast_slice(input);
-        let get_byte = |pos: usize| -> FastPForResult<u8> {
-            input_bytes
-                .get(pos)
-                .copied()
-                .ok_or(FastPForError::NotEnoughData)
-        };
         let mut byte_pos = (inexcept as usize)
             .checked_mul(4)
             .filter(|&bp| bp <= input_bytes.len())
@@ -382,14 +371,14 @@ impl FastPFOR {
             .checked_add(length)
             .ok_or(FastPForError::NotEnoughData)?;
 
-        let bitmap = get_u32(inexcept)?;
+        let bitmap = input.get_val(inexcept)?;
         inexcept = inexcept
             .checked_add(1)
             .ok_or(FastPForError::NotEnoughData)?;
 
         for k in 2..=32 {
             if (bitmap & (1 << (k - 1))) != 0 {
-                let size = get_u32(inexcept)?;
+                let size = input.get_val(inexcept)?;
                 inexcept = inexcept
                     .checked_add(1)
                     .ok_or(FastPForError::NotEnoughData)?;
@@ -460,12 +449,12 @@ impl FastPFOR {
 
         let run_end = thissize / self.block_size;
         for _ in 0..run_end {
-            let bits = get_byte(byte_pos)?;
+            let bits = input_bytes.get_val(byte_pos)?;
             if bits > 32 {
                 return Err(FastPForError::NotEnoughData);
             }
             byte_pos += 1;
-            let num_exceptions = get_byte(byte_pos)?;
+            let num_exceptions = input_bytes.get_val(byte_pos)?;
             byte_pos += 1;
             for k in (0..self.block_size).step_by(32) {
                 let in_start = tmp_input_offset as usize;
@@ -480,7 +469,7 @@ impl FastPFOR {
                 tmp_input_offset += u32::from(bits);
             }
             if num_exceptions > 0 {
-                let maxbits = get_byte(byte_pos)?;
+                let maxbits = input_bytes.get_val(byte_pos)?;
                 byte_pos += 1;
                 let index = maxbits
                     .checked_sub(bits)
@@ -491,7 +480,7 @@ impl FastPFOR {
                 let index = usize::from(index);
                 if index == 1 {
                     for _ in 0..num_exceptions {
-                        let pos = get_byte(byte_pos)?;
+                        let pos = input_bytes.get_val(byte_pos)?;
                         byte_pos += 1;
                         if u32::from(pos) >= self.block_size {
                             return Err(FastPForError::NotEnoughData);
@@ -504,7 +493,7 @@ impl FastPFOR {
                     }
                 } else {
                     for _ in 0..num_exceptions {
-                        let pos = get_byte(byte_pos)?;
+                        let pos = input_bytes.get_val(byte_pos)?;
                         byte_pos += 1;
                         if u32::from(pos) >= self.block_size {
                             return Err(FastPForError::NotEnoughData);
@@ -513,9 +502,7 @@ impl FastPFOR {
                         // out_idx < output.len(): same invariant as index==1 branch above.
                         debug_assert!(out_idx < output.len());
                         let ptr = self.data_pointers[index];
-                        // ptr < data_to_be_packed[index].len(): size <= page_size was
-                        // validated above, and the buffer is pre-allocated to page_size.
-                        let except_value = self.data_to_be_packed[index][ptr];
+                        let except_value = self.data_to_be_packed[index].get_val(ptr)?;
                         output[out_idx] |= except_value << bits;
                         self.data_pointers[index] += 1;
                     }

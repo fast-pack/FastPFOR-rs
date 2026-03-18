@@ -451,6 +451,32 @@ fn decode_exception_pos_out_of_block() {
     assert!(result.is_err());
 }
 
+/// `index > 1`: `data_to_be_packed[index]` was never populated because the
+/// bitmap had no bit set for that bit-width, yet the block metadata claims
+/// exceptions at that width.  Before the fix this panicked with an
+/// index-out-of-bounds on the empty `Vec`; after the fix it returns `Err`.
+///
+/// The crafted stream has `bitmap=0` (no exception buffers filled) but block
+/// metadata with `bits=1`, `cexcept=1`, `maxbits=3` → `index=2`, causing an
+/// access into the empty `data_to_be_packed[2]`.
+#[test]
+fn decode_exception_unpopulated_data_to_be_packed() {
+    // meta_word encodes [bits=1, num_exceptions=1, maxbits=3, pos=0] in LE bytes.
+    // Layout: outlength=256, where_meta=9, 8 packed zero words (bits=1),
+    //         bytesize=4, meta_word, bitmap=0.
+    let meta_word = u32::from_le_bytes([1, 1, 3, 0]);
+    let compressed: Vec<u32> = [
+        256u32, // outlength
+        9,      // where_meta
+        0, 0, 0, 0, 0, 0, 0, 0,         // 8 packed words (bits=1, all zeros)
+        4,         // bytesize = 4 bytes
+        meta_word, // block metadata: bits=1, cexcept=1, maxbits=3, pos=0
+        0,         // bitmap=0: no exception bit-widths loaded into data_to_be_packed
+    ]
+    .into();
+    assert!(try_decode(&compressed).is_err());
+}
+
 /// `index > 1`: output buffer too small (`out_idx` >= `output.len()`).
 #[test]
 fn decode_exception_output_out_of_bounds() {
