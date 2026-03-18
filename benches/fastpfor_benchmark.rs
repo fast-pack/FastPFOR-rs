@@ -1,235 +1,73 @@
 //! Benchmark suite for `FastPFOR` compression codecs.
 
-use core::ops::Range;
 use std::hint::black_box;
-use std::io::Cursor;
-use std::num::NonZeroU32;
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use fastpfor::rust::{BLOCK_SIZE_128, BLOCK_SIZE_256, DEFAULT_PAGE_SIZE, FastPFOR, Integer};
-use rand::rngs::StdRng;
-use rand::{RngExt as _, SeedableRng};
 
-const SIZES: &[usize; 2] = &[1024, 4096];
-const SEED: u64 = 456;
+#[path = "bench_utils.rs"]
+mod bench_utils;
+use bench_utils::{
+    BLOCK_SIZE_128, Cursor, DEFAULT_PAGE_SIZE, FastPFOR, Integer, block_size_fixtures,
+    compress_data, compress_fixtures, decompress_data,
+    generate_uniform_data_small_value_distribution, ratio_fixtures,
+};
+#[cfg(feature = "cpp")]
+use bench_utils::{cpp_decode, cpp_decode_fixtures, cpp_encode};
 
-type DataGeneratorFn = fn(usize) -> Vec<u32>;
-
-/// Generate uniformly distributed random data
-fn generate_uniform_data_from_range(size: usize, value_range: Range<u32>) -> Vec<u32> {
-    let mut rng = StdRng::seed_from_u64(SEED);
-    (0..size)
-        .map(|_| rng.random_range(value_range.clone()))
-        .collect()
-}
-
-fn generate_uniform_data_small_value_distribution(size: usize) -> Vec<u32> {
-    generate_uniform_data_from_range(size, 0..1000)
-}
-
-fn generate_uniform_data_large_value_distribution(size: usize) -> Vec<u32> {
-    generate_uniform_data_from_range(size, 0..u32::MAX)
-}
-
-/// Generate clustered data - values tend to cluster around changing base values
-fn generate_clustered_data(size: usize) -> Vec<u32> {
-    let mut rng = StdRng::seed_from_u64(SEED);
-    let mut data = Vec::with_capacity(size);
-    let mut base = 0u32;
-
-    for _ in 0..size {
-        // 10% chance to jump to a new cluster
-        if rng.random_bool(0.1) {
-            base = rng.random_range(0..1000);
-        }
-        data.push(base + rng.random_range(0..10));
-    }
-    data
-}
-
-/// Generate sequential/sorted data - ideal for compression
-fn generate_sequential_data(size: usize) -> Vec<u32> {
-    (0..size as u32).collect()
-}
-
-/// Generate sparse data - mostly zeros with occasional random values
-fn generate_sparse_data(size: usize) -> Vec<u32> {
-    let mut rng = StdRng::seed_from_u64(SEED);
-    (0..size)
-        .map(|_| {
-            if rng.random_bool(0.9) {
-                0
-            } else {
-                rng.random()
-            }
-        })
-        .collect()
-}
-
-/// Generate constant data - best case for compression
-fn generate_constant_data(size: usize) -> Vec<u32> {
-    vec![SEED as u32; size]
-}
-
-/// Generate data with powers of two
-fn generate_geometric_data(size: usize) -> Vec<u32> {
-    (0..size).map(|i| 1u32 << (i % 30)).collect()
-}
-
-/// Helper function to compress data and return the compressed size
-fn compress_data(codec: &mut FastPFOR, data: &[u32]) -> usize {
-    let mut compressed = vec![0u32; data.len() * 2];
-    let mut input_offset = Cursor::new(0);
-    let mut output_offset = Cursor::new(0);
-
-    codec
-        .compress(
-            data,
-            data.len() as u32,
-            &mut input_offset,
-            &mut compressed,
-            &mut output_offset,
-        )
-        .unwrap();
-
-    output_offset.position() as usize
-}
-
-/// Helper function to compress data and return compressed buffer
-fn prepare_compressed_data(data: &[u32], block_size: NonZeroU32) -> Vec<u32> {
-    let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, block_size);
-    let mut compressed = vec![0u32; data.len() * 2];
-    let mut input_offset = Cursor::new(0);
-    let mut output_offset = Cursor::new(0);
-
-    codec
-        .compress(
-            data,
-            data.len() as u32,
-            &mut input_offset,
-            &mut compressed,
-            &mut output_offset,
-        )
-        .unwrap();
-
-    let compressed_size = output_offset.position() as usize;
-    compressed.truncate(compressed_size);
-    compressed
-}
-
-/// The caller must ensure that the `decompressed` slice is large enough to hold the output.
-fn decompress_data(codec: &mut FastPFOR, compressed: &[u32], decompressed: &mut [u32]) -> usize {
-    let mut input_offset = Cursor::new(0);
-    let mut output_offset = Cursor::new(0);
-
-    codec
-        .uncompress(
-            compressed,
-            compressed.len() as u32,
-            &mut input_offset,
-            decompressed,
-            &mut output_offset,
-        )
-        .unwrap();
-
-    output_offset.position() as usize
-}
+const SIZES: &[usize] = &[1024, 4096];
 
 fn benchmark_compression(c: &mut Criterion) {
     let mut group = c.benchmark_group("compression");
-
-    let patterns: &[(&str, DataGeneratorFn)] = &[
-        (
-            "uniform_small_value_distribution",
-            generate_uniform_data_small_value_distribution,
-        ),
-        (
-            "uniform_large_value_distribution",
-            generate_uniform_data_large_value_distribution,
-        ),
-        ("clustered", generate_clustered_data),
-        ("sequential", generate_sequential_data),
-        ("sparse", generate_sparse_data),
-    ];
-
-    for &size in SIZES {
-        for (name, generator) in patterns {
-            let data = generator(size);
-            group.throughput(Throughput::Elements(size as u64));
-            group.bench_with_input(BenchmarkId::new(*name, size), &data, |b, data| {
-                let mut codec = FastPFOR::default();
-                b.iter(|| black_box(compress_data(&mut codec, black_box(data))));
-            });
-        }
+    for (size, fix) in compress_fixtures(SIZES) {
+        group.throughput(Throughput::Elements(size as u64));
+        group.bench_with_input(BenchmarkId::new(fix.name, size), &fix.data, |b, data| {
+            let mut codec = FastPFOR::default();
+            b.iter(|| black_box(compress_data(&mut codec, black_box(data))));
+        });
     }
-
     group.finish();
 }
 
 fn benchmark_decompression(c: &mut Criterion) {
     let mut group = c.benchmark_group("decompression");
-
-    let patterns: &[(&str, DataGeneratorFn)] = &[
-        (
-            "uniform_small_value_distribution",
-            generate_uniform_data_small_value_distribution,
-        ),
-        (
-            "uniform_large_value_distribution",
-            generate_uniform_data_large_value_distribution,
-        ),
-        ("clustered", generate_clustered_data),
-        ("sequential", generate_sequential_data),
-        ("sparse", generate_sparse_data),
-    ];
-
-    for &size in SIZES {
-        for (name, generator) in patterns {
-            let data = generator(size);
-            let compressed = prepare_compressed_data(&data, BLOCK_SIZE_128);
-
-            group.throughput(Throughput::Elements(size as u64));
-            group.bench_with_input(
-                BenchmarkId::new(*name, size),
-                &(compressed, size),
-                |b, (compressed, size)| {
-                    let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, BLOCK_SIZE_128);
-                    let mut decompressed = vec![0u32; *size];
-                    b.iter(|| {
-                        black_box(decompress_data(
-                            &mut codec,
-                            black_box(compressed),
-                            &mut decompressed,
-                        ))
-                    });
-                },
-            );
-        }
+    for (size, fix) in compress_fixtures(SIZES) {
+        group.throughput(Throughput::Elements(size as u64));
+        group.bench_with_input(
+            BenchmarkId::new(fix.name, size),
+            &fix.rust_compressed,
+            |b, compressed| {
+                let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, BLOCK_SIZE_128);
+                let mut decompressed = vec![0u32; size];
+                b.iter(|| {
+                    black_box(decompress_data(
+                        &mut codec,
+                        black_box(compressed),
+                        &mut decompressed,
+                    ))
+                });
+            },
+        );
     }
-
     group.finish();
 }
 
 fn benchmark_roundtrip(c: &mut Criterion) {
     let mut group = c.benchmark_group("roundtrip");
-
     for &size in SIZES {
         let data = generate_uniform_data_small_value_distribution(size);
-
         group.throughput(Throughput::Elements(size as u64));
         group.bench_with_input(
             BenchmarkId::new("compress_decompress", size),
             &data,
             |b, data| {
-                let mut codec1 = FastPFOR::default();
-                let mut codec2 = FastPFOR::default();
-                let mut compressed = vec![0u32; data.len() * 2];
+                let mut encoder = FastPFOR::default();
+                let mut decoder = FastPFOR::default();
+                let mut compressed = vec![0u32; data.len() * 2 + 1024];
                 let mut decompressed = vec![0u32; data.len()];
                 b.iter(|| {
                     let mut input_offset = Cursor::new(0);
                     let mut output_offset = Cursor::new(0);
-
-                    codec1
+                    encoder
                         .compress(
                             black_box(data),
                             data.len() as u32,
@@ -238,12 +76,10 @@ fn benchmark_roundtrip(c: &mut Criterion) {
                             &mut output_offset,
                         )
                         .unwrap();
-
                     input_offset.set_position(0);
                     let compressed_len = output_offset.position();
                     output_offset.set_position(0);
-
-                    codec2
+                    decoder
                         .uncompress(
                             &compressed,
                             data.len() as u32,
@@ -252,48 +88,32 @@ fn benchmark_roundtrip(c: &mut Criterion) {
                             &mut output_offset,
                         )
                         .unwrap();
-
                     black_box((compressed_len, output_offset.position()))
                 });
             },
         );
     }
-
     group.finish();
 }
 
 fn benchmark_block_sizes(c: &mut Criterion) {
     let mut group = c.benchmark_group("block_sizes");
-
     let size = *SIZES.last().unwrap();
-    let data = generate_uniform_data_small_value_distribution(size);
-
-    let block_sizes = [BLOCK_SIZE_128, BLOCK_SIZE_256];
-
-    for block_size in block_sizes {
+    for fix in block_size_fixtures(size) {
         group.throughput(Throughput::Elements(size as u64));
-        group.bench_function(format!("compress_{block_size}"), |b| {
-            let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, block_size);
-            b.iter(|| black_box(compress_data(&mut codec, black_box(&data))));
+        group.bench_function(format!("compress_{}", fix.block_size), |b| {
+            let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, fix.block_size);
+            b.iter(|| black_box(compress_data(&mut codec, black_box(&fix.data))));
         });
-    }
-
-    // Also benchmark decompression performance for each block size
-    for block_size in block_sizes {
-        // Pre-compress the data once for this block size so the decompression
-        // benchmark measures only decompression work inside `b.iter`.
-        let compressed = prepare_compressed_data(&data, block_size);
-
-        group.throughput(Throughput::Elements(size as u64));
-        group.bench_function(format!("decompress_{block_size}"), |b| {
-            let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, block_size);
+        group.bench_function(format!("decompress_{}", fix.block_size), |b| {
+            let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, fix.block_size);
             let mut decompressed = vec![0u32; size];
             b.iter(|| {
                 black_box(decompress_data(
                     &mut codec,
-                    black_box(&compressed),
+                    black_box(&fix.compressed),
                     &mut decompressed,
-                ));
+                ))
             });
         });
     }
@@ -302,151 +122,79 @@ fn benchmark_block_sizes(c: &mut Criterion) {
 
 fn benchmark_compression_ratio(c: &mut Criterion) {
     let mut group = c.benchmark_group("compression_ratio");
-    group.sample_size(20); // Fewer samples since we're measuring ratio, not just speed
-
+    group.sample_size(20);
     let size = *SIZES.last().unwrap();
-    let patterns: &[(&str, DataGeneratorFn)] = &[
-        (
-            "uniform_small_distribution",
-            generate_uniform_data_small_value_distribution,
-        ),
-        (
-            "uniform_large_distribution",
-            generate_uniform_data_large_value_distribution,
-        ),
-        ("clustered", generate_clustered_data),
-        ("sequential", generate_sequential_data),
-        ("sparse", generate_sparse_data),
-        ("constant", generate_constant_data),
-        ("geometric", generate_geometric_data),
-    ];
-
-    for (name, data_fn) in patterns {
-        let data = data_fn(size);
-        group.bench_function(*name, |b| {
+    for fix in ratio_fixtures(size) {
+        group.bench_function(fix.name, |b| {
             let mut codec = FastPFOR::default();
             b.iter(|| {
-                let compressed_size = compress_data(&mut codec, black_box(&data));
+                let compressed = compress_data(&mut codec, black_box(&fix.data));
                 #[expect(
                     clippy::cast_precision_loss,
                     reason = "Loss of precision is acceptable for compression ratio calculation"
                 )]
-                let ratio = data.len() as f64 / compressed_size as f64;
-                black_box(ratio)
+                black_box(fix.data.len() as f64 / compressed.len() as f64)
             });
         });
     }
-
     group.finish();
 }
 
 /// Compare encoding and decoding speed of the C++ `FastPFor128` codec against
 /// the pure-Rust `FastPFOR` codec with `BLOCK_SIZE_128`.
-///
-/// Both implementations process identical input data so the numbers are directly
-/// comparable.  The benchmark is only compiled when the `cpp` feature is enabled.
-///
-/// Each sub-benchmark is labelled `cpp/<pattern>/<size>` or
-/// `rust/<pattern>/<size>` so Criterion can show them side-by-side.
 #[cfg(feature = "cpp")]
 fn benchmark_cpp_vs_rust(c: &mut Criterion) {
-    use fastpfor::cpp::{Codec32, FastPFor128Codec};
-
-    fn cpp_encode(codec: &FastPFor128Codec, data: &[u32]) -> Vec<u32> {
-        let mut out = vec![0u32; data.len() * 2 + 1024];
-        let encoded = codec.encode32(data, &mut out).unwrap();
-        let new_len = encoded.len();
-        out.truncate(new_len);
-        out
-    }
-
-    fn cpp_decode(codec: &FastPFor128Codec, compressed: &[u32], original_len: usize) -> usize {
-        let mut out = vec![0u32; original_len];
-        codec.decode32(compressed, &mut out).unwrap().len()
-    }
-
-    let patterns: &[(&str, DataGeneratorFn)] = &[
-        (
-            "uniform_small_value_distribution",
-            generate_uniform_data_small_value_distribution,
-        ),
-        (
-            "uniform_large_value_distribution",
-            generate_uniform_data_large_value_distribution,
-        ),
-        ("clustered", generate_clustered_data),
-        ("sequential", generate_sequential_data),
-        ("sparse", generate_sparse_data),
-    ];
-
-    // Encoding
+    use fastpfor::cpp::FastPFor128Codec;
 
     let mut group = c.benchmark_group("cpp_vs_rust/encode");
-    for &size in SIZES {
-        for (name, generator) in patterns {
-            let data = generator(size);
-            group.throughput(Throughput::Elements(size as u64));
-
-            group.bench_with_input(
-                BenchmarkId::new(format!("cpp/{name}"), size),
-                &data,
-                |b, data| {
-                    let codec = FastPFor128Codec::new();
-                    b.iter(|| black_box(cpp_encode(&codec, black_box(data))));
-                },
-            );
-
-            group.bench_with_input(
-                BenchmarkId::new(format!("rust/{name}"), size),
-                &data,
-                |b, data| {
-                    let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, BLOCK_SIZE_128);
-                    b.iter(|| black_box(compress_data(&mut codec, black_box(data))));
-                },
-            );
-        }
+    for (size, fix) in compress_fixtures(SIZES) {
+        group.throughput(Throughput::Elements(size as u64));
+        group.bench_with_input(
+            BenchmarkId::new(format!("cpp/{}", fix.name), size),
+            &fix.data,
+            |b, data| {
+                let codec = FastPFor128Codec::new();
+                b.iter(|| black_box(cpp_encode(&codec, black_box(data))));
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new(format!("rust/{}", fix.name), size),
+            &fix.data,
+            |b, data| {
+                let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, BLOCK_SIZE_128);
+                b.iter(|| black_box(compress_data(&mut codec, black_box(data))));
+            },
+        );
     }
     group.finish();
 
-    // Decoding
-
     let mut group = c.benchmark_group("cpp_vs_rust/decode");
-    for &size in SIZES {
-        for (name, generator) in patterns {
-            let data = generator(size);
-
-            // Pre-compress once outside the timed loop for each implementation.
-            let cpp_codec = FastPFor128Codec::new();
-            let cpp_compressed = cpp_encode(&cpp_codec, &data);
-            let rust_compressed = prepare_compressed_data(&data, BLOCK_SIZE_128);
-
-            group.throughput(Throughput::Elements(size as u64));
-
-            group.bench_with_input(
-                BenchmarkId::new(format!("cpp/{name}"), size),
-                &cpp_compressed,
-                |b, compressed| {
-                    let codec = FastPFor128Codec::new();
-                    b.iter(|| black_box(cpp_decode(&codec, black_box(compressed), size)));
-                },
-            );
-
-            group.bench_with_input(
-                BenchmarkId::new(format!("rust/{name}"), size),
-                &rust_compressed,
-                |b, compressed| {
-                    let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, BLOCK_SIZE_128);
-                    let mut decompressed = vec![0u32; size];
-                    b.iter(|| {
-                        black_box(decompress_data(
-                            &mut codec,
-                            black_box(compressed),
-                            &mut decompressed,
-                        ))
-                    });
-                },
-            );
-        }
+    for (size, fix) in cpp_decode_fixtures(SIZES) {
+        group.throughput(Throughput::Elements(size as u64));
+        group.bench_with_input(
+            BenchmarkId::new(format!("cpp/{}", fix.name), size),
+            &fix.cpp_compressed,
+            |b, compressed| {
+                let codec = FastPFor128Codec::new();
+                let mut out = vec![0u32; fix.original_len];
+                b.iter(|| black_box(cpp_decode(&codec, black_box(compressed), &mut out)));
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new(format!("rust/{}", fix.name), size),
+            &fix.rust_compressed,
+            |b, compressed| {
+                let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, BLOCK_SIZE_128);
+                let mut decompressed = vec![0u32; fix.original_len];
+                b.iter(|| {
+                    black_box(decompress_data(
+                        &mut codec,
+                        black_box(compressed),
+                        &mut decompressed,
+                    ))
+                });
+            },
+        );
     }
     group.finish();
 }
