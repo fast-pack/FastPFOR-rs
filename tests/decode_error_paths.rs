@@ -237,11 +237,11 @@ fn decode_block_b_too_large() {
 /// Packed-values region is truncated: the bytesize read fails because `inexcept`
 /// (= `init_pos + where_meta`) is already beyond the end of the truncated slice.
 ///
-/// Note: the `in_start + b > input.len()` guard inside the bitunpack loop
-/// (line 469 of fastpfor.rs) is structurally unreachable — the packed-values
+/// Note: the `in_start + b > input.len()` guard inside the packed-value
+/// bitunpack loop in the decoder is structurally unreachable — the packed-values
 /// region physically precedes the metadata in the stream, so any truncation
 /// that removes packed words also removes the metadata needed to parse the page
-/// header, and an earlier `NotEnoughData` fires first.  This test therefore
+/// header, and an earlier `NotEnoughData` fires first. This test therefore
 /// exercises the nearest reachable error: the `bytesize` read failing when
 /// the metadata section is absent.
 #[test]
