@@ -21,6 +21,12 @@ name = "fastpfor_benchmark"
 required-features = ["rust"]
 harness = false
 
+[[bench]]
+name = "bench_utils"
+required-features = ["rust"]
+harness = false
+bench = false
+
 [features]
 # Eventually we may want to build without the C++ bindings by default.
 # Keeping it on for now to simplify development.

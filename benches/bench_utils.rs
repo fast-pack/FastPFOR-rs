@@ -10,12 +10,12 @@
 #![allow(missing_docs)]
 
 use core::ops::Range;
+pub use std::io::Cursor;
 use std::num::NonZeroU32;
 
 pub use fastpfor::rust::{BLOCK_SIZE_128, BLOCK_SIZE_256, DEFAULT_PAGE_SIZE, FastPFOR, Integer};
 use rand::rngs::StdRng;
 use rand::{RngExt as _, SeedableRng};
-pub use std::io::Cursor;
 
 const SEED: u64 = 456;
 
