@@ -8,7 +8,12 @@
 
 #[path = "../benches/bench_utils.rs"]
 mod bench_utils;
-use bench_utils::*;
+use bench_utils::{
+    BLOCK_SIZE_128, DEFAULT_PAGE_SIZE, FastPFOR, block_size_fixtures, compress_data,
+    compress_fixtures, decompress_data, ratio_fixtures,
+};
+#[cfg(feature = "cpp")]
+use bench_utils::{cpp_decode, cpp_decode_fixtures};
 
 const SMOKE_SIZE: usize = 256;
 

@@ -6,7 +6,13 @@ use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_m
 
 #[path = "bench_utils.rs"]
 mod bench_utils;
-use bench_utils::*;
+use bench_utils::{
+    BLOCK_SIZE_128, Cursor, DEFAULT_PAGE_SIZE, FastPFOR, Integer, block_size_fixtures,
+    compress_data, compress_fixtures, decompress_data,
+    generate_uniform_data_small_value_distribution, ratio_fixtures,
+};
+#[cfg(feature = "cpp")]
+use bench_utils::{cpp_decode, cpp_decode_fixtures, cpp_encode};
 
 const SIZES: &[usize] = &[1024, 4096];
 

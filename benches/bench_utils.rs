@@ -193,7 +193,7 @@ pub fn cpp_decode(
 pub struct CompressFixture {
     pub name: &'static str,
     pub data: Vec<u32>,
-    /// Rust-compressed form (BLOCK_SIZE_128), ready for decompression benchmarks.
+    /// Rust-compressed form (`BLOCK_SIZE_128`), ready for decompression benchmarks.
     pub rust_compressed: Vec<u32>,
 }
 
