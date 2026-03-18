@@ -28,7 +28,7 @@ rust-compress *args: (run 'rust_compress_oracle' args)
 # Run rust_decompress_oracle (uses C++ as oracle)
 rust-decompress *args: (run 'rust_decompress_oracle' args)
 
-# Feed arbitrary bytes directly to the Rust decompressr; runs=0 means run indefinitely (Ctrl-C to stop)
+# Feed arbitrary bytes directly to the Rust decompressor; runs=0 means run indefinitely (Ctrl-C to stop)
 rust-decompress-arbitrary *args: (run 'rust_decompress_arbitrary' args)
 
 # Run cpp_roundtrip (C++ roundtrip)

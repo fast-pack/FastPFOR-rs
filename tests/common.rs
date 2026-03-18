@@ -1,8 +1,7 @@
 //! Common test utilities for codec compatibility testing.
 
 #![cfg(all(feature = "rust", feature = "cpp"))]
-// This file is shared by several test modules
-#![allow(dead_code)]
+#![allow(dead_code, reason = "This file is shared by several test modules")]
 
 use std::io::Cursor;
 
