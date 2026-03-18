@@ -56,7 +56,7 @@ fn benchmark_roundtrip(c: &mut Criterion) {
             |b, data| {
                 let mut encoder = FastPFOR::default();
                 let mut decoder = FastPFOR::default();
-                let mut compressed = vec![0u32; data.len() * 2];
+                let mut compressed = vec![0u32; data.len() * 2 + 1024];
                 let mut decompressed = vec![0u32; data.len()];
                 b.iter(|| {
                     let mut input_offset = Cursor::new(0);

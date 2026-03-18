@@ -4,7 +4,7 @@
 //! shared fixtures through assertions so `cargo test` and coverage tools
 //! cover the benchmark code paths without Criterion overhead.
 
-#![cfg(all(feature = "rust", feature = "cpp"))]
+#![cfg(feature = "rust")]
 
 #[path = "../benches/bench_utils.rs"]
 mod bench_utils;

@@ -116,7 +116,7 @@ const ALL_PATTERNS: &[(&str, DataGeneratorFn)] = &[
 
 /// Compress `data` and return the compressed words.
 pub fn compress_data(codec: &mut FastPFOR, data: &[u32]) -> Vec<u32> {
-    let mut compressed = vec![0u32; data.len() * 2 + 128];
+    let mut compressed = vec![0u32; data.len() * 2 + 1024];
     let mut input_offset = Cursor::new(0);
     let mut output_offset = Cursor::new(0);
     codec
