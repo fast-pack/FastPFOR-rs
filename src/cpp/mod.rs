@@ -479,4 +479,35 @@ mod tests {
 
         assert_eq!(decoded, input);
     }
+
+    // Regression: Simple8bRleCodec internally reinterpret_cast's the uint32_t*
+    // output buffer to uint64_t*, writing 64-bit words directly.  On ARM64
+    // (strict-alignment architectures) a 64-bit store to a 4-byte-aligned
+    // (but not 8-byte-aligned) address is undefined behaviour and causes
+    // SIGSEGV.  Reproduce the exact pattern: pass a slice starting at
+    // output[1], which is at a +4-byte offset from the allocation and is
+    // therefore 4-byte aligned but NOT 8-byte aligned.
+    //
+    // This matches the calling convention introduced in the block-size branch
+    // (encode32_to_vec pushes a u32 header first, then passes &mut out[1..]).
+    #[test]
+    fn test_simple8b_rle_encode_at_u32_offset() {
+        let codec = Simple8bRleCodec::new();
+        // 128 small values to exercise the codec properly (same as block-size
+        // test_anylen_128 input; fewer values may not trigger the misaligned
+        // write because the codec emits fewer 64-bit output words).
+        let input: Vec<u32> = (1u32..=128).collect();
+
+        // Allocate one extra leading u32 so that buf[1..] is at offset +4.
+        let capacity = input.len() * 2 + 1024;
+        let mut buf = vec![0u32; 1 + capacity];
+        // buf[0] acts as the header word (as in encode32_to_vec); buf[1..] is
+        // the misaligned encode target.
+        let encoded = codec.encode32(&input, &mut buf[1..]).unwrap();
+        let encoded_len = encoded.len();
+
+        let mut decoded = vec![0u32; input.len()];
+        let decoded_slice = codec.decode32(&buf[1..=encoded_len], &mut decoded).unwrap();
+        assert_eq!(decoded_slice, input.as_slice());
+    }
 }
