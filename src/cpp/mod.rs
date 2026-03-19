@@ -508,7 +508,7 @@ mod tests {
 
         let mut decoded = vec![0u32; input.len()];
         let decoded_slice = codec
-            .decode32(&buf[1..1 + encoded_len], &mut decoded)
+            .decode32(&buf[1..=encoded_len], &mut decoded)
             .unwrap();
         assert_eq!(decoded_slice, input.as_slice());
     }
