@@ -1299,3 +1299,59 @@ fn fast_pack31(input: &[u32], inpos: usize, output: &mut [u32], outpos: usize) {
 fn fast_pack32(input: &[u32], inpos: usize, output: &mut [u32], outpos: usize) {
     output[outpos..outpos + 32].copy_from_slice(&input[inpos..inpos + 32]);
 }
+
+#[cfg(test)]
+mod tests {
+    use rand::RngExt as _;
+
+    use super::fast_pack;
+    use crate::rust::integer_compression::bitunpacking::fast_unpack;
+
+    #[test]
+    fn pack_unpack_roundtrip() {
+        let n = 32;
+        let times = 1000;
+        let mut r = rand::rng();
+        let mut data = vec![0u32; n];
+        let mut compressed = vec![0u32; n];
+        let mut uncompressed = vec![0u32; n];
+
+        for bit in 0..31u8 {
+            for _ in 0..times {
+                for value in &mut data {
+                    *value = r.random_range(0..(1 << bit));
+                }
+                fast_pack(&data, 0, &mut compressed, 0, bit);
+                fast_unpack(&compressed, 0, &mut uncompressed, 0, bit);
+                assert_eq!(uncompressed, data, "Mismatch for bit {bit}");
+            }
+        }
+    }
+
+    #[test]
+    fn pack_unpack_with_masking() {
+        const N: usize = 32;
+        const TIMES: usize = 1000;
+        let mut rng = rand::rng();
+        let mut data = vec![0u32; N];
+        let mut compressed = vec![0u32; N];
+        let mut uncompressed = vec![0u32; N];
+
+        for bit in 0..31u8 {
+            for _ in 0..TIMES {
+                for value in &mut data {
+                    *value = rng.random();
+                }
+                fast_pack(&data, 0, &mut compressed, 0, bit);
+                fast_unpack(&compressed, 0, &mut uncompressed, 0, bit);
+                for value in &mut data {
+                    *value &= (1 << bit) - 1;
+                }
+                assert_eq!(
+                    data, uncompressed,
+                    "Data does not match uncompressed output"
+                );
+            }
+        }
+    }
+}

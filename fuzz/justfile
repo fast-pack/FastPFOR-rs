@@ -3,24 +3,33 @@
 #   just fuzz::run rust_compress_oracle
 # cargo-fuzz requires nightly Rust and must be run from inside the fuzz/ directory.
 
-fuzz_dir := justfile_directory()
+# How to call the current just executable. Note that just_executable() may have `\` in Windows paths, so we need to quote it.
+just := quote(just_executable())
+fuzz_target := "x86_64-unknown-linux-gnu"
 
 # List available fuzz targets
 list:
-    @cd {{fuzz_dir}} && cargo +nightly fuzz list
+    cargo +nightly fuzz list
 
-# Run a fuzz target indefinitely  (Ctrl-C to stop)
-# Targets: rust_compress_oracle, rust_decompress_oracle, cpp_roundtrip
+# Build all fuzz targets without running them
+build *args:
+    cargo +nightly fuzz build --target {{fuzz_target}} {{args}}
+
+# Print coverage for a fuzz target (requires llvm-tools)
+coverage target *args:
+    cargo +nightly fuzz coverage --target {{fuzz_target}} {{target}} {{args}} ${JUST_FUZZ_EXTRA_ARGS:+-- $JUST_FUZZ_EXTRA_ARGS}
+
+# Run a fuzz target, indefinitely by default (Ctrl-C to stop)
 run target *args:
-    cd {{fuzz_dir}} && cargo +nightly fuzz run --target x86_64-unknown-linux-gnu {{target}} {{args}}
+    cargo +nightly fuzz run --target {{fuzz_target}} {{target}} {{args}} ${JUST_FUZZ_EXTRA_ARGS:+-- $JUST_FUZZ_EXTRA_ARGS}
 
 # Run a fuzz target for a fixed number of seconds
 run-time target seconds='60' *args:
-    cd {{fuzz_dir}} && cargo +nightly fuzz run {{target}} {{args}} -- -max_total_time={{seconds}}
+    JUST_FUZZ_EXTRA_ARGS='-max_total_time={{seconds}}' {{just}} run {{target}} {{args}}
 
 # Run a fuzz target for a fixed number of iterations
 run-iters target iters='10000' *args:
-    cd {{fuzz_dir}} && cargo +nightly fuzz run {{target}} {{args}} -- -runs={{iters}}
+    JUST_FUZZ_EXTRA_ARGS='-runs={{iters}}' {{just}} run {{target}} {{args}}
 
 # Run rust_compress_oracle (Rust only, no C++ required)
 rust-compress *args: (run 'rust_compress_oracle' args)
@@ -36,12 +45,20 @@ cpp-roundtrip *args: (run 'cpp_roundtrip' args)
 
 # Reproduce a specific crash artifact
 repro target artifact:
-    cd {{fuzz_dir}} && cargo +nightly fuzz run {{target}} {{artifact}}
+    cargo +nightly fuzz run {{target}} {{artifact}}
 
-# Build all fuzz targets without running them
-build:
-    cd {{fuzz_dir}} && cargo +nightly fuzz build --target x86_64-unknown-linux-gnu
+# Run a single pass of every fuzz target (CI smoke test; stops after 1 iteration each).
+ci-test:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for target in $({{just}} list); do
+        {{just}} run-iters $target 1
+    done
 
-# Print coverage for a fuzz target (requires llvm-tools)
-coverage target:
-    cd {{fuzz_dir}} && cargo +nightly fuzz coverage --target x86_64-unknown-linux-gnu {{target}}
+# Run a single pass of every fuzz target (CI smoke test; stops after 1 iteration each).
+coverage-all:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for target in $({{just}} list); do
+        {{just}} coverage $target
+    done

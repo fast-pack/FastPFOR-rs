@@ -5,6 +5,10 @@
 #[cfg(not(any(feature = "cpp", feature = "rust",)))]
 compile_error!("At least one of the features 'cpp' or 'rust' must be enabled");
 
+// Error types are always available regardless of which codec features are enabled.
+mod error;
+pub use error::{FastPForError, FastPForResult};
+
 // FIXME: need decide on the external API. Some ideas:
 //  - offer two sets of similar APIs - rust and cpp ffi
 //  - it will be possible to enable/disable each with a feature flag
@@ -18,6 +22,13 @@ pub mod cpp;
 #[forbid(unsafe_code, reason = "Rust code must always be safe")]
 /// Rust re-implementation of `FastPFor` (work in progress)
 pub mod rust;
+
+mod codec;
+#[cfg(feature = "cpp")]
+pub use codec::BlockCodec64;
+pub use codec::{AnyLenCodec, BlockCodec, slice_to_blocks};
+
+pub(crate) mod helpers;
 
 /// Low-level compression interface using caller-provided buffers.
 ///
