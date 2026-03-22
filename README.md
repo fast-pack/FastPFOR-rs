@@ -90,10 +90,11 @@ Feature selection can be overridden with the `FASTPFOR_SIMD_MODE` environment va
 ### Using C++ Wrapper
 
 ```rust
-use fastpfor::{AnyLenCodec as _, cpp};
+use fastpfor::AnyLenCodec as _;
+use fastpfor::cpp::CppSimdFastPFor128;
 
 fn main() {
-  let mut codec = cpp::SimdFastPFor128Codec::new();
+  let mut codec = CppSimdFastPFor128::new();
 
   let input = vec![1u32, 2, 3, 4, 5];
   let mut compressed = Vec::new();

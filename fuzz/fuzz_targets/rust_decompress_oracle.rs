@@ -1,9 +1,10 @@
 #![no_main]
 
-use fastpfor::{AnyLenCodec, CodecToSlice, cpp, rust};
+use fastpfor::{AnyLenCodec, CodecToSlice, rust};
 use libfuzzer_sys::fuzz_target;
 mod common;
 use common::*;
+use fastpfor::cpp::*;
 
 fuzz_target!(|data: FuzzInput<RustCodec>| {
     let input = data.data;
@@ -31,16 +32,16 @@ fuzz_target!(|data: FuzzInput<RustCodec>| {
     // First, compress with C++ implementation to get valid compressed data
     let mut cpp_compressed = Vec::new();
     match data.codec {
-        RustCodec::FastPFOR256 => cpp::FastPFor256Codec::new()
+        RustCodec::FastPFOR256 => CppFastPFor256::new()
             .encode(input, &mut cpp_compressed)
             .expect("C++ compression failed"),
-        RustCodec::FastPFOR128 => cpp::FastPFor128Codec::new()
+        RustCodec::FastPFOR128 => CppFastPFor128::new()
             .encode(input, &mut cpp_compressed)
             .expect("C++ compression failed"),
-        RustCodec::VariableByte => cpp::MaskedVByteCodec::new()
+        RustCodec::VariableByte => CppMaskedVByte::new()
             .encode(input, &mut cpp_compressed)
             .expect("C++ compression failed"),
-        RustCodec::JustCopy => cpp::CopyCodec::new()
+        RustCodec::JustCopy => CppCopy::new()
             .encode(input, &mut cpp_compressed)
             .expect("C++ compression failed"),
     }

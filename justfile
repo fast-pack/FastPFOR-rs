@@ -85,7 +85,7 @@ fmt:
     #!/usr/bin/env bash
     set -euo pipefail
     for dir in "./" "fuzz"; do
-        cd "$dir"
+        pushd "$dir"
         if (rustup toolchain list | grep nightly && rustup component list --toolchain nightly | grep rustfmt) &> /dev/null; then
             echo "Reformatting Rust code using nightly Rust fmt to sort imports in $dir"
             cargo +nightly fmt --all -- --config imports_granularity=Module,group_imports=StdExternalCrate
@@ -93,9 +93,7 @@ fmt:
             echo "Reformatting Rust with the stable cargo fmt in $dir.  Install nightly with \`rustup install nightly\` for better results"
             cargo fmt --all
         fi
-        if [ -f .git ]; then
-            cd ..
-        fi
+        popd
     done
 
 # Reformat all Cargo.toml files using cargo-sort
