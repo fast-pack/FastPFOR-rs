@@ -18,16 +18,16 @@ Unless otherwise specified, all codecs support `&[u32]` only.
 ```text
 * BP32
 * Copy
+* FastBinaryPacking16
+* FastBinaryPacking32
 * FastBinaryPacking8
 * FastPFor128 (both `&[u32]` and `&[u64]`)
 * FastPFor256 (both `&[u32]` and `&[u64]`)
-* FastBinaryPacking16
-* FastBinaryPacking32
 * MaskedVByte
 * NewPFor
 * OptPFor
-* PFor2008
 * PFor
+* PFor2008
 * SimdBinaryPacking
 * SimdFastPFor128
 * SimdFastPFor256

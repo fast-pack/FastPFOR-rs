@@ -11,6 +11,7 @@
 
 use std::io::Cursor;
 
+use bytemuck::cast_slice_mut;
 use fastpfor::rust::{BLOCK_SIZE_128, DEFAULT_PAGE_SIZE, FastPFOR, Integer, Skippable};
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -229,7 +230,7 @@ fn decode_exception_partial_group_not_enough_data() {
 fn decode_block_b_too_large() {
     let (mut compressed, _) = compressed_with_exceptions();
     let start = meta_byte_start(&compressed);
-    let bytes: &mut [u8] = bytemuck::cast_slice_mut(&mut compressed);
+    let bytes: &mut [u8] = cast_slice_mut(&mut compressed);
     bytes[start] = 33; // overwrite best_b of block 0
     assert!(try_decode(&compressed).is_err());
 }
@@ -289,7 +290,7 @@ fn find_exception_block(bytes: &[u8], meta_start: usize) -> Option<(usize, usize
 fn decode_exception_maxbits_too_large() {
     let (mut compressed, _) = compressed_with_exceptions();
     let start = meta_byte_start(&compressed);
-    let bytes: &mut [u8] = bytemuck::cast_slice_mut(&mut compressed);
+    let bytes: &mut [u8] = cast_slice_mut(&mut compressed);
     if let Some((_, _, mb_off)) = find_exception_block(bytes, start) {
         bytes[mb_off] = 33;
     }
@@ -301,7 +302,7 @@ fn decode_exception_maxbits_too_large() {
 fn decode_exception_index_underflow() {
     let (mut compressed, _) = compressed_with_exceptions();
     let start = meta_byte_start(&compressed);
-    let bytes: &mut [u8] = bytemuck::cast_slice_mut(&mut compressed);
+    let bytes: &mut [u8] = cast_slice_mut(&mut compressed);
     if let Some((bb_off, _, mb_off)) = find_exception_block(bytes, start) {
         bytes[mb_off] = bytes[bb_off].saturating_sub(1); // maxbits < best_b
     }
@@ -313,7 +314,7 @@ fn decode_exception_index_underflow() {
 fn decode_exception_index_zero() {
     let (mut compressed, _) = compressed_with_exceptions();
     let start = meta_byte_start(&compressed);
-    let bytes: &mut [u8] = bytemuck::cast_slice_mut(&mut compressed);
+    let bytes: &mut [u8] = cast_slice_mut(&mut compressed);
     if let Some((bb_off, _, mb_off)) = find_exception_block(bytes, start) {
         bytes[mb_off] = bytes[bb_off]; // maxbits == best_b → index 0
     }
@@ -368,7 +369,7 @@ fn decode_index1_pos_out_of_block() {
     buf.truncate(out_off.position() as usize);
 
     let start = meta_byte_start(&buf);
-    let bytes: &mut [u8] = bytemuck::cast_slice_mut(&mut buf);
+    let bytes: &mut [u8] = cast_slice_mut(&mut buf);
     if let Some((bb_off, _, mb_off)) = find_exception_block(bytes, start) {
         if bytes[mb_off].wrapping_sub(bytes[bb_off]) == 1 && mb_off + 1 < bytes.len() {
             bytes[mb_off + 1] = 200; // position 200 >= block_size 128
@@ -432,7 +433,7 @@ fn decode_exception_pos_out_of_block() {
     buf.truncate(out_off.position() as usize);
 
     let start = meta_byte_start(&buf);
-    let bytes: &mut [u8] = bytemuck::cast_slice_mut(&mut buf);
+    let bytes: &mut [u8] = cast_slice_mut(&mut buf);
     if let Some((bb_off, _, mb_off)) = find_exception_block(bytes, start) {
         if bytes[mb_off].wrapping_sub(bytes[bb_off]) > 1 && mb_off + 1 < bytes.len() {
             bytes[mb_off + 1] = 200; // position 200 >= block_size 128
