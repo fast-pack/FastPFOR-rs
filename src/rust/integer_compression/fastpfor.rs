@@ -2,6 +2,7 @@ use std::array;
 use std::io::Cursor;
 use std::num::NonZeroU32;
 
+use bytemuck::cast_slice;
 use bytes::{Buf as _, BufMut as _, BytesMut};
 
 use crate::helpers::{GetWithErr, bits, greatest_multiple};
@@ -176,13 +177,13 @@ impl FastPFOR {
     /// - Writes header, packed data, metadata bytes, and exception values.
     ///
     /// # Arguments
-    /// * `thissize` - Must be multiple of `block_size`
-    /// * `input_offset` - Advanced by `thissize`
+    /// * `this_size` - Must be multiple of `block_size`
+    /// * `input_offset` - Advanced by `this_size`
     /// * `output_offset` - Advanced by compressed size
     fn encode_page(
         &mut self,
         input: &[u32],
-        thissize: u32,
+        this_size: u32,
         input_offset: &mut Cursor<u32>,
         output: &mut [u32],
         output_offset: &mut Cursor<u32>,
@@ -196,7 +197,7 @@ impl FastPFOR {
         self.bytes_container.clear();
 
         let mut tmp_input_offset = input_offset.position() as u32;
-        let final_input_offset = tmp_input_offset + thissize - self.block_size;
+        let final_input_offset = tmp_input_offset + this_size - self.block_size;
         while tmp_input_offset <= final_input_offset {
             self.best_bit_from_data(input, tmp_input_offset);
             self.bytes_container.put_u8(self.optimal_bits);
@@ -331,9 +332,9 @@ impl FastPFOR {
     /// unpacks regular values per block, patches in exceptions by position.
     ///
     /// # Arguments
-    /// * `thissize` - Expected decompressed integer count
+    /// * `this_size` - Expected decompressed integer count
     /// * `input_offset` - Advanced by bytes read
-    /// * `output_offset` - Advanced by `thissize`
+    /// * `output_offset` - Advanced by `this_size`
     #[expect(clippy::too_many_lines)]
     fn decode_page(
         &mut self,
@@ -341,7 +342,7 @@ impl FastPFOR {
         input_offset: &mut Cursor<u32>,
         output: &mut [u32],
         output_offset: &mut Cursor<u32>,
-        thissize: u32,
+        this_size: u32,
     ) -> FastPForResult<()> {
         let n = u32::try_from(input.len())
             .map_err(|_| FastPForError::InvalidInputLength(input.len()))?;
@@ -362,7 +363,7 @@ impl FastPFOR {
         // The C++ encoder uses a raw `memcpy` of bytes into the u32 output (no endian
         // conversion), and the decoder does a raw reinterpret_cast back -- both native byte
         // order. `cast_slice` is the exact Rust equivalent: a safe, zero-copy native view.
-        let input_bytes: &[u8] = bytemuck::cast_slice(input);
+        let input_bytes: &[u8] = cast_slice(input);
         let mut byte_pos = (inexcept as usize)
             .checked_mul(4)
             .filter(|&bp| bp <= input_bytes.len())
@@ -448,7 +449,7 @@ impl FastPFOR {
         let mut tmp_output_offset = output_offset.position() as u32;
         let mut tmp_input_offset = input_offset.position() as u32;
 
-        let run_end = thissize / self.block_size;
+        let run_end = this_size / self.block_size;
         for _ in 0..run_end {
             let bits = input_bytes.get_val(byte_pos)?;
             if bits > 32 {

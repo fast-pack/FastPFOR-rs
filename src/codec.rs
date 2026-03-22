@@ -1,6 +1,6 @@
 use bytemuck::{Pod, cast_slice};
 
-use crate::FastPForError;
+use crate::FastPForResult;
 
 /// Internal default for max decompressed length. Used by trait defaults and C++ FFI.
 #[inline]
@@ -23,13 +23,15 @@ pub(crate) fn default_max_decoded_len(compressed_words: usize) -> usize {
 ///
 /// # Implementing this trait
 ///
-/// ```rust,ignore
+/// ```
+/// # use fastpfor::{BlockCodec, FastPForResult};
+/// struct MyCodec;
 /// impl BlockCodec for MyCodec {
 ///     type Block = [u32; 256];
-///     fn encode_blocks(&self, blocks: &[[u32; 256]], out: &mut Vec<u32>)
-///         -> Result<(), FastPForError> { ... }
-///     fn decode_blocks(&self, input: &[u32], expected_len: Option<u32>,
-///         out: &mut Vec<u32>) -> Result<usize, FastPForError> { ... }
+///     fn encode_blocks(&mut self, blocks: &[[u32; 256]], out: &mut Vec<u32>)
+///         -> FastPForResult<()> { todo!() }
+///     fn decode_blocks(&mut self, input: &[u32], expected_len: Option<u32>,
+///         out: &mut Vec<u32>) -> FastPForResult<usize> { todo!() }
 /// }
 /// ```
 pub trait BlockCodec {
@@ -54,11 +56,7 @@ pub trait BlockCodec {
     ///
     /// No remainder is possible — the caller must split the input first using
     /// [`slice_to_blocks`] and handle any remainder separately.
-    fn encode_blocks(
-        &mut self,
-        blocks: &[Self::Block],
-        out: &mut Vec<u32>,
-    ) -> Result<(), FastPForError>;
+    fn encode_blocks(&mut self, blocks: &[Self::Block], out: &mut Vec<u32>) -> FastPForResult<()>;
 
     /// Decompress blocks from `input`, using the length stored in the header.
     ///
@@ -75,7 +73,7 @@ pub trait BlockCodec {
         input: &[u32],
         expected_len: Option<u32>,
         out: &mut Vec<u32>,
-    ) -> Result<usize, FastPForError>;
+    ) -> FastPForResult<usize>;
 
     /// Maximum decompressed element count for a given compressed input length.
     /// Reject `expected_len` values exceeding this to avoid allocation from bad data.
@@ -100,9 +98,9 @@ pub trait BlockCodec {
 #[cfg(feature = "cpp")]
 pub trait BlockCodec64 {
     /// Compress 64-bit integers into a 32-bit word stream.
-    fn encode64(&mut self, input: &[u64], out: &mut Vec<u32>) -> Result<(), FastPForError>;
+    fn encode64(&mut self, input: &[u64], out: &mut Vec<u32>) -> FastPForResult<()>;
     /// Decompress 64-bit integers from a 32-bit word stream.
-    fn decode64(&mut self, input: &[u32], out: &mut Vec<u64>) -> Result<(), FastPForError>;
+    fn decode64(&mut self, input: &[u32], out: &mut Vec<u64>) -> FastPForResult<()>;
 }
 
 /// Compresses and decompresses an arbitrary-length `&[u32]` slice.
@@ -113,7 +111,7 @@ pub trait BlockCodec64 {
 /// to produce an `AnyLenCodec`.
 pub trait AnyLenCodec {
     /// Compress an arbitrary-length slice of `u32` values.
-    fn encode(&mut self, input: &[u32], out: &mut Vec<u32>) -> Result<(), FastPForError>;
+    fn encode(&mut self, input: &[u32], out: &mut Vec<u32>) -> FastPForResult<()>;
 
     /// Maximum decompressed element count for a given compressed input length.
     /// Reject `expected_len` values exceeding this to avoid allocation from bad data.
@@ -140,7 +138,7 @@ pub trait AnyLenCodec {
         input: &[u32],
         out: &mut Vec<u32>,
         expected_len: Option<u32>,
-    ) -> Result<(), FastPForError>;
+    ) -> FastPForResult<()>;
 }
 
 /// Split a flat `&[u32]` into `(&[Blocks::Block], &[u32])` without copying.
@@ -154,7 +152,8 @@ pub trait AnyLenCodec {
 ///
 /// # Example
 ///
-/// ```rust,ignore
+/// ```ignore
+/// # use fastpfor::{slice_to_blocks, FastPForBlock256};
 /// let data: Vec<u32> = (0..600).collect(); // 2 × 256 + 88 remainder
 /// let (blocks, remainder) = slice_to_blocks::<FastPForBlock256>(&data);
 /// assert_eq!(blocks.len(), 2);    // 2 blocks of [u32; 256]
