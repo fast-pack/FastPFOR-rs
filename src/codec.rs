@@ -23,13 +23,15 @@ pub(crate) fn default_max_decoded_len(compressed_words: usize) -> usize {
 ///
 /// # Implementing this trait
 ///
-/// ```rust,ignore
+/// ```
+/// # use fastpfor::{BlockCodec, FastPForResult};
+/// struct MyCodec;
 /// impl BlockCodec for MyCodec {
 ///     type Block = [u32; 256];
-///     fn encode_blocks(&self, blocks: &[[u32; 256]], out: &mut Vec<u32>)
-///         -> FastPForResult<()> { ... }
-///     fn decode_blocks(&self, input: &[u32], expected_len: Option<u32>,
-///         out: &mut Vec<u32>) -> FastPForResult<usize> { ... }
+///     fn encode_blocks(&mut self, blocks: &[[u32; 256]], out: &mut Vec<u32>)
+///         -> FastPForResult<()> { todo!() }
+///     fn decode_blocks(&mut self, input: &[u32], expected_len: Option<u32>,
+///         out: &mut Vec<u32>) -> FastPForResult<usize> { todo!() }
 /// }
 /// ```
 pub trait BlockCodec {
@@ -153,7 +155,8 @@ pub trait AnyLenCodec {
 ///
 /// # Example
 ///
-/// ```rust,ignore
+/// ```ignore
+/// # use fastpfor::{slice_to_blocks, FastPForBlock256};
 /// let data: Vec<u32> = (0..600).collect(); // 2 × 256 + 88 remainder
 /// let (blocks, remainder) = slice_to_blocks::<FastPForBlock256>(&data);
 /// assert_eq!(blocks.len(), 2);    // 2 blocks of [u32; 256]
