@@ -12,7 +12,7 @@ use crate::cpp::wrappers::{
 // Single macro: all C++ codecs implement AnyLenCodec. Codecs marked with `@ 64`
 // also implement BlockCodec64 for 64-bit integer support.
 
-/// Macro for C++ codec wrappers: struct + Default + `CppAnyLen`.
+/// Macro for C++ codec wrappers: struct + Default + [`AnyLenCodec`].
 macro_rules! implement_cpp_codecs {
     ($(
         $(#[$($attrs:tt)*])*
