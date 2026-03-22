@@ -12,7 +12,7 @@ use crate::cpp::wrappers::{
 // Single macro: all C++ codecs implement AnyLenCodec. Codecs marked with `@ 64`
 // also implement BlockCodec64 for 64-bit integer support.
 
-/// Macro for C++ codec wrappers: struct + Default + [`AnyLenCodec`].
+/// Macro for C++ codec wrappers: struct + Default + `AnyLenCodec`.
 macro_rules! implement_cpp_codecs {
     ($(
         $(#[$($attrs:tt)*])*
@@ -139,7 +139,7 @@ implement_cpp_codecs! {
 
     // CppSnappy => snappy_codec,  // Conditional with #ifdef
 
-    /// [`CppStreamVByte`](https://github.com/lemire/streamvbyte) encoding for fast variable-byte compression.
+    /// [`StreamVByte`](https://github.com/lemire/streamvbyte) encoding for fast variable-byte compression.
     CppStreamVByte => streamvbyte_codec,
 
     /// Standard variable-byte encoding.
@@ -192,7 +192,7 @@ pub(crate) mod tests {
     }
 
     /// C++ `fastpfor256_codec` returns `CompositeCodec<FastPFor<8>, VariableByte>` — already
-    /// any-length. Use it directly; do not wrap in Rust `CppComposite`.
+    /// any-length. Use it directly; do not wrap in Rust `CompositeCodec`.
     #[test]
     fn test_cpp_fastpfor256_composite_anylen() {
         let mut codec = CppFastPFor256::new();

@@ -62,6 +62,9 @@ pub trait BlockCodec {
 
     /// Decompress blocks from `input`, using the length stored in the header.
     ///
+    /// Returns the number of input `u32` words consumed, so the caller (e.g.
+    /// [`CompositeCodec`]) can locate the tail without parsing the block format.
+    ///
     /// When `expected_len` is `Some(n)`:
     /// - Validates that the header value equals `n` (must be a multiple of
     ///   [`size`](BlockCodec::size)).

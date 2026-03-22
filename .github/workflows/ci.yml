@@ -31,7 +31,78 @@ jobs:
           prefix-key: "v0-${{ matrix.simd_mode }}"
       - uses: taiki-e/install-action@v2
         with: { tool: 'just,cargo-binstall' }
-      - run: just ci-test
+      # Enable core dumps so SIGSEGV crashes produce a dump for post-mortem analysis.
+      # ulimit is per-process, so it must be set in the same shell that runs the tests.
+      - name: Run tests (with core dumps enabled)
+        run: |
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            sudo sysctl -w kern.coredump=1
+            sudo sysctl -w kern.corefile='/cores/core.%N.%P'
+            sudo mkdir -p /cores && sudo chmod 1777 /cores
+          else
+            sudo sysctl -w kernel.core_pattern='/tmp/cores/core.%e.%p'
+            sudo mkdir -p /tmp/cores && sudo chmod 1777 /tmp/cores
+          fi
+          ulimit -c unlimited
+          just ci-test
+      # On failure, extract a minimal text report from any core dump (backtrace, file info).
+      # We deliberately avoid uploading the raw core dump (can be ~1.5 GB).
+      - name: Collect crash report
+        if: failure()
+        run: |
+          mkdir -p crash-report
+          CORE_DIR=$([[ "$RUNNER_OS" == "macOS" ]] && echo /cores || echo /tmp/cores)
+          for core in "$CORE_DIR"/core.* ; do
+            [[ -f "$core" ]] || continue
+            report="crash-report/$(basename "$core").txt"
+            {
+              echo "=== Core dump ==="
+              echo "Path: $core"
+              echo "File: $(file "$core")"
+              echo ""
+              if [[ "$RUNNER_OS" == "macOS" ]]; then
+                bin_name=$(basename "$core" | sed -E 's/core\.([^.]+)\.[0-9]+/\1/')
+                bin=$(find target -path '*/deps/*' -name "${bin_name}*" -type f -perm /111 ! -name '*.d' 2>/dev/null | head -1)
+                [[ -z "$bin" ]] && bin=$(find target/debug -maxdepth 2 -name "${bin_name}*" -type f -perm /111 2>/dev/null | head -1)
+                echo "Binary: ${bin:-not found}"
+                echo ""
+                echo "=== Backtrace ==="
+                if [[ -n "$bin" && -x "$bin" ]]; then
+                  lldb --no-lldbinit --batch \
+                    -o "target create --core '$core' '$bin'" \
+                    -o "thread backtrace all" \
+                    -o quit 2>&1
+                else
+                  echo "(trying lldb with core only)"
+                  lldb --no-lldbinit --batch \
+                    -o "target create --core '$core'" \
+                    -o "thread backtrace all" \
+                    -o quit 2>&1
+                fi
+              else
+                bin=$(file "$core" | sed -n "s/.*from '\([^']*\)'.*/\1/p")
+                [[ -z "$bin" ]] && bin=$(file "$core" | grep -oE "execfn: '[^']+'" | cut -d"'" -f2)
+                echo "Binary: ${bin:-not found}"
+                echo ""
+                echo "=== Backtrace ==="
+                if [[ -n "$bin" && -x "$bin" ]]; then
+                  gdb -batch -ex "thread apply all bt full" "$bin" "$core" 2>&1
+                else
+                  echo "(trying gdb with core only)"
+                  gdb -batch -ex "core-file $core" -ex "thread apply all bt" 2>&1
+                fi
+              fi
+            } > "$report" 2>&1
+          done
+          echo "=== crash-report ===" && ls -lh crash-report/ || true
+          shopt -s nullglob; reports=(crash-report/*.txt)
+          if [[ ${#reports[@]} -gt 0 ]]; then cat "${reports[@]}"; else echo "(no core dumps found)"; fi
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: crash-report-${{ matrix.os }}-${{ matrix.simd_mode }}-${{ github.sha }}
+          path: crash-report/
+          if-no-files-found: warn
 
   test-nightly:
     name: Nightly-specific tests
@@ -75,9 +146,9 @@ jobs:
       matrix:
         include:
           - fuzz_target: cpp_roundtrip
-          - fuzz_target: rust_compress_oracle
-          - fuzz_target: rust_decompress_oracle
-          - fuzz_target: rust_decompress_arbitrary
+          - fuzz_target: encode_oracle
+          - fuzz_target: decode_oracle
+          - fuzz_target: decode_arbitrary
     steps:
       - uses: actions/checkout@v6
         with: {persist-credentials: false, submodules: recursive}

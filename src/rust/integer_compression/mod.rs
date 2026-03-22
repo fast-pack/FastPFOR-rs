@@ -1,10 +1,5 @@
 pub mod bitpacking;
 pub mod bitunpacking;
-pub mod codec;
-pub mod composition;
-pub mod differential;
 pub mod fastpfor;
-pub mod integer_codec;
 pub mod just_copy;
-pub mod skippable_codec;
 pub mod variable_byte;

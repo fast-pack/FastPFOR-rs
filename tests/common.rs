@@ -1,103 +1,12 @@
 //! Common test utilities for codec compatibility testing.
 
-#![cfg(all(feature = "rust", feature = "cpp"))]
+#![cfg(any(feature = "rust", feature = "cpp"))]
 #![allow(dead_code, reason = "This file is shared by several test modules")]
 
-use std::io::Cursor;
-
-use fastpfor::rust::{
-    BLOCK_SIZE_128, Composition, DEFAULT_PAGE_SIZE, FastPFOR, FastPForResult, Integer, JustCopy,
-    VariableByte,
-};
 use rand::rngs::StdRng;
 use rand::{RngExt as _, SeedableRng as _};
 
-/// Wrapper enum for different codec implementations used in tests.
-pub enum TestCodec {
-    /// Variable-byte codec with name
-    VariableByte(VariableByte, String),
-    /// Pass-through codec with name
-    JustCopy(JustCopy, String),
-    /// Composite codec with name
-    Composition(Box<Composition>, String),
-}
-
-impl TestCodec {
-    /// Returns the name of the codec.
-    #[must_use]
-    pub fn name(&self) -> &str {
-        match self {
-            TestCodec::Composition(_, name)
-            | TestCodec::JustCopy(_, name)
-            | TestCodec::VariableByte(_, name) => name,
-        }
-    }
-    /// Compresses input data using the wrapped codec.
-    pub fn compress(
-        &mut self,
-        input: &[u32],
-        input_length: u32,
-        input_offset: &mut Cursor<u32>,
-        output: &mut [u32],
-        output_offset: &mut Cursor<u32>,
-    ) -> FastPForResult<()> {
-        match self {
-            TestCodec::VariableByte(vb, _) => {
-                vb.compress(input, input_length, input_offset, output, output_offset)
-            }
-            TestCodec::JustCopy(jc, _) => {
-                jc.compress(input, input_length, input_offset, output, output_offset)
-            }
-            TestCodec::Composition(comp, _) => {
-                comp.compress(input, input_length, input_offset, output, output_offset)
-            }
-        }
-    }
-
-    /// Decompresses input data using the wrapped codec.
-    pub fn uncompress(
-        &mut self,
-        input: &[u32],
-        input_length: u32,
-        input_offset: &mut Cursor<u32>,
-        output: &mut [u32],
-        output_offset: &mut Cursor<u32>,
-    ) -> FastPForResult<()> {
-        match self {
-            TestCodec::VariableByte(vb, _) => {
-                vb.uncompress(input, input_length, input_offset, output, output_offset)
-            }
-            TestCodec::JustCopy(jc, _) => {
-                jc.uncompress(input, input_length, input_offset, output, output_offset)
-            }
-            TestCodec::Composition(comp, _) => {
-                comp.uncompress(input, input_length, input_offset, output, output_offset)
-            }
-        }
-    }
-}
-
-/// Returns a collection of codec instances for testing.
-#[must_use]
-pub fn get_codecs() -> Vec<TestCodec> {
-    vec![
-        TestCodec::VariableByte(VariableByte::new(), "VariableByte".to_string()),
-        TestCodec::JustCopy(JustCopy::new(), "JustCopy".to_string()),
-        TestCodec::Composition(
-            Box::new(Composition::new(FastPFOR::default(), VariableByte::new())),
-            "FastPFOR + VariableByte".to_string(),
-        ),
-        TestCodec::Composition(
-            Box::new(Composition::new(
-                FastPFOR::new(DEFAULT_PAGE_SIZE, BLOCK_SIZE_128),
-                VariableByte::new(),
-            )),
-            "FastPFOR + VariableByte".to_string(),
-        ),
-    ]
-}
-
-/// Returns various input sizes to test codec behavior.
+/// Returns various input sizes to test codec behavior (multiples of 128).
 #[must_use]
 pub fn test_input_sizes() -> Vec<usize> {
     (1..=8).map(|exp| (1usize << exp) * 128).collect()

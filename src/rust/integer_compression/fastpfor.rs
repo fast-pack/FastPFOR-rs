@@ -1,92 +1,143 @@
 use std::array;
 use std::io::Cursor;
-use std::num::NonZeroU32;
 
+use bytemuck::cast_slice;
 use bytes::{Buf as _, BufMut as _, BytesMut};
 
-use crate::helpers::{GetWithErr, bits, greatest_multiple};
+use crate::helpers::{AsUsize, GetWithErr, bits, greatest_multiple};
 use crate::rust::cursor::IncrementCursor;
 use crate::rust::integer_compression::{bitpacking, bitunpacking};
-use crate::rust::{Integer, Skippable};
-use crate::{FastPForError, FastPForResult};
-
-/// Block size constant for 256 integers per block
-pub const BLOCK_SIZE_256: NonZeroU32 = NonZeroU32::new(256).unwrap();
-
-/// Block size constant for 128 integers per block
-pub const BLOCK_SIZE_128: NonZeroU32 = NonZeroU32::new(128).unwrap();
+use crate::{BlockCodec, FastPForError};
 
 /// Overhead cost (in bits) for storing each exception's position in the block
 const OVERHEAD_OF_EACH_EXCEPT: u32 = 8;
 
-/// Default page size in number of integers
-pub const DEFAULT_PAGE_SIZE: NonZeroU32 = NonZeroU32::new(65536).unwrap();
+/// Default page size in number of integers (64 KiB / 4 bytes = 16 Ki integers).
+const DEFAULT_PAGE_SIZE: u32 = 65536;
 
-/// Fast Patched Frame-of-Reference ([`FastPFOR`](https://github.com/lemire/FastPFor)) integer compression codec.
+/// Type alias for [`FastPFor`] with 128-element blocks.
+pub type FastPForBlock128 = FastPFor<128>;
+
+/// Type alias for [`FastPFor`] with 256-element blocks.
+pub type FastPForBlock256 = FastPFor<256>;
+
+/// Fast Patched Frame-of-Reference ([FastPFOR](https://github.com/lemire/FastPFor)) codec.
 ///
-/// It is useful for compressing sequences of unsigned 32-bit integers.
+/// `N` is the block size (128 or 256 values per block). This struct implements
+/// [`BlockCodec`] with `Block = [u32; N]`, giving compile-time guarantees that
+/// only correctly-sized blocks are accepted.
 ///
-/// The algorithm works by
-/// - dividing data into blocks,
-/// - determining the optimal number of bits needed for most values, and
-/// - handling exceptions (values requiring more bits) separately
+/// Use [`FastPForBlock128`] or [`FastPForBlock256`] as convenient type aliases.
+///
+/// To compress arbitrary-length data (including a sub-block remainder),
+/// wrap this in a [`CompositeCodec`](crate::CompositeCodec):
+///
+/// ```
+/// # use fastpfor::{FastPFor256, AnyLenCodec};
+/// # let data = [];
+/// # let mut out = vec![];
+/// let mut codec = FastPFor256::default();
+/// codec.encode(&data, &mut out).unwrap();
+/// ```
 #[derive(Debug)]
-pub struct FastPFOR {
+pub struct FastPFor<const N: usize> {
     /// Exception values indexed by bit width difference
-    pub exception_buffers: [Vec<u32>; 33],
+    exception_buffers: [Vec<u32>; 33],
     /// Metadata buffer for encoding/decoding
-    pub bytes_container: BytesMut,
+    bytes_container: BytesMut,
     /// Maximum integers per page
-    pub page_size: u32,
+    page_size: u32,
     /// Position trackers for exception arrays
-    pub data_pointers: [usize; 33],
+    data_pointers: [usize; 33],
     /// Frequency count for each bit width:
     /// `freqs[i]` = count of values needing exactly i bits
-    pub freqs: [u32; 33],
+    freqs: [u32; 33],
     /// Optimal number of bits chosen for the current block
-    pub optimal_bits: u8,
+    optimal_bits: u8,
     /// Number of exceptions that don't fit in the optimal bit width
-    pub exception_count: u8,
+    exception_count: u8,
     /// Maximum bit width required for any value in the block
-    pub max_bits: u8,
-    /// Integers per block (128 or 256)
-    pub block_size: u32,
+    max_bits: u8,
 }
 
-impl Skippable for FastPFOR {
-    fn headless_compress(
+impl<const N: usize> Default for FastPFor<N>
+where
+    [u32; N]: bytemuck::Pod,
+{
+    fn default() -> Self {
+        Self::create(DEFAULT_PAGE_SIZE)
+            .expect("DEFAULT_PAGE_SIZE is a multiple of all valid block sizes")
+    }
+}
+
+impl FastPFor<128> {
+    /// Creates a new `FastPForBlock128` codec with the given page size.
+    ///
+    /// Returns an error if `page_size` is not a multiple of 128.
+    /// Use [`Default`] for the default page size.
+    pub fn new(page_size: u32) -> Result<Self, FastPForError> {
+        Self::create(page_size)
+    }
+}
+
+impl FastPFor<256> {
+    /// Creates a new `FastPForBlock256` codec with the given page size.
+    ///
+    /// Returns an error if `page_size` is not a multiple of 256.
+    /// Use [`Default`] for the default page size.
+    pub fn new(page_size: u32) -> Result<Self, FastPForError> {
+        Self::create(page_size)
+    }
+}
+
+impl<const N: usize> FastPFor<N> {
+    fn create(page_size: u32) -> Result<Self, FastPForError> {
+        if page_size % N as u32 != 0 {
+            return Err(FastPForError::InvalidPageSize {
+                page_size,
+                block_size: N as u32,
+            });
+        }
+        Ok(FastPFor {
+            bytes_container: BytesMut::with_capacity(
+                (3 * page_size / N as u32 + page_size) as usize,
+            ),
+            page_size,
+            exception_buffers: array::from_fn(|_| Vec::new()),
+            data_pointers: [0; 33],
+            freqs: [0; 33],
+            optimal_bits: 0,
+            exception_count: 0,
+            max_bits: 0,
+        })
+    }
+
+    fn compress_blocks(
         &mut self,
         input: &[u32],
         input_length: u32,
         input_offset: &mut Cursor<u32>,
         output: &mut [u32],
         output_offset: &mut Cursor<u32>,
-    ) -> FastPForResult<()> {
-        let inlength = greatest_multiple(input_length, self.block_size);
+    ) {
+        let inlength = greatest_multiple(input_length, N as u32);
         let final_inpos = input_offset.position() as u32 + inlength;
         while input_offset.position() as u32 != final_inpos {
             let this_size =
                 std::cmp::min(self.page_size, final_inpos - input_offset.position() as u32);
             self.encode_page(input, this_size, input_offset, output, output_offset);
         }
-        Ok(())
     }
 
-    #[expect(unused_variables)]
-    fn headless_uncompress(
+    fn decode_headless_blocks(
         &mut self,
         input: &[u32],
         inlength: u32,
         input_offset: &mut Cursor<u32>,
         output: &mut [u32],
         output_offset: &mut Cursor<u32>,
-        num: u32,
-    ) -> FastPForResult<()> {
-        if inlength == 0 && self.block_size == BLOCK_SIZE_128.get() {
-            // Return early if there is no data to uncompress and block size is 128
-            return Ok(());
-        }
-        let mynvalue = greatest_multiple(inlength, self.block_size);
+    ) -> Result<(), FastPForError> {
+        let mynvalue = greatest_multiple(inlength, N as u32);
         let final_out = output_offset.position() as u32 + mynvalue;
         while output_offset.position() as u32 != final_out {
             let this_size =
@@ -94,78 +145,6 @@ impl Skippable for FastPFOR {
             self.decode_page(input, input_offset, output, output_offset, this_size)?;
         }
         Ok(())
-    }
-}
-
-impl Integer<u32> for FastPFOR {
-    fn compress(
-        &mut self,
-        input: &[u32],
-        input_length: u32,
-        input_offset: &mut Cursor<u32>,
-        output: &mut [u32],
-        output_offset: &mut Cursor<u32>,
-    ) -> FastPForResult<()> {
-        let inlength = greatest_multiple(input_length, self.block_size);
-        if inlength == 0 {
-            // Return early if there is no data to compress
-            return Ok(());
-        }
-        output[output_offset.position() as usize] = inlength;
-        output_offset.increment();
-        self.headless_compress(input, inlength, input_offset, output, output_offset)
-    }
-
-    fn uncompress(
-        &mut self,
-        input: &[u32],
-        input_length: u32,
-        input_offset: &mut Cursor<u32>,
-        output: &mut [u32],
-        output_offset: &mut Cursor<u32>,
-    ) -> FastPForResult<()> {
-        if input_length == 0 {
-            // Return early if there is no data to uncompress
-            return Ok(());
-        }
-        let outlength = input[input_offset.position() as usize];
-        input_offset.increment();
-        self.headless_uncompress(
-            input,
-            outlength,
-            input_offset,
-            output,
-            output_offset,
-            outlength,
-        )
-    }
-}
-
-impl Default for FastPFOR {
-    fn default() -> Self {
-        Self::new(DEFAULT_PAGE_SIZE, BLOCK_SIZE_256) // Use default values here
-    }
-}
-
-impl FastPFOR {
-    /// Creates codec with specified page and block sizes.
-    #[must_use]
-    pub fn new(page_size: NonZeroU32, block_size: NonZeroU32) -> FastPFOR {
-        let page_size = page_size.get();
-        let block_size = block_size.get();
-        FastPFOR {
-            page_size,
-            block_size,
-            bytes_container: BytesMut::with_capacity(
-                (3 * page_size / block_size + page_size) as usize,
-            ),
-            exception_buffers: array::from_fn(|_| Vec::new()),
-            data_pointers: [0; 33],
-            freqs: [0; 33],
-            optimal_bits: 0,
-            exception_count: 0,
-            max_bits: 0,
-        }
     }
 
     /// Encodes a page using optimal bit width per block.
@@ -176,13 +155,13 @@ impl FastPFOR {
     /// - Writes header, packed data, metadata bytes, and exception values.
     ///
     /// # Arguments
-    /// * `thissize` - Must be multiple of `block_size`
-    /// * `input_offset` - Advanced by `thissize`
+    /// * `this_size` - Must be multiple of `block_size`
+    /// * `input_offset` - Advanced by `this_size`
     /// * `output_offset` - Advanced by compressed size
     fn encode_page(
         &mut self,
         input: &[u32],
-        thissize: u32,
+        this_size: u32,
         input_offset: &mut Cursor<u32>,
         output: &mut [u32],
         output_offset: &mut Cursor<u32>,
@@ -196,7 +175,7 @@ impl FastPFOR {
         self.bytes_container.clear();
 
         let mut tmp_input_offset = input_offset.position() as u32;
-        let final_input_offset = tmp_input_offset + thissize - self.block_size;
+        let final_input_offset = tmp_input_offset + this_size - N as u32;
         while tmp_input_offset <= final_input_offset {
             self.best_bit_from_data(input, tmp_input_offset);
             self.bytes_container.put_u8(self.optimal_bits);
@@ -210,7 +189,7 @@ impl FastPFOR {
                     let new_cap = needed.saturating_mul(2).next_multiple_of(32);
                     self.exception_buffers[index].resize(new_cap, 0);
                 }
-                for k in 0..self.block_size {
+                for k in 0..N as u32 {
                     if (input[(k + tmp_input_offset) as usize] >> self.optimal_bits) != 0 {
                         self.bytes_container.put_u8(k as u8);
                         self.exception_buffers[index][self.data_pointers[index]] =
@@ -219,7 +198,7 @@ impl FastPFOR {
                     }
                 }
             }
-            for k in (0..self.block_size).step_by(32) {
+            for k in (0..N as u32).step_by(32) {
                 bitpacking::fast_pack(
                     input,
                     (tmp_input_offset + k) as usize,
@@ -229,7 +208,7 @@ impl FastPFOR {
                 );
                 tmp_output_offset += u32::from(self.optimal_bits);
             }
-            tmp_input_offset += self.block_size;
+            tmp_input_offset += N as u32;
         }
         input_offset.set_position(u64::from(tmp_input_offset));
         output[header_pos] = tmp_output_offset - header_pos as u32;
@@ -241,14 +220,10 @@ impl FastPFOR {
         output[tmp_output_offset as usize] = byte_size as u32;
         tmp_output_offset += 1;
         let how_many_ints = self.bytes_container.len() / 4;
-
-        for it in output
-            .iter_mut()
-            .skip(tmp_output_offset as usize)
-            .take(how_many_ints)
-        {
-            *it = self.bytes_container.get_u32_le();
-        }
+        // Match C++ memcpy: copy metadata bytes as u32s in one shot (native byte order).
+        let meta_u32s: &[u32] = cast_slice(self.bytes_container.chunk());
+        output[tmp_output_offset as usize..][..how_many_ints]
+            .copy_from_slice(&meta_u32s[..how_many_ints]);
         tmp_output_offset += how_many_ints as u32;
         let mut bitmap = 0;
         for k in 2..=32 {
@@ -289,7 +264,7 @@ impl FastPFOR {
     /// Analyzes frequency distribution to balance regular value bits against exception overhead.
     fn best_bit_from_data(&mut self, input: &[u32], pos: u32) {
         self.freqs.fill(0);
-        let k_end = std::cmp::min(pos + self.block_size, input.len() as u32);
+        let k_end = std::cmp::min(pos + N as u32, input.len() as u32);
         for k in pos..k_end {
             self.freqs[bits(input[k as usize])] += 1;
         }
@@ -300,19 +275,19 @@ impl FastPFOR {
         }
         self.max_bits = self.optimal_bits;
 
-        let mut best_cost = u32::from(self.optimal_bits) * self.block_size;
+        let mut best_cost = u32::from(self.optimal_bits) * N as u32;
         let mut num_exceptions: u32 = 0;
         self.exception_count = 0;
 
         for bits in (0..self.optimal_bits).rev() {
             num_exceptions += self.freqs[bits as usize + 1];
-            if num_exceptions == self.block_size {
+            if num_exceptions == N as u32 {
                 break;
             }
             let diff = u32::from(self.max_bits - bits);
             let mut cost = num_exceptions * OVERHEAD_OF_EACH_EXCEPT
                 + num_exceptions * diff
-                + u32::from(bits) * self.block_size
+                + u32::from(bits) * N as u32
                 + 8;
             if diff == 1 {
                 cost -= num_exceptions;
@@ -331,9 +306,9 @@ impl FastPFOR {
     /// unpacks regular values per block, patches in exceptions by position.
     ///
     /// # Arguments
-    /// * `thissize` - Expected decompressed integer count
+    /// * `this_size` - Expected decompressed integer count
     /// * `input_offset` - Advanced by bytes read
-    /// * `output_offset` - Advanced by `thissize`
+    /// * `output_offset` - Advanced by `this_size`
     #[expect(clippy::too_many_lines)]
     fn decode_page(
         &mut self,
@@ -341,8 +316,8 @@ impl FastPFOR {
         input_offset: &mut Cursor<u32>,
         output: &mut [u32],
         output_offset: &mut Cursor<u32>,
-        thissize: u32,
-    ) -> FastPForResult<()> {
+        this_size: u32,
+    ) -> Result<(), FastPForError> {
         let n = u32::try_from(input.len())
             .map_err(|_| FastPForError::InvalidInputLength(input.len()))?;
 
@@ -362,7 +337,7 @@ impl FastPFOR {
         // The C++ encoder uses a raw `memcpy` of bytes into the u32 output (no endian
         // conversion), and the decoder does a raw reinterpret_cast back -- both native byte
         // order. `cast_slice` is the exact Rust equivalent: a safe, zero-copy native view.
-        let input_bytes: &[u8] = bytemuck::cast_slice(input);
+        let input_bytes: &[u8] = cast_slice(input);
         let mut byte_pos = (inexcept as usize)
             .checked_mul(4)
             .filter(|&bp| bp <= input_bytes.len())
@@ -448,7 +423,7 @@ impl FastPFOR {
         let mut tmp_output_offset = output_offset.position() as u32;
         let mut tmp_input_offset = input_offset.position() as u32;
 
-        let run_end = thissize / self.block_size;
+        let run_end = this_size / N as u32;
         for _ in 0..run_end {
             let bits = input_bytes.get_val(byte_pos)?;
             if bits > 32 {
@@ -457,15 +432,21 @@ impl FastPFOR {
             byte_pos += 1;
             let num_exceptions = input_bytes.get_val(byte_pos)?;
             byte_pos += 1;
-            for k in (0..self.block_size).step_by(32) {
+            for k in (0..N as u32).step_by(32) {
                 let in_start = tmp_input_offset as usize;
                 let out_start = (tmp_output_offset + k) as usize;
-                if in_start + usize::from(bits) > input.len() {
-                    return Err(FastPForError::NotEnoughData);
-                }
-                if out_start + 32 > output.len() {
-                    return Err(FastPForError::OutputBufferTooSmall);
-                }
+                // Both invariants are guaranteed by the caller:
+                // - packed data lies within [init_pos+1, init_pos+where_meta), which is
+                //   within bounds because metadata was successfully read at init_pos+where_meta.
+                // - output is pre-allocated to n_blocks*N by decode_blocks.
+                debug_assert!(
+                    in_start + usize::from(bits) <= input.len(),
+                    "packed data overruns input"
+                );
+                debug_assert!(
+                    out_start + 32 <= output.len(),
+                    "output pre-allocated to wrong size"
+                );
                 bitunpacking::fast_unpack(input, in_start, output, out_start, bits);
                 tmp_input_offset += u32::from(bits);
             }
@@ -483,7 +464,7 @@ impl FastPFOR {
                     for _ in 0..num_exceptions {
                         let pos = input_bytes.get_val(byte_pos)?;
                         byte_pos += 1;
-                        if u32::from(pos) >= self.block_size {
+                        if u32::from(pos) >= N as u32 {
                             return Err(FastPForError::NotEnoughData);
                         }
                         let out_idx = tmp_output_offset as usize + pos as usize;
@@ -496,7 +477,7 @@ impl FastPFOR {
                     for _ in 0..num_exceptions {
                         let pos = input_bytes.get_val(byte_pos)?;
                         byte_pos += 1;
-                        if u32::from(pos) >= self.block_size {
+                        if u32::from(pos) >= N as u32 {
                             return Err(FastPForError::NotEnoughData);
                         }
                         let out_idx = tmp_output_offset as usize + pos as usize;
@@ -509,7 +490,7 @@ impl FastPFOR {
                     }
                 }
             }
-            tmp_output_offset += self.block_size;
+            tmp_output_offset += N as u32;
         }
         output_offset.set_position(u64::from(tmp_output_offset));
         input_offset.set_position(u64::from(inexcept));
@@ -517,280 +498,525 @@ impl FastPFOR {
     }
 }
 
+impl<const N: usize> BlockCodec for FastPFor<N>
+where
+    [u32; N]: bytemuck::Pod,
+{
+    type Block = [u32; N];
+
+    fn encode_blocks(
+        &mut self,
+        blocks: &[[u32; N]],
+        out: &mut Vec<u32>,
+    ) -> Result<(), FastPForError> {
+        let n_values = (blocks.len() * N) as u32;
+        if blocks.is_empty() {
+            out.push(n_values);
+            return Ok(());
+        }
+        let flat: &[u32] = cast_slice(blocks);
+
+        let capacity = flat.len() * 2 + 1024;
+        let start = out.len();
+        // Reserve slot for the length header, then space for compressed data.
+        out.resize(start + 1 + capacity, 0);
+
+        let mut in_off = Cursor::new(0u32);
+        let mut out_off = Cursor::new(0u32);
+
+        // Write length header then compress.
+        out[start] = n_values;
+        self.compress_blocks(
+            flat,
+            n_values,
+            &mut in_off,
+            &mut out[start + 1..],
+            &mut out_off,
+        );
+
+        let written = 1 + out_off.position() as usize;
+        out.truncate(start + written);
+        Ok(())
+    }
+
+    fn decode_blocks(
+        &mut self,
+        input: &[u32],
+        expected_len: Option<u32>,
+        out: &mut Vec<u32>,
+    ) -> Result<usize, FastPForError> {
+        let Some((&block_n_values, rest)) = input.split_first() else {
+            return Err(FastPForError::NotEnoughData);
+        };
+        if block_n_values % N as u32 != 0 {
+            return Err(FastPForError::NotEnoughData);
+        }
+        if let Some(expected) = expected_len {
+            if block_n_values != expected {
+                return Err(FastPForError::DecodedCountMismatch {
+                    actual: block_n_values.as_usize(),
+                    expected: expected.as_usize(),
+                });
+            }
+        } else {
+            let max = Self::max_decompressed_len(input.len());
+            if block_n_values.as_usize() > max {
+                return Err(FastPForError::NotEnoughData);
+            }
+        }
+        let n_blocks = block_n_values as usize / N;
+        if n_blocks == 0 {
+            return Ok(1);
+        }
+        let start = out.len();
+        out.resize(start + n_blocks * N, 0);
+
+        let mut in_off = Cursor::new(0u32);
+        let mut out_off = Cursor::new(0u32);
+
+        self.decode_headless_blocks(
+            rest,
+            block_n_values,
+            &mut in_off,
+            &mut out[start..],
+            &mut out_off,
+        )?;
+
+        let written = out_off.position() as usize;
+        if written != n_blocks * N {
+            out.truncate(start + written);
+        }
+        // +1 for the header word (block_n_values) that precedes `rest`.
+        Ok(1 + in_off.position() as usize)
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use bytemuck::cast_slice_mut;
+
     use super::*;
+
+    // ── Generic helpers ───────────────────────────────────────────────────────
+
+    /// Encode `data` with `FastPFor<N>`, decode it back, and return the result.
+    fn roundtrip<const N: usize>(data: &[u32]) -> Vec<u32>
+    where
+        FastPFor<N>: BlockCodec<Block = [u32; N]>,
+        [u32; N]: bytemuck::Pod,
+    {
+        let blocks: &[[u32; N]] = cast_slice(data);
+        let mut compressed = Vec::new();
+        FastPFor::<N>::default()
+            .encode_blocks(blocks, &mut compressed)
+            .unwrap();
+        let mut decoded = Vec::new();
+        FastPFor::<N>::default()
+            .decode_blocks(&compressed, Some((blocks.len() * N) as u32), &mut decoded)
+            .unwrap();
+        decoded
+    }
+
+    /// Encode `data` as a single batch of `[u32; N]` blocks and return the compressed words.
+    fn encode_block<const N: usize>(data: &[u32]) -> Vec<u32>
+    where
+        FastPFor<N>: BlockCodec<Block = [u32; N]>,
+        [u32; N]: bytemuck::Pod,
+    {
+        let mut out = Vec::new();
+        FastPFor::<N>::default()
+            .encode_blocks(cast_slice(data), &mut out)
+            .expect("compression must succeed");
+        out
+    }
+
+    /// Try to decode `compressed` as 1 block with `FastPFor<N>`.
+    fn try_decode<const N: usize>(compressed: &[u32]) -> Result<(), impl std::fmt::Debug>
+    where
+        FastPFor<N>: BlockCodec<Block = [u32; N]>,
+        [u32; N]: bytemuck::Pod,
+    {
+        FastPFor::<N>::default()
+            .decode_blocks(compressed, Some(N as u32), &mut Vec::new())
+            .map(|_| ())
+    }
+
+    // ── Wire format index helpers (FastPFor block layout) ─────────────────────
+    //
+    // Full `compressed` layout (output of `encode_blocks` for a single block):
+    //   [0]                              = out_length  (number of encoded u32 values)
+    //   [1]                              = where_meta (offset to metadata section)
+    //   [2 .. where_meta]               = packed regular values
+    //   [1+where_meta]                  = bytesize   (byte count of block metadata)
+    //   [+1 .. +ceil(bytesize/4)]       = block metadata bytes
+    //   [+ceil(bytesize/4)+1]           = bitmap
+    //   for each set bit k (2..=32):
+    //     [next]                        = size  (# of packed exceptions at width k)
+    //     [next ceil(size*k/32) words]  = bit-packed exception values
+
+    fn meta_byte_start(compressed: &[u32]) -> usize {
+        let where_meta = compressed[1] as usize;
+        (1 + where_meta + 1) * 4
+    }
+
+    fn bitmap_idx(compressed: &[u32]) -> usize {
+        let where_meta = compressed[1] as usize;
+        let bytesize_idx = 1 + where_meta;
+        let bytesize = compressed[bytesize_idx] as usize;
+        bytesize_idx + 1 + bytesize.div_ceil(4)
+    }
+
+    fn find_exception_block(bytes: &[u8], meta_start: usize) -> Option<(usize, usize, usize)> {
+        let mut pos = meta_start;
+        while pos + 1 < bytes.len() {
+            if bytes[pos + 1] > 0 {
+                return Some((pos, pos + 1, pos + 2));
+            }
+            pos += 2;
+        }
+        None
+    }
+
+    /// Compressed data containing at least one non-trivial exception group.
+    fn compressed_with_exceptions() -> (Vec<u32>, Vec<u32>) {
+        let data: Vec<u32> = (0..256u32)
+            .map(|i| if i % 2 == 0 { 1u32 << 30 } else { 3 })
+            .collect();
+        (encode_block::<256>(&data), data)
+    }
+
+    /// Compressed data whose exception group uses bit-width difference == 1
+    /// (`maxbits - optimal_bits == 1`), triggering the `index == 1` branch.
+    fn compressed_with_index1_exceptions() -> (Vec<u32>, Vec<u32>) {
+        let mut data = vec![1u32; 256];
+        data[0] = 3; // needs 2 bits → encoder picks optimal_bits=1, maxbits=2, index=1
+        (encode_block::<256>(&data), data)
+    }
+
+    // ── Round-trip tests ──────────────────────────────────────────────────────
 
     #[test]
     fn fastpfor_test() {
-        let mut codec1 = FastPFOR::default();
-        let mut codec2 = FastPFOR::default();
-        let mut data = vec![0u32; BLOCK_SIZE_256.get() as usize];
-        data[126] = -1i32 as u32;
-        let mut out_buf = vec![0; data.len() * 4];
-        let mut input_offset = Cursor::new(0);
-        let mut output_offset = Cursor::new(0);
-        codec1
-            .compress(
-                &data,
-                data.len() as u32,
-                &mut input_offset,
-                &mut out_buf,
-                &mut output_offset,
-            )
-            .unwrap();
-        let comp = out_buf[..output_offset.position() as usize].to_vec();
-
-        let mut out_buf_uncomp = vec![0; data.len() * 4];
-        input_offset = Cursor::new(0);
-        output_offset = Cursor::new(0);
-        codec2
-            .uncompress(
-                &comp,
-                comp.len() as u32,
-                &mut input_offset,
-                &mut out_buf_uncomp,
-                &mut output_offset,
-            )
-            .unwrap();
-        let answer = out_buf_uncomp[..output_offset.position() as usize].to_vec();
-
-        assert_eq!(answer.len(), BLOCK_SIZE_256.get() as usize);
-        assert_eq!(data.len(), BLOCK_SIZE_256.get() as usize);
-        for k in 0..BLOCK_SIZE_256.get() {
-            assert_eq!(answer[k as usize], data[k as usize], "bug in {k}");
-        }
+        let mut data = vec![0u32; 256];
+        data[126] = u32::MAX;
+        assert_eq!(roundtrip::<256>(&data), data);
     }
 
     #[test]
     fn fastpfor_test_128() {
-        let mut codec1 = FastPFOR::new(DEFAULT_PAGE_SIZE, BLOCK_SIZE_128);
-        let mut codec2 = FastPFOR::new(DEFAULT_PAGE_SIZE, BLOCK_SIZE_128);
-        let mut data = vec![0; BLOCK_SIZE_128.get() as usize];
-        data[126] = -1i32 as u32;
-        let mut out_buf = vec![0; data.len() * 4];
-        let mut input_offset = Cursor::new(0);
-        let mut output_offset = Cursor::new(0);
-        codec1
-            .compress(
-                &data,
-                data.len() as u32,
-                &mut input_offset,
-                &mut out_buf,
-                &mut output_offset,
-            )
-            .unwrap();
-        let comp = out_buf[..output_offset.position() as usize].to_vec();
-
-        let mut out_buf_uncomp = vec![0; data.len() * 4];
-        input_offset = Cursor::new(0);
-        output_offset = Cursor::new(0);
-        codec2
-            .uncompress(
-                &comp,
-                comp.len() as u32,
-                &mut input_offset,
-                &mut out_buf_uncomp,
-                &mut output_offset,
-            )
-            .unwrap();
-        let answer = out_buf_uncomp[..output_offset.position() as usize].to_vec();
-
-        assert_eq!(answer.len(), BLOCK_SIZE_128.get() as usize);
-        assert_eq!(data.len(), BLOCK_SIZE_128.get() as usize);
-        for k in 0..BLOCK_SIZE_128.get() {
-            assert_eq!(answer[k as usize], data[k as usize], "bug in {k}");
-        }
+        let mut data = vec![0u32; 128];
+        data[126] = u32::MAX;
+        assert_eq!(roundtrip::<128>(&data), data);
     }
 
     #[test]
-    fn test_spurious() {
-        let mut c = FastPFOR::default();
-        let x = vec![0; 1024];
-        let mut y = vec![0; 0];
-        let mut i0 = Cursor::new(0);
-        let mut i1 = Cursor::new(0);
-        for inlength in 0..32 {
-            c.compress(&x, inlength, &mut i0, &mut y, &mut i1).unwrap();
-            assert_eq!(0, i1.position());
-        }
+    fn test_empty_blocks_ok() {
+        // Empty input encodes to length header [0] (matches C++ FastPFor) and decodes cleanly.
+        let mut enc = Vec::new();
+        FastPForBlock256::default()
+            .encode_blocks(&[], &mut enc)
+            .unwrap();
+        assert_eq!(enc, [0]);
+        let mut dec = Vec::new();
+        FastPForBlock256::default()
+            .decode_blocks(&enc, Some(0), &mut dec)
+            .unwrap();
+        assert_eq!(dec, []);
     }
 
-    #[test]
-    fn test_zero_in_zero_out() {
-        let mut c = FastPFOR::default();
-        let x = vec![0; 0];
-        let mut y = vec![0; 0];
-        let mut i0 = Cursor::new(0);
-        let mut i1 = Cursor::new(0);
-        c.compress(&x, 0, &mut i0, &mut y, &mut i1).unwrap();
-        assert_eq!(0, i1.position());
-
-        // Needs uncompress
-        let mut out = vec![0; 0];
-        let mut outpos = Cursor::new(0);
-        c.uncompress(&y, 0, &mut i1, &mut out, &mut outpos).unwrap();
-        assert_eq!(0, outpos.position());
-    }
-
-    // The following tests are ported from C++
-    fn run_codec_test(codec: &mut FastPFOR, data: &[u32]) {
-        let mut compressed = vec![0u32; data.len() * 2];
-        let mut decompressed = vec![0u32; data.len()];
-        let len = data.len() as u32;
-        let mut input_offset = Cursor::new(0);
-        let mut output_offset = Cursor::new(0);
-
-        codec
-            .compress(
-                data,
-                len,
-                &mut input_offset,
-                &mut compressed,
-                &mut output_offset,
-            )
-            .expect("Compression failed");
-
-        input_offset.set_position(0);
-        output_offset.set_position(0);
-
-        codec
-            .uncompress(
-                &compressed,
-                len,
-                &mut input_offset,
-                &mut decompressed,
-                &mut output_offset,
-            )
-            .expect("Decompression failed");
-
-        for (i, &original) in data.iter().enumerate() {
-            assert_eq!(
-                decompressed[i], original,
-                "Mismatch at index {}: {} != {}",
-                i, decompressed[i], original
-            );
-        }
-    }
-
+    // Tests ported from C++
     #[test]
     fn test_constant_sequence() {
-        let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, BLOCK_SIZE_128);
-        let data = vec![42u32; 65536];
-        run_codec_test(&mut codec, &data);
+        assert_eq!(roundtrip::<128>(&vec![42u32; 65536]), vec![42u32; 65536]);
     }
 
     #[test]
     fn test_alternating_sequence() {
-        let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, BLOCK_SIZE_128);
-        let data: Vec<_> = (0..65536).map(|i| u32::from(i % 2 != 0)).collect(); // Alternating 0s and 1s
-        run_codec_test(&mut codec, &data);
+        let data: Vec<_> = (0..65536u32).map(|i| u32::from(i % 2 != 0)).collect();
+        assert_eq!(roundtrip::<128>(&data), data);
     }
 
     #[test]
     fn test_large_numbers() {
-        let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, BLOCK_SIZE_128);
-        let data: Vec<u32> = (0..65536).map(|i| i + (1u32 << 30)).collect(); // Large numbers near 2^30
-        run_codec_test(&mut codec, &data);
-    }
-
-    // The following tests fail. It is not clear if this is due the translation or there's a bug
-    // Fails
-    // #[test]
-    // fn test_powers_of_two() {
-    //     let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, BLOCK_SIZE_128);
-    //     let data: Vec<u32> = (0..32).map(|i| 1 << i).collect(); // Powers of 2
-    //     run_codec_test(&mut codec, &data);
-    // }
-
-    // Fails
-    // #[test]
-    // fn test_large_random_sequence() {
-    //     let mut codec = FastPFOR::new(DEFAULT_PAGE_SIZE, BLOCK_SIZE_128);
-    //     let data = generate_random_data(100000); // Large random data set
-    //     run_codec_test(&mut codec, &data);
-    // }
-
-    // Fails
-    // #[test]
-    // fn test_edge_cases() {
-    //     let mut codec = fastpfor::FastPFOR::new(fastpfor::DEFAULT_PAGE_SIZE, fastpfor::BLOCK_SIZE_128);
-    //     let data = vec![u32::MIN, u32::MAX, 0, 1, 42, u32::MAX - 1]; // Edge cases
-    //     run_codec_test(&mut codec, &data);
-    // }
-
-    // Fails
-    // Utility to generate random data
-    // fn generate_random_data(size: usize) -> Vec<u32> {
-    //     let mut rng = thread_rng();
-    //     (0..size).map(|_| rng.gen()).collect()
-    // }
-
-    /// Compress one block of data and return the compressed words.
-    fn compress_one_block(data: &[u32]) -> Vec<u32> {
-        let mut codec = FastPFOR::default();
-        let mut compressed = vec![0u32; data.len() * 4];
-        let mut in_off = Cursor::new(0);
-        let mut out_off = Cursor::new(0);
-        codec
-            .compress(
-                data,
-                data.len() as u32,
-                &mut in_off,
-                &mut compressed,
-                &mut out_off,
-            )
-            .unwrap();
-        compressed[..out_off.position() as usize].to_vec()
+        let data: Vec<u32> = (0..65536u32).map(|i| i + (1u32 << 30)).collect();
+        assert_eq!(roundtrip::<128>(&data), data);
     }
 
     #[test]
-    fn test_truncated_input_returns_error() {
-        let data = vec![42u32; BLOCK_SIZE_256.get() as usize];
-        let compressed = compress_one_block(&data);
+    fn cursor_api_roundtrip() {
+        assert_eq!(roundtrip::<256>(&vec![42u32; 256]), vec![42u32; 256]);
+    }
 
-        // Try decompressing with progressively shorter inputs — all must error, never panic.
+    #[test]
+    fn headless_compress_unfit_pagesize() {
+        // 640 values with 128-block codec spans two pages (512 + 128), exercising the loop.
+        let input: Vec<u32> = (0..640u32).collect();
+        assert_eq!(roundtrip::<128>(&input), input);
+    }
+
+    #[test]
+    fn exception_value_vector_resizes() {
+        // Alternating large/small values trigger exception-buffer resizing across pages.
+        let input: Vec<u32> = (0..1024u32)
+            .map(|i| if i % 2 == 0 { 1 << 30 } else { 3 })
+            .collect();
+        assert_eq!(roundtrip::<128>(&input), input);
+    }
+
+    // ── Error-path tests: truncated / corrupted compressed data ──────────────
+    //
+    // Each test: compress valid data → surgically corrupt one field →
+    // assert `Err` is returned rather than a panic.
+
+    #[test]
+    fn test_truncated_input_returns_error() {
+        let compressed = encode_block::<256>(&vec![42u32; 256]);
         for truncated_len in [1, 2, compressed.len() / 2, compressed.len() - 1] {
-            let truncated = &compressed[..truncated_len];
-            let mut codec = FastPFOR::default();
-            let mut out = vec![0u32; data.len()];
-            let mut in_off = Cursor::new(0);
-            let mut out_off = Cursor::new(0);
-            let result = codec.uncompress(
-                truncated,
-                truncated.len() as u32,
-                &mut in_off,
-                &mut out,
-                &mut out_off,
-            );
             assert!(
-                result.is_err(),
-                "expected error for truncated len {truncated_len}, got Ok"
+                try_decode::<256>(&compressed[..truncated_len]).is_err(),
+                "expected error for truncated len {truncated_len}"
             );
         }
     }
 
     #[test]
     fn test_corrupted_where_meta_returns_error() {
-        let data = vec![1u32; BLOCK_SIZE_256.get() as usize];
-        let mut compressed = compress_one_block(&data);
+        let mut compressed = encode_block::<256>(&vec![1u32; 256]);
+        // word [1] = where_meta; point it past the end
+        compressed[1] = u32::MAX;
+        assert!(try_decode::<256>(&compressed).is_err());
+    }
 
-        // The first word after the length header is `where_meta` — point it far past the end.
-        if compressed.len() > 1 {
-            compressed[1] = u32::MAX;
-        }
-
-        let mut codec = FastPFOR::default();
-        let mut out = vec![0u32; data.len()];
-        let mut in_off = Cursor::new(0);
-        let mut out_off = Cursor::new(0);
-        let result = codec.uncompress(
-            &compressed,
-            compressed.len() as u32,
-            &mut in_off,
-            &mut out,
-            &mut out_off,
+    #[test]
+    fn uncompress_zero_input_length_err() {
+        // Truly empty input (no header word at all) is invalid — C++ would crash reading *in.
+        assert!(
+            FastPForBlock256::default()
+                .decode_blocks(&[], None, &mut Vec::new())
+                .is_err()
         );
-        assert!(result.is_err(), "expected error for corrupted where_meta");
+    }
+
+    #[test]
+    fn headless_uncompress_zero_inlength_128_ok() {
+        FastPForBlock128::default()
+            .decode_headless_blocks(
+                &[],
+                0,
+                &mut Cursor::new(0u32),
+                &mut [],
+                &mut Cursor::new(0u32),
+            )
+            .expect("zero-length decompress must succeed");
+    }
+
+    #[test]
+    fn decode_where_meta_missing() {
+        // Only an out_length word, no where_meta follows → must error.
+        assert!(try_decode::<256>(&[256u32]).is_err());
+    }
+
+    #[test]
+    fn decode_where_meta_out_of_bounds() {
+        let (mut compressed, _) = compressed_with_exceptions();
+        compressed[1] = u32::MAX;
+        assert!(try_decode::<256>(&compressed).is_err());
+    }
+
+    #[test]
+    fn decode_where_meta_overflow() {
+        // FIXME: this test should be modified to use public API
+        let (compressed, _) = compressed_with_exceptions();
+        let mut padded = vec![0u32];
+        padded.extend_from_slice(&compressed);
+        padded[2] = u32::MAX;
+        let out_length = padded[1];
+        assert!(
+            FastPForBlock256::default()
+                .decode_headless_blocks(
+                    &padded,
+                    out_length,
+                    &mut Cursor::new(1u32),
+                    &mut vec![0u32; 320],
+                    &mut Cursor::new(0u32),
+                )
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn decode_bytesize_out_of_bounds() {
+        let (mut compressed, _) = compressed_with_exceptions();
+        compressed[1] = compressed.len() as u32 - 1;
+        assert!(try_decode::<256>(&compressed).is_err());
+    }
+
+    #[test]
+    fn decode_bytesize_length_overflow() {
+        let (mut compressed, _) = compressed_with_exceptions();
+        let bytesize_idx = 1 + compressed[1] as usize;
+        compressed[bytesize_idx] = u32::MAX - 3;
+        assert!(try_decode::<256>(&compressed).is_err());
+    }
+
+    #[test]
+    fn decode_bitmap_out_of_bounds() {
+        let (mut compressed, _) = compressed_with_exceptions();
+        let bytesize_idx = 1 + compressed[1] as usize;
+        let remaining = (compressed.len() - bytesize_idx - 1) as u32;
+        compressed[bytesize_idx] = remaining * 4;
+        assert!(try_decode::<256>(&compressed).is_err());
+    }
+
+    #[test]
+    fn decode_exception_size_exceeds_page_size() {
+        let (mut compressed, _) = compressed_with_exceptions();
+        let size_idx = bitmap_idx(&compressed) + 1;
+        compressed[size_idx] = DEFAULT_PAGE_SIZE + 1;
+        assert!(try_decode::<256>(&compressed).is_err());
+    }
+
+    #[test]
+    fn decode_exception_partial_group_not_enough_data() {
+        let (compressed, _) = compressed_with_exceptions();
+        assert!(try_decode::<256>(&compressed[..compressed.len() - 2]).is_err());
+    }
+
+    #[test]
+    fn decode_block_b_too_large() {
+        let (mut compressed, _) = compressed_with_exceptions();
+        let start = meta_byte_start(&compressed);
+        cast_slice_mut::<_, u8>(&mut compressed)[start] = 33;
+        assert!(try_decode::<256>(&compressed).is_err());
+    }
+
+    #[test]
+    fn decode_packed_region_truncated() {
+        let (compressed, _) = compressed_with_exceptions();
+        let where_meta = compressed[1] as usize;
+        assert!(try_decode::<256>(&compressed[..where_meta]).is_err());
+    }
+
+    #[test]
+    fn decode_exception_maxbits_too_large() {
+        let (mut compressed, _) = compressed_with_exceptions();
+        let start = meta_byte_start(&compressed);
+        let bytes: &mut [u8] = cast_slice_mut(&mut compressed);
+        if let Some((_, _, mb_off)) = find_exception_block(bytes, start) {
+            bytes[mb_off] = 33;
+        }
+        assert!(try_decode::<256>(&compressed).is_err());
+    }
+
+    #[test]
+    fn decode_exception_index_underflow() {
+        let (mut compressed, _) = compressed_with_exceptions();
+        let start = meta_byte_start(&compressed);
+        let bytes: &mut [u8] = cast_slice_mut(&mut compressed);
+        if let Some((bb_off, _, mb_off)) = find_exception_block(bytes, start) {
+            bytes[mb_off] = bytes[bb_off].saturating_sub(1);
+        }
+        assert!(try_decode::<256>(&compressed).is_err());
+    }
+
+    #[test]
+    fn decode_exception_index_zero() {
+        let (mut compressed, _) = compressed_with_exceptions();
+        let start = meta_byte_start(&compressed);
+        let bytes: &mut [u8] = cast_slice_mut(&mut compressed);
+        if let Some((bb_off, _, mb_off)) = find_exception_block(bytes, start) {
+            bytes[mb_off] = bytes[bb_off];
+        }
+        assert!(try_decode::<256>(&compressed).is_err());
+    }
+
+    #[test]
+    fn decode_index1_branch_valid() {
+        let (compressed, data) = compressed_with_index1_exceptions();
+        let mut out = Vec::new();
+        FastPForBlock256::default()
+            .decode_blocks(&compressed, Some(256), &mut out)
+            .expect("decompression of index-1 data must succeed");
+        assert_eq!(out, data);
+    }
+
+    #[test]
+    fn decode_index1_pos_byte_missing() {
+        let (compressed, _) = compressed_with_index1_exceptions();
+        assert!(try_decode::<256>(&compressed[..compressed.len() - 1]).is_err());
+    }
+
+    #[test]
+    fn decode_index1_pos_out_of_block() {
+        let mut data = vec![1u32; 128];
+        data[0] = 3;
+        let mut buf = encode_block::<128>(&data);
+        let start = meta_byte_start(&buf);
+        let bytes: &mut [u8] = cast_slice_mut(&mut buf);
+        if let Some((bb_off, _, mb_off)) = find_exception_block(bytes, start) {
+            if bytes[mb_off].wrapping_sub(bytes[bb_off]) == 1 && mb_off + 1 < bytes.len() {
+                bytes[mb_off + 1] = 200; // position 200 >= block_size 128
+            }
+        }
+        assert!(try_decode::<128>(&buf).is_err());
+    }
+
+    #[test]
+    fn decode_exception_pos_byte_missing() {
+        let (compressed, _) = compressed_with_exceptions();
+        assert!(try_decode::<256>(&compressed[..compressed.len() - 1]).is_err());
+    }
+
+    #[test]
+    fn decode_exception_pos_out_of_block() {
+        let data: Vec<u32> = (0..128u32)
+            .map(|i| if i % 4 == 0 { 1u32 << 30 } else { 1 })
+            .collect();
+        let mut buf = encode_block::<128>(&data);
+        let start = meta_byte_start(&buf);
+        let bytes: &mut [u8] = cast_slice_mut(&mut buf);
+        if let Some((bb_off, _, mb_off)) = find_exception_block(bytes, start) {
+            if bytes[mb_off].wrapping_sub(bytes[bb_off]) > 1 && mb_off + 1 < bytes.len() {
+                bytes[mb_off + 1] = 200; // position 200 >= block_size 128
+            }
+        }
+        assert!(try_decode::<128>(&buf).is_err());
+    }
+
+    /// `decode_blocks` with `expected_len: None` and header=0 returns `Ok` with empty output.
+    #[test]
+    fn decode_blocks_header_only_input() {
+        // Input with just the length header [0]: no blocks to decode.
+        let input = vec![0u32];
+        let mut out = Vec::new();
+        FastPForBlock256::default()
+            .decode_blocks(&input, None, &mut out)
+            .unwrap();
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn decode_exception_unpopulated_data_to_be_packed() {
+        // Hand-crafted compressed stream: out_length=256, where_meta=9,
+        // 8 packed zero words (bits=1), bytesize=4,
+        // meta=[bits=1, cexcept=1, maxbits=3, pos=0], bitmap=0.
+        // The exception buffer is never filled, so decoding must error.
+        let compressed: Vec<u32> = [
+            256u32, // out_length
+            9,      // where_meta
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,                                // 8 packed words
+            4,                                // bytesize = 4 bytes
+            u32::from_le_bytes([1, 1, 3, 0]), // meta: bits=1, cexcept=1, maxbits=3, pos=0
+            0,                                // bitmap=0
+        ]
+        .into();
+        assert!(try_decode::<256>(&compressed).is_err());
     }
 }
