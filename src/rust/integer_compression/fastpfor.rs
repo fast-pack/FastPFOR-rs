@@ -393,10 +393,9 @@ impl<const N: usize> FastPFor<N> {
                     }
                     let copy_len = words_needed as usize;
                     let mut tail_buf = [0u32; 64];
-                    debug_assert!(
-                        copy_len > 0,
-                        "j < size and k >= 2 guarantee words_needed >= 1"
-                    );
+                    if copy_len == 0 {
+                        return Err(FastPForError::NotEnoughData);
+                    }
                     let start = inexcept as usize;
                     let src = input
                         .get(start..start + copy_len)
@@ -434,18 +433,18 @@ impl<const N: usize> FastPFor<N> {
             for k in (0..N as u32).step_by(32) {
                 let in_start = tmp_input_offset as usize;
                 let out_start = (tmp_output_offset + k) as usize;
-                // Both invariants are guaranteed by the caller:
-                // - packed data lies within [init_pos+1, init_pos+where_meta), which is
-                //   within bounds because metadata was successfully read at init_pos+where_meta.
-                // - output is pre-allocated to n_blocks*N by decode_blocks.
-                debug_assert!(
-                    in_start + usize::from(bits) <= input.len(),
-                    "packed data overruns input"
-                );
-                debug_assert!(
-                    out_start + 32 <= output.len(),
-                    "output pre-allocated to wrong size"
-                );
+                let in_end = in_start
+                    .checked_add(usize::from(bits))
+                    .ok_or(FastPForError::NotEnoughData)?;
+                if in_end > input.len() {
+                    return Err(FastPForError::NotEnoughData);
+                }
+                let out_end = out_start
+                    .checked_add(32)
+                    .ok_or(FastPForError::OutputBufferTooSmall)?;
+                if out_end > output.len() {
+                    return Err(FastPForError::OutputBufferTooSmall);
+                }
                 bitunpacking::fast_unpack(input, in_start, output, out_start, bits);
                 tmp_input_offset += u32::from(bits);
             }
@@ -467,9 +466,9 @@ impl<const N: usize> FastPFor<N> {
                             return Err(FastPForError::NotEnoughData);
                         }
                         let out_idx = tmp_output_offset as usize + pos as usize;
-                        // out_idx < output.len(): pos < block_size and the bitunpack
-                        // guard above already confirmed output.len() >= tmp_output_offset + block_size.
-                        debug_assert!(out_idx < output.len());
+                        if out_idx >= output.len() {
+                            return Err(FastPForError::OutputBufferTooSmall);
+                        }
                         output[out_idx] |= 1 << bits;
                     }
                 } else {
@@ -480,8 +479,9 @@ impl<const N: usize> FastPFor<N> {
                             return Err(FastPForError::NotEnoughData);
                         }
                         let out_idx = tmp_output_offset as usize + pos as usize;
-                        // out_idx < output.len(): same invariant as index==1 branch above.
-                        debug_assert!(out_idx < output.len());
+                        if out_idx >= output.len() {
+                            return Err(FastPForError::OutputBufferTooSmall);
+                        }
                         let ptr = self.data_pointers[index];
                         let except_value = self.exception_buffers[index].get_val(ptr)?;
                         output[out_idx] |= except_value << bits;
