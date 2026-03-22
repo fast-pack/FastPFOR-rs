@@ -27,11 +27,11 @@ use crate::helpers::AsUsize;
 ///
 /// # Example
 ///
-/// ```rust,ignore
+/// ```
 /// use fastpfor::{AnyLenCodec, FastPFor256};
 ///
 /// let data: Vec<u32> = (0..600).collect(); // 2 × 256 + 88 remainder
-/// let codec = FastPFor256::default();
+/// let mut codec = FastPFor256::default();
 ///
 /// let mut encoded = Vec::new();
 /// codec.encode(&data, &mut encoded).unwrap();

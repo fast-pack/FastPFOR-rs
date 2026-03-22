@@ -155,7 +155,7 @@ pub trait AnyLenCodec {
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```
 /// # use fastpfor::{slice_to_blocks, FastPForBlock256};
 /// let data: Vec<u32> = (0..600).collect(); // 2 × 256 + 88 remainder
 /// let (blocks, remainder) = slice_to_blocks::<FastPForBlock256>(&data);
