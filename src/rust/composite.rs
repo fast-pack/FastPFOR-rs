@@ -3,7 +3,7 @@
 //!
 //! Rust-only: combines Rust block codecs with Rust tail codecs. Do not wrap C++ codecs.
 
-use crate::FastPForError;
+use crate::FastPForResult;
 use crate::codec::{AnyLenCodec, BlockCodec, slice_to_blocks};
 use crate::helpers::AsUsize;
 
@@ -63,7 +63,7 @@ impl<Blocks: BlockCodec, Tail: AnyLenCodec> CompositeCodec<Blocks, Tail> {
 }
 
 impl<Blocks: BlockCodec, Tail: AnyLenCodec> AnyLenCodec for CompositeCodec<Blocks, Tail> {
-    fn encode(&mut self, input: &[u32], out: &mut Vec<u32>) -> Result<(), FastPForError> {
+    fn encode(&mut self, input: &[u32], out: &mut Vec<u32>) -> FastPForResult<()> {
         let (blocks, remainder) = slice_to_blocks::<Blocks>(input);
         // C++ CompositeCodec: concatenate block + tail. Block codec writes length header (0 when empty).
         self.block.encode_blocks(blocks, out)?;
@@ -76,7 +76,7 @@ impl<Blocks: BlockCodec, Tail: AnyLenCodec> AnyLenCodec for CompositeCodec<Block
         input: &[u32],
         out: &mut Vec<u32>,
         expected_len: Option<u32>,
-    ) -> Result<(), FastPForError> {
+    ) -> FastPForResult<()> {
         let start_len = out.len();
         let max = Self::max_decompressed_len(input.len());
 
@@ -112,6 +112,7 @@ impl<Blocks: BlockCodec, Tail: AnyLenCodec> AnyLenCodec for CompositeCodec<Block
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::FastPForError;
     use crate::rust::{FastPForBlock128, FastPForBlock256, JustCopy, VariableByte};
 
     fn roundtrip<C: AnyLenCodec>(codec: &mut C, data: &[u32]) {

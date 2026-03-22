@@ -1,5 +1,8 @@
 use thiserror::Error;
 
+/// Alias for the result type of `FastPFor` operations.
+pub type FastPForResult<T> = Result<T, FastPForError>;
+
 /// Errors that can occur when using the `FastPFor` codecs.
 #[non_exhaustive]
 #[derive(Error, Debug)]

@@ -1,4 +1,4 @@
-use crate::FastPForError;
+use crate::{FastPForError, FastPForResult};
 
 /// Finds the greatest multiple of `factor` that is less than or equal to `value`.
 #[cfg_attr(feature = "cpp", allow(dead_code))]
@@ -17,7 +17,7 @@ pub trait AsUsize: Eq + Copy {
     fn as_usize(self) -> usize;
 
     #[inline]
-    fn is_decoded_mismatch(self, expected: impl AsUsize) -> Result<(), FastPForError> {
+    fn is_decoded_mismatch(self, expected: impl AsUsize) -> FastPForResult<()> {
         let actual = self.as_usize();
         let expected = expected.as_usize();
         if self.as_usize() == expected {
@@ -29,7 +29,7 @@ pub trait AsUsize: Eq + Copy {
 
     /// Returns an error if `expected` exceeds `max`.
     #[inline]
-    fn is_valid_expected(self, max: impl AsUsize) -> Result<usize, FastPForError> {
+    fn is_valid_expected(self, max: impl AsUsize) -> FastPForResult<usize> {
         let expected = self.as_usize();
         let max = max.as_usize();
         if expected > max {
@@ -67,12 +67,12 @@ impl AsUsize for u32 {
 
 #[cfg_attr(feature = "cpp", allow(dead_code))]
 pub trait GetWithErr<T> {
-    fn get_val(&self, pos: impl AsUsize) -> Result<T, FastPForError>;
+    fn get_val(&self, pos: impl AsUsize) -> FastPForResult<T>;
 }
 
 impl<T: Copy> GetWithErr<T> for &[T] {
     #[inline]
-    fn get_val(&self, pos: impl AsUsize) -> Result<T, FastPForError> {
+    fn get_val(&self, pos: impl AsUsize) -> FastPForResult<T> {
         self.get(pos.as_usize())
             .copied()
             .ok_or(FastPForError::NotEnoughData)
@@ -81,7 +81,7 @@ impl<T: Copy> GetWithErr<T> for &[T] {
 
 impl<T: Copy> GetWithErr<T> for Vec<T> {
     #[inline]
-    fn get_val(&self, pos: impl AsUsize) -> Result<T, FastPForError> {
+    fn get_val(&self, pos: impl AsUsize) -> FastPForResult<T> {
         self.as_slice().get_val(pos)
     }
 }

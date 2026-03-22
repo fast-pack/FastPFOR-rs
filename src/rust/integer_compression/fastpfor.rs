@@ -7,7 +7,7 @@ use bytes::{Buf as _, BufMut as _, BytesMut};
 use crate::helpers::{AsUsize, GetWithErr, bits, greatest_multiple};
 use crate::rust::cursor::IncrementCursor;
 use crate::rust::integer_compression::{bitpacking, bitunpacking};
-use crate::{BlockCodec, FastPForError};
+use crate::{BlockCodec, FastPForError, FastPForResult};
 
 /// Overhead cost (in bits) for storing each exception's position in the block
 const OVERHEAD_OF_EACH_EXCEPT: u32 = 8;
@@ -75,7 +75,7 @@ impl FastPFor<128> {
     ///
     /// Returns an error if `page_size` is not a multiple of 128.
     /// Use [`Default`] for the default page size.
-    pub fn new(page_size: u32) -> Result<Self, FastPForError> {
+    pub fn new(page_size: u32) -> FastPForResult<Self> {
         Self::create(page_size)
     }
 }
@@ -85,13 +85,13 @@ impl FastPFor<256> {
     ///
     /// Returns an error if `page_size` is not a multiple of 256.
     /// Use [`Default`] for the default page size.
-    pub fn new(page_size: u32) -> Result<Self, FastPForError> {
+    pub fn new(page_size: u32) -> FastPForResult<Self> {
         Self::create(page_size)
     }
 }
 
 impl<const N: usize> FastPFor<N> {
-    fn create(page_size: u32) -> Result<Self, FastPForError> {
+    fn create(page_size: u32) -> FastPForResult<Self> {
         if page_size % N as u32 != 0 {
             return Err(FastPForError::InvalidPageSize {
                 page_size,
@@ -136,7 +136,7 @@ impl<const N: usize> FastPFor<N> {
         input_offset: &mut Cursor<u32>,
         output: &mut [u32],
         output_offset: &mut Cursor<u32>,
-    ) -> Result<(), FastPForError> {
+    ) -> FastPForResult<()> {
         let mynvalue = greatest_multiple(inlength, N as u32);
         let final_out = output_offset.position() as u32 + mynvalue;
         while output_offset.position() as u32 != final_out {
@@ -317,7 +317,7 @@ impl<const N: usize> FastPFor<N> {
         output: &mut [u32],
         output_offset: &mut Cursor<u32>,
         this_size: u32,
-    ) -> Result<(), FastPForError> {
+    ) -> FastPForResult<()> {
         let n = u32::try_from(input.len())
             .map_err(|_| FastPForError::InvalidInputLength(input.len()))?;
 
@@ -504,11 +504,7 @@ where
 {
     type Block = [u32; N];
 
-    fn encode_blocks(
-        &mut self,
-        blocks: &[[u32; N]],
-        out: &mut Vec<u32>,
-    ) -> Result<(), FastPForError> {
+    fn encode_blocks(&mut self, blocks: &[[u32; N]], out: &mut Vec<u32>) -> FastPForResult<()> {
         let n_values = (blocks.len() * N) as u32;
         if blocks.is_empty() {
             out.push(n_values);
@@ -544,7 +540,7 @@ where
         input: &[u32],
         expected_len: Option<u32>,
         out: &mut Vec<u32>,
-    ) -> Result<usize, FastPForError> {
+    ) -> FastPForResult<usize> {
         let Some((&block_n_values, rest)) = input.split_first() else {
             return Err(FastPForError::NotEnoughData);
         };

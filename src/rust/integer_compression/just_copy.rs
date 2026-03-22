@@ -1,4 +1,4 @@
-use crate::FastPForError;
+use crate::FastPForResult;
 use crate::codec::AnyLenCodec;
 use crate::helpers::AsUsize;
 
@@ -23,7 +23,7 @@ impl Default for JustCopy {
 }
 
 impl AnyLenCodec for JustCopy {
-    fn encode(&mut self, input: &[u32], out: &mut Vec<u32>) -> Result<(), FastPForError> {
+    fn encode(&mut self, input: &[u32], out: &mut Vec<u32>) -> FastPForResult<()> {
         out.extend_from_slice(input);
         Ok(())
     }
@@ -33,7 +33,7 @@ impl AnyLenCodec for JustCopy {
         input: &[u32],
         out: &mut Vec<u32>,
         expected_len: Option<u32>,
-    ) -> Result<(), FastPForError> {
+    ) -> FastPForResult<()> {
         if let Some(expected) = expected_len {
             let expected = expected.is_valid_expected(Self::max_decompressed_len(input.len()))?;
             input.len().is_decoded_mismatch(expected)?;
@@ -46,6 +46,7 @@ impl AnyLenCodec for JustCopy {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::FastPForError;
 
     #[test]
     fn justcopy_default_and_roundtrip() {

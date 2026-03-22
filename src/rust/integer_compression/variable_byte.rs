@@ -2,10 +2,10 @@ use std::io::Cursor;
 
 use bytemuck::{cast_slice, cast_slice_mut};
 
-use crate::FastPForError;
 use crate::codec::AnyLenCodec;
 use crate::helpers::AsUsize;
 use crate::rust::cursor::IncrementCursor;
+use crate::{FastPForError, FastPForResult};
 
 /// Variable-byte encoding codec for integer compression.
 #[derive(Debug)]
@@ -42,7 +42,7 @@ impl VariableByte {
         input_offset: &mut Cursor<u32>,
         output: &mut [u32],
         output_offset: &mut Cursor<u32>,
-    ) -> Result<(), FastPForError> {
+    ) -> FastPForResult<()> {
         if input_length == 0 {
             return Ok(());
         }
@@ -102,7 +102,7 @@ impl VariableByte {
         input_offset: &mut Cursor<u32>,
         output: &mut [u32],
         output_offset: &mut Cursor<u32>,
-    ) -> Result<(), FastPForError> {
+    ) -> FastPForResult<()> {
         if input_length == 0 {
             return Ok(());
         }
@@ -193,7 +193,7 @@ impl VariableByte {
         input_offset: &mut Cursor<u32>,
         output: &mut [i8],
         output_offset: &mut Cursor<u32>,
-    ) -> Result<(), FastPForError> {
+    ) -> FastPForResult<()> {
         if input_length == 0 {
             return Ok(());
         }
@@ -252,7 +252,7 @@ impl VariableByte {
         input_offset: &mut Cursor<u32>,
         output: &mut [u32],
         output_offset: &mut Cursor<u32>,
-    ) -> Result<(), FastPForError> {
+    ) -> FastPForResult<()> {
         let mut p = input_offset.position() as u32;
         let final_p = input_offset.position() as u32 + input_length;
         let mut tmp_outpos = output_offset.position();
@@ -308,7 +308,7 @@ impl Default for VariableByte {
 }
 
 impl AnyLenCodec for VariableByte {
-    fn encode(&mut self, input: &[u32], out: &mut Vec<u32>) -> Result<(), FastPForError> {
+    fn encode(&mut self, input: &[u32], out: &mut Vec<u32>) -> FastPForResult<()> {
         let capacity = input.len() * 2 + 4;
         let start = out.len();
         out.resize(start + capacity, 0);
@@ -331,7 +331,7 @@ impl AnyLenCodec for VariableByte {
         input: &[u32],
         out: &mut Vec<u32>,
         expected_len: Option<u32>,
-    ) -> Result<(), FastPForError> {
+    ) -> FastPForResult<()> {
         let capacity = if let Some(expected) = expected_len {
             expected.is_valid_expected(Self::max_decompressed_len(input.len()))?
         } else {

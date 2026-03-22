@@ -1,6 +1,6 @@
 use cxx::UniquePtr;
 
-use crate::FastPForError;
+use crate::FastPForResult;
 use crate::codec::{AnyLenCodec, BlockCodec64};
 use crate::cpp::ffi;
 use crate::cpp::wrappers::{
@@ -12,7 +12,7 @@ use crate::cpp::wrappers::{
 // Single macro: all C++ codecs implement AnyLenCodec. Codecs marked with `@ 64`
 // also implement BlockCodec64 for 64-bit integer support.
 
-/// Macro for C++ codec wrappers: struct + Default + `AnyLenCodec`.
+/// Macro for C++ codec wrappers: struct + Default + [`AnyLenCodec`].
 macro_rules! implement_cpp_codecs {
     ($(
         $(#[$($attrs:tt)*])*
@@ -37,7 +37,7 @@ macro_rules! implement_cpp_codecs {
             }
 
             impl AnyLenCodec for $name {
-                fn encode(&mut self, input: &[u32], out: &mut Vec<u32>) -> Result<(), FastPForError> {
+                fn encode(&mut self, input: &[u32], out: &mut Vec<u32>) -> FastPForResult<()> {
                     encode32_to_vec_ffi(&self.0, input, out)
                 }
 
@@ -46,7 +46,7 @@ macro_rules! implement_cpp_codecs {
                     input: &[u32],
                     out: &mut Vec<u32>,
                     expected_len: Option<u32>,
-                ) -> Result<(), FastPForError> {
+                ) -> FastPForResult<()> {
                     decode32_anylen_ffi(&self.0, input, out, expected_len)
                 }
             }
@@ -139,7 +139,7 @@ implement_cpp_codecs! {
 
     // CppSnappy => snappy_codec,  // Conditional with #ifdef
 
-    /// [`StreamVByte`](https://github.com/lemire/streamvbyte) encoding for fast variable-byte compression.
+    /// [`CppStreamVByte`](https://github.com/lemire/streamvbyte) encoding for fast variable-byte compression.
     CppStreamVByte => streamvbyte_codec,
 
     /// Standard variable-byte encoding.
@@ -161,10 +161,10 @@ macro_rules! implement_cpp_codecs_64 {
     ($($name:ident => $ffi:ident ,)*) => {
         $(
             impl BlockCodec64 for $name {
-                fn encode64(&mut self, input: &[u64], out: &mut Vec<u32>) -> Result<(), FastPForError> {
+                fn encode64(&mut self, input: &[u64], out: &mut Vec<u32>) -> FastPForResult<()> {
                     encode64_to_vec_ffi(&self.0, input, out)
                 }
-                fn decode64(&mut self, input: &[u32], out: &mut Vec<u64>) -> Result<(), FastPForError> {
+                fn decode64(&mut self, input: &[u32], out: &mut Vec<u64>) -> FastPForResult<()> {
                     decode64_to_vec_ffi(&self.0, input, out)
                 }
             }

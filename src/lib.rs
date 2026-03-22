@@ -7,7 +7,7 @@ compile_error!("At least one of the features 'cpp' or 'rust' must be enabled");
 
 // Error types are always available regardless of which codec features are enabled.
 mod error;
-pub use error::FastPForError;
+pub use error::{FastPForError, FastPForResult};
 
 #[cfg(feature = "cpp")]
 /// Rust wrapper for the [`FastPFOR` C++ library](https://github.com/fast-pack/FastPFor)

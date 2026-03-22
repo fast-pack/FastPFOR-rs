@@ -1,6 +1,6 @@
 use cxx::UniquePtr;
 
-use crate::FastPForError;
+use crate::FastPForResult;
 use crate::codec::default_max_decoded_len;
 use crate::cpp::ffi;
 use crate::helpers::AsUsize;
@@ -14,7 +14,7 @@ pub fn encode32_to_vec_ffi(
     codec: &UniquePtr<ffi::IntegerCODEC>,
     input: &[u32],
     out: &mut Vec<u32>,
-) -> Result<(), FastPForError> {
+) -> FastPForResult<()> {
     let capacity = input.len() * 2 + 1024;
     let start = out.len();
     out.resize(start + capacity, 0);
@@ -28,7 +28,7 @@ fn decode32_to_vec_ffi(
     input: &[u32],
     out: &mut Vec<u32>,
     capacity: usize,
-) -> Result<(), FastPForError> {
+) -> FastPForResult<()> {
     if !input.is_empty() {
         let start = out.len();
         out.resize(start + capacity, 0);
@@ -43,7 +43,7 @@ pub fn decode32_anylen_ffi(
     input: &[u32],
     out: &mut Vec<u32>,
     expected_len: Option<u32>,
-) -> Result<(), FastPForError> {
+) -> FastPForResult<()> {
     let max = default_max_decoded_len(input.len());
     let capacity = if let Some(n) = expected_len {
         n.is_valid_expected(max)?
@@ -64,7 +64,7 @@ pub fn encode64_to_vec_ffi(
     codec: &UniquePtr<ffi::IntegerCODEC>,
     input: &[u64],
     out: &mut Vec<u32>,
-) -> Result<(), FastPForError> {
+) -> FastPForResult<()> {
     let capacity = input.len() * 3 + 1024;
     let start = out.len();
     out.resize(start + capacity, 0);
@@ -77,7 +77,7 @@ pub fn decode64_to_vec_ffi(
     codec: &UniquePtr<ffi::IntegerCODEC>,
     input: &[u32],
     out: &mut Vec<u64>,
-) -> Result<(), FastPForError> {
+) -> FastPForResult<()> {
     if !input.is_empty() {
         // C++ decodeArray needs output buffer. Variable-byte can pack multiple values per word.
         let capacity = input.len().saturating_mul(4);

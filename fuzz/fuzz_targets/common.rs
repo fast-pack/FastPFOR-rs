@@ -151,10 +151,10 @@ pub fn resolve_encode_compare_pair(idx: u8) -> Option<CodecPair> {
     let pairs = ENCODE_COMPARE_PAIRS;
     let i = idx as usize % pairs.len();
     let pair = pairs[i];
-    if let Some(ref f) = filter {
-        if !f.eq_ignore_ascii_case(pair.name) {
-            return None;
-        }
+    if let Some(ref f) = filter
+        && !f.eq_ignore_ascii_case(pair.name)
+    {
+        return None;
     }
     Some(pair)
 }
