@@ -4,10 +4,11 @@ use std::num::NonZeroU32;
 
 use bytes::{Buf as _, BufMut as _, BytesMut};
 
+use crate::helpers::{GetWithErr, bits, greatest_multiple};
 use crate::rust::cursor::IncrementCursor;
-use crate::rust::integer_compression::helpers::GetWithErr;
-use crate::rust::integer_compression::{bitpacking, bitunpacking, helpers};
-use crate::rust::{FastPForError, FastPForResult, Integer, Skippable};
+use crate::rust::integer_compression::{bitpacking, bitunpacking};
+use crate::rust::{Integer, Skippable};
+use crate::{FastPForError, FastPForResult};
 
 /// Block size constant for 256 integers per block
 pub const BLOCK_SIZE_256: NonZeroU32 = NonZeroU32::new(256).unwrap();
@@ -61,7 +62,7 @@ impl Skippable for FastPFOR {
         output: &mut [u32],
         output_offset: &mut Cursor<u32>,
     ) -> FastPForResult<()> {
-        let inlength = helpers::greatest_multiple(input_length, self.block_size);
+        let inlength = greatest_multiple(input_length, self.block_size);
         let final_inpos = input_offset.position() as u32 + inlength;
         while input_offset.position() as u32 != final_inpos {
             let this_size =
@@ -85,7 +86,7 @@ impl Skippable for FastPFOR {
             // Return early if there is no data to uncompress and block size is 128
             return Ok(());
         }
-        let mynvalue = helpers::greatest_multiple(inlength, self.block_size);
+        let mynvalue = greatest_multiple(inlength, self.block_size);
         let final_out = output_offset.position() as u32 + mynvalue;
         while output_offset.position() as u32 != final_out {
             let this_size =
@@ -105,7 +106,7 @@ impl Integer<u32> for FastPFOR {
         output: &mut [u32],
         output_offset: &mut Cursor<u32>,
     ) -> FastPForResult<()> {
-        let inlength = helpers::greatest_multiple(input_length, self.block_size);
+        let inlength = greatest_multiple(input_length, self.block_size);
         if inlength == 0 {
             // Return early if there is no data to compress
             return Ok(());
@@ -290,7 +291,7 @@ impl FastPFOR {
         self.freqs.fill(0);
         let k_end = std::cmp::min(pos + self.block_size, input.len() as u32);
         for k in pos..k_end {
-            self.freqs[helpers::bits(input[k as usize])] += 1;
+            self.freqs[bits(input[k as usize])] += 1;
         }
 
         self.optimal_bits = 32;

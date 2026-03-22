@@ -14,6 +14,8 @@ use bench_utils::{
 };
 #[cfg(feature = "cpp")]
 use bench_utils::{cpp_decode, cpp_decode_fixtures};
+#[cfg(feature = "cpp")]
+use fastpfor::cpp;
 
 const SMOKE_SIZE: usize = 256;
 
@@ -108,13 +110,11 @@ fn smoke_compression_ratio() {
 #[cfg(feature = "cpp")]
 #[test]
 fn smoke_cpp_vs_rust() {
-    use fastpfor::cpp::FastPFor128Codec;
-
     for (_, fix) in cpp_decode_fixtures(&[SMOKE_SIZE]) {
         // C++ decode
-        let codec = FastPFor128Codec::new();
+        let mut codec = cpp::FastPFor128Codec::new();
         let mut cpp_out = vec![0u32; fix.original_len];
-        let n = cpp_decode(&codec, &fix.cpp_compressed, &mut cpp_out);
+        let n = cpp_decode(&mut codec, &fix.cpp_compressed, &mut cpp_out);
         assert_eq!(
             n, fix.original_len,
             "{}: C++ decoded wrong element count",

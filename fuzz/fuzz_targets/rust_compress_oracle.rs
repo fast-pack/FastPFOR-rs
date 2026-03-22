@@ -1,6 +1,6 @@
 #![no_main]
 
-use fastpfor::{CodecToSlice, cpp, rust};
+use fastpfor::{AnyLenCodec, CodecToSlice, cpp, rust};
 use libfuzzer_sys::fuzz_target;
 mod common;
 use common::*;
@@ -28,9 +28,8 @@ fuzz_target!(|data: FuzzInput<RustCodec>| {
     let last_block_size_multiple = input.len() / block_size * block_size;
     let input = &input[..last_block_size_multiple];
 
-    // Allocate output buffers with generous size
+    // Allocate output buffer for Rust (slice API)
     let mut rust_compressed = vec![0u32; input.len() * 2 + 1024];
-    let mut cpp_compressed = vec![0u32; input.len() * 2 + 1024];
 
     // Compress with Rust implementation using Codec wrapper
     let mut rust_codec = rust::Codec::from(data.codec);
@@ -38,33 +37,23 @@ fuzz_target!(|data: FuzzInput<RustCodec>| {
         .compress_to_slice(input, &mut rust_compressed)
         .expect("Rust compression failed");
 
-    // Compress with C++ implementation
-    let compressed_oracle_from_cpp = match data.codec {
-        RustCodec::FastPFOR256 => {
-            let mut cpp_codec = cpp::FastPFor256Codec::new();
-            cpp_codec
-                .compress_to_slice(input, &mut cpp_compressed)
-                .expect("C++ compression failed")
-        }
-        RustCodec::FastPFOR128 => {
-            let mut cpp_codec = cpp::FastPFor128Codec::new();
-            cpp_codec
-                .compress_to_slice(input, &mut cpp_compressed)
-                .expect("C++ compression failed")
-        }
-        RustCodec::VariableByte => {
-            let mut cpp_codec = cpp::MaskedVByteCodec::new();
-            cpp_codec
-                .compress_to_slice(input, &mut cpp_compressed)
-                .expect("C++ compression failed")
-        }
-        RustCodec::JustCopy => {
-            let mut cpp_codec = cpp::CopyCodec::new();
-            cpp_codec
-                .compress_to_slice(input, &mut cpp_compressed)
-                .expect("C++ compression failed")
-        }
-    };
+    // Compress with C++ implementation (`AnyLenCodec` / Vec API)
+    let mut cpp_compressed = Vec::new();
+    match data.codec {
+        RustCodec::FastPFOR256 => cpp::FastPFor256Codec::new()
+            .encode(input, &mut cpp_compressed)
+            .expect("C++ compression failed"),
+        RustCodec::FastPFOR128 => cpp::FastPFor128Codec::new()
+            .encode(input, &mut cpp_compressed)
+            .expect("C++ compression failed"),
+        RustCodec::VariableByte => cpp::MaskedVByteCodec::new()
+            .encode(input, &mut cpp_compressed)
+            .expect("C++ compression failed"),
+        RustCodec::JustCopy => cpp::CopyCodec::new()
+            .encode(input, &mut cpp_compressed)
+            .expect("C++ compression failed"),
+    }
+    let compressed_oracle_from_cpp = cpp_compressed.as_slice();
 
     // Compare compressed outputs
     assert_eq!(

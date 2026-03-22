@@ -5,28 +5,26 @@ mod common;
 use common::*;
 
 fuzz_target!(|data: FuzzInput<CppCodec>| {
-    let codec = BoxedCppCodec::from(data.codec);
+    let mut codec = BoxedCppCodec::from(data.codec);
     let input = data.data;
 
-    // Allocate output buffer with generous size
-    let mut output = vec![0u32; input.len() * 2 + 1024];
+    let mut compressed = Vec::new();
+    codec.encode(&input, &mut compressed).unwrap();
 
-    // Compress the data
-    let enc_slice = codec.encode32(&input, &mut output).unwrap();
-
-    // Now decompress
-    let mut decoded = vec![0u32; input.len() * 2 + 1024];
-    let dec_slice = codec.decode32(enc_slice, &mut decoded).unwrap();
+    let mut decoded = Vec::new();
+    codec
+        .decode(&compressed, &mut decoded, None)
+        .expect("decode");
 
     // Verify roundtrip
-    if dec_slice.len() + input.len() < 200 {
-        assert_eq!(input, dec_slice, "Decompressed output mismatches");
+    if decoded.len() + input.len() < 200 {
+        assert_eq!(input, decoded.as_slice(), "Decompressed output mismatches");
     } else {
-        assert_eq!(dec_slice.len(), input.len(), "Decompressed length mismatch");
-        for (i, (&original, &decoded)) in input.iter().zip(dec_slice.iter()).enumerate() {
+        assert_eq!(decoded.len(), input.len(), "Decompressed length mismatch");
+        for (i, (&original, &out)) in input.iter().zip(decoded.iter()).enumerate() {
             assert_eq!(
-                original, decoded,
-                "Mismatch at position {i}: expected {original}, got {decoded}"
+                original, out,
+                "Mismatch at position {i}: expected {original}, got {out}"
             );
         }
     }

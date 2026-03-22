@@ -13,6 +13,10 @@ use core::ops::Range;
 pub use std::io::Cursor;
 use std::num::NonZeroU32;
 
+#[cfg(feature = "cpp")]
+use fastpfor::AnyLenCodec as _;
+#[cfg(feature = "cpp")]
+use fastpfor::cpp;
 pub use fastpfor::rust::{BLOCK_SIZE_128, BLOCK_SIZE_256, DEFAULT_PAGE_SIZE, FastPFOR, Integer};
 use rand::rngs::StdRng;
 use rand::{RngExt as _, SeedableRng};
@@ -167,22 +171,24 @@ fn prepare_compressed_data(data: &[u32], block_size: NonZeroU32) -> Vec<u32> {
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "cpp")]
-pub fn cpp_encode(codec: &fastpfor::cpp::FastPFor128Codec, data: &[u32]) -> Vec<u32> {
-    use fastpfor::cpp::Codec32 as _;
-    let mut out = vec![0u32; data.len() * 2 + 1024];
-    let new_len = codec.encode32(data, &mut out).unwrap().len();
-    out.truncate(new_len);
+pub fn cpp_encode(codec: &mut cpp::FastPFor128Codec, data: &[u32]) -> Vec<u32> {
+    let mut out = Vec::new();
+    codec.encode(data, &mut out).unwrap();
     out
 }
 
 #[cfg(feature = "cpp")]
 pub fn cpp_decode(
-    codec: &fastpfor::cpp::FastPFor128Codec,
+    codec: &mut cpp::FastPFor128Codec,
     compressed: &[u32],
     decompressed: &mut [u32],
 ) -> usize {
-    use fastpfor::cpp::Codec32 as _;
-    codec.decode32(compressed, decompressed).unwrap().len()
+    let mut out = Vec::new();
+    codec
+        .decode(compressed, &mut out, Some(decompressed.len() as u32))
+        .unwrap();
+    decompressed.copy_from_slice(&out);
+    out.len()
 }
 
 // ---------------------------------------------------------------------------
@@ -268,10 +274,9 @@ pub struct CppDecodeFixture {
 #[cfg(feature = "cpp")]
 impl CppDecodeFixture {
     fn new(name: &'static str, generator: DataGeneratorFn, size: usize) -> Self {
-        use fastpfor::cpp::FastPFor128Codec;
         let data = generator(size);
-        let codec = FastPFor128Codec::new();
-        let cpp_compressed = cpp_encode(&codec, &data);
+        let mut codec = cpp::FastPFor128Codec::new();
+        let cpp_compressed = cpp_encode(&mut codec, &data);
         let rust_compressed = prepare_compressed_data(&data, BLOCK_SIZE_128);
         Self {
             name,

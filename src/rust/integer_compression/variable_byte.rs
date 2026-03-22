@@ -2,8 +2,8 @@ use std::io::Cursor;
 
 use bytemuck::{cast_slice, cast_slice_mut};
 
+use crate::helpers::AsUsize;
 use crate::rust::cursor::IncrementCursor;
-use crate::rust::integer_compression::helpers::AsUsize;
 use crate::rust::{FastPForError, FastPForResult, Integer, Skippable};
 
 /// Variable-byte encoding codec for integer compression.

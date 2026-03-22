@@ -33,6 +33,7 @@ check:
     cargo check --workspace --all-targets --features _all_compatible
     cargo check --workspace --all-targets --no-default-features --features cpp
     cargo check --workspace --all-targets --no-default-features --features rust
+    cargo check --workspace --all-targets --manifest-path fuzz/Cargo.toml
 
 # Generate code coverage report to upload to codecov.io
 ci-coverage: env-info && \
@@ -41,7 +42,8 @@ ci-coverage: env-info && \
     mkdir -p target/llvm-cov
 
 # Run all tests as expected by CI
-ci-test: env-info test-fmt check build clippy test test-doc && assert-git-is-clean
+ci-test: env-info test-fmt check build clippy test test-doc fuzz::ci-test
+    {{ if ci_mode == '1' { just + ' assert-git-is-clean' } else { '' } }}
 
 # Run minimal subset of tests to ensure compatibility with MSRV
 ci-test-msrv: env-info test
@@ -50,10 +52,12 @@ ci-test-msrv: env-info test
 clean:
     cargo clean
     rm -f Cargo.lock
+    cd fuzz && cargo clean && rm -f Cargo.lock
 
 # Run cargo clippy to lint the code
 clippy *args:
     cargo clippy --workspace --all-targets --features _all_compatible {{args}}
+    cargo clippy --workspace --all-targets --manifest-path fuzz/Cargo.toml {{args}}
 
 # Generate code coverage report. Will install `cargo llvm-cov` if missing.
 coverage *args='--open':  (cargo-install 'cargo-llvm-cov')
@@ -61,8 +65,8 @@ coverage *args='--open':  (cargo-install 'cargo-llvm-cov')
     cargo llvm-cov --workspace --all-targets --features _all_compatible --include-build-script {{args}}
 
 # Build and open code documentation
-docs *args='--open':
-    DOCS_RS=1 cargo doc --no-deps {{args}} --workspace --features _all_compatible
+docs *args='--features _all_compatible --open':
+    DOCS_RS=1 cargo doc --no-deps {{args}} --workspace
 
 # Print environment info
 env-info:
@@ -134,7 +138,7 @@ test-all-simd-modes:
     {{just}} test-simd native
 
 # Test documentation generation
-test-doc:  (docs '')
+test-doc:  (docs '')  (docs '--features _all_compatible')
 
 # Test code formatting
 test-fmt: && (fmt-toml '--check' '--check-format')
