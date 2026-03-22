@@ -588,8 +588,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use bytemuck::cast_slice_mut;
-
     use super::*;
 
     // ── Generic helpers ───────────────────────────────────────────────────────
@@ -623,53 +621,6 @@ mod tests {
             .encode_blocks(cast_slice(data), &mut out)
             .expect("compression must succeed");
         out
-    }
-
-    /// Try to decode `compressed` as 1 block with `FastPFor<N>`.
-    fn try_decode<const N: usize>(compressed: &[u32]) -> Result<(), impl std::fmt::Debug>
-    where
-        FastPFor<N>: BlockCodec<Block = [u32; N]>,
-        [u32; N]: bytemuck::Pod,
-    {
-        FastPFor::<N>::default()
-            .decode_blocks(compressed, Some(N as u32), &mut Vec::new())
-            .map(|_| ())
-    }
-
-    // ── Wire format index helpers (FastPFor block layout) ─────────────────────
-    //
-    // Full `compressed` layout (output of `encode_blocks` for a single block):
-    //   [0]                              = out_length  (number of encoded u32 values)
-    //   [1]                              = where_meta (offset to metadata section)
-    //   [2 .. where_meta]               = packed regular values
-    //   [1+where_meta]                  = bytesize   (byte count of block metadata)
-    //   [+1 .. +ceil(bytesize/4)]       = block metadata bytes
-    //   [+ceil(bytesize/4)+1]           = bitmap
-    //   for each set bit k (2..=32):
-    //     [next]                        = size  (# of packed exceptions at width k)
-    //     [next ceil(size*k/32) words]  = bit-packed exception values
-
-    fn meta_byte_start(compressed: &[u32]) -> usize {
-        let where_meta = compressed[1] as usize;
-        (1 + where_meta + 1) * 4
-    }
-
-    fn bitmap_idx(compressed: &[u32]) -> usize {
-        let where_meta = compressed[1] as usize;
-        let bytesize_idx = 1 + where_meta;
-        let bytesize = compressed[bytesize_idx] as usize;
-        bytesize_idx + 1 + bytesize.div_ceil(4)
-    }
-
-    fn find_exception_block(bytes: &[u8], meta_start: usize) -> Option<(usize, usize, usize)> {
-        let mut pos = meta_start;
-        while pos + 1 < bytes.len() {
-            if bytes[pos + 1] > 0 {
-                return Some((pos, pos + 1, pos + 2));
-            }
-            pos += 2;
-        }
-        None
     }
 
     /// Compressed data containing at least one non-trivial exception group.
@@ -758,29 +709,10 @@ mod tests {
         assert_eq!(roundtrip::<128>(&input), input);
     }
 
-    // ── Error-path tests: truncated / corrupted compressed data ──────────────
+    // ── Error / edge tests not covered by `tests/decode_validation.rs` ─────
     //
-    // Each test: compress valid data → surgically corrupt one field →
-    // assert `Err` is returned rather than a panic.
-
-    #[test]
-    fn test_truncated_input_returns_error() {
-        let compressed = encode_block::<256>(&vec![42u32; 256]);
-        for truncated_len in [1, 2, compressed.len() / 2, compressed.len() - 1] {
-            assert!(
-                try_decode::<256>(&compressed[..truncated_len]).is_err(),
-                "expected error for truncated len {truncated_len}"
-            );
-        }
-    }
-
-    #[test]
-    fn test_corrupted_where_meta_returns_error() {
-        let mut compressed = encode_block::<256>(&vec![1u32; 256]);
-        // word [1] = where_meta; point it past the end
-        compressed[1] = u32::MAX;
-        assert!(try_decode::<256>(&compressed).is_err());
-    }
+    // `AnyLenCodec::decode` treats an empty slice as tail-only and succeeds; an empty
+    // `decode_blocks` input is still invalid. Headless decode is internal-only.
 
     #[test]
     fn uncompress_zero_input_length_err() {
@@ -806,21 +738,8 @@ mod tests {
     }
 
     #[test]
-    fn decode_where_meta_missing() {
-        // Only an out_length word, no where_meta follows → must error.
-        assert!(try_decode::<256>(&[256u32]).is_err());
-    }
-
-    #[test]
-    fn decode_where_meta_out_of_bounds() {
-        let (mut compressed, _) = compressed_with_exceptions();
-        compressed[1] = u32::MAX;
-        assert!(try_decode::<256>(&compressed).is_err());
-    }
-
-    #[test]
     fn decode_where_meta_overflow() {
-        // FIXME: this test should be modified to use public API
+        // `decode_headless_blocks` only: no `AnyLenCodec` entry point passes this layout.
         let (compressed, _) = compressed_with_exceptions();
         let mut padded = vec![0u32];
         padded.extend_from_slice(&compressed);
@@ -840,92 +759,6 @@ mod tests {
     }
 
     #[test]
-    fn decode_bytesize_out_of_bounds() {
-        let (mut compressed, _) = compressed_with_exceptions();
-        compressed[1] = compressed.len() as u32 - 1;
-        assert!(try_decode::<256>(&compressed).is_err());
-    }
-
-    #[test]
-    fn decode_bytesize_length_overflow() {
-        let (mut compressed, _) = compressed_with_exceptions();
-        let bytesize_idx = 1 + compressed[1] as usize;
-        compressed[bytesize_idx] = u32::MAX - 3;
-        assert!(try_decode::<256>(&compressed).is_err());
-    }
-
-    #[test]
-    fn decode_bitmap_out_of_bounds() {
-        let (mut compressed, _) = compressed_with_exceptions();
-        let bytesize_idx = 1 + compressed[1] as usize;
-        let remaining = (compressed.len() - bytesize_idx - 1) as u32;
-        compressed[bytesize_idx] = remaining * 4;
-        assert!(try_decode::<256>(&compressed).is_err());
-    }
-
-    #[test]
-    fn decode_exception_size_exceeds_page_size() {
-        let (mut compressed, _) = compressed_with_exceptions();
-        let size_idx = bitmap_idx(&compressed) + 1;
-        compressed[size_idx] = DEFAULT_PAGE_SIZE + 1;
-        assert!(try_decode::<256>(&compressed).is_err());
-    }
-
-    #[test]
-    fn decode_exception_partial_group_not_enough_data() {
-        let (compressed, _) = compressed_with_exceptions();
-        assert!(try_decode::<256>(&compressed[..compressed.len() - 2]).is_err());
-    }
-
-    #[test]
-    fn decode_block_b_too_large() {
-        let (mut compressed, _) = compressed_with_exceptions();
-        let start = meta_byte_start(&compressed);
-        cast_slice_mut::<_, u8>(&mut compressed)[start] = 33;
-        assert!(try_decode::<256>(&compressed).is_err());
-    }
-
-    #[test]
-    fn decode_packed_region_truncated() {
-        let (compressed, _) = compressed_with_exceptions();
-        let where_meta = compressed[1] as usize;
-        assert!(try_decode::<256>(&compressed[..where_meta]).is_err());
-    }
-
-    #[test]
-    fn decode_exception_maxbits_too_large() {
-        let (mut compressed, _) = compressed_with_exceptions();
-        let start = meta_byte_start(&compressed);
-        let bytes: &mut [u8] = cast_slice_mut(&mut compressed);
-        if let Some((_, _, mb_off)) = find_exception_block(bytes, start) {
-            bytes[mb_off] = 33;
-        }
-        assert!(try_decode::<256>(&compressed).is_err());
-    }
-
-    #[test]
-    fn decode_exception_index_underflow() {
-        let (mut compressed, _) = compressed_with_exceptions();
-        let start = meta_byte_start(&compressed);
-        let bytes: &mut [u8] = cast_slice_mut(&mut compressed);
-        if let Some((bb_off, _, mb_off)) = find_exception_block(bytes, start) {
-            bytes[mb_off] = bytes[bb_off].saturating_sub(1);
-        }
-        assert!(try_decode::<256>(&compressed).is_err());
-    }
-
-    #[test]
-    fn decode_exception_index_zero() {
-        let (mut compressed, _) = compressed_with_exceptions();
-        let start = meta_byte_start(&compressed);
-        let bytes: &mut [u8] = cast_slice_mut(&mut compressed);
-        if let Some((bb_off, _, mb_off)) = find_exception_block(bytes, start) {
-            bytes[mb_off] = bytes[bb_off];
-        }
-        assert!(try_decode::<256>(&compressed).is_err());
-    }
-
-    #[test]
     fn decode_index1_branch_valid() {
         let (compressed, data) = compressed_with_index1_exceptions();
         let mut out = Vec::new();
@@ -933,49 +766,6 @@ mod tests {
             .decode_blocks(&compressed, Some(256), &mut out)
             .expect("decompression of index-1 data must succeed");
         assert_eq!(out, data);
-    }
-
-    #[test]
-    fn decode_index1_pos_byte_missing() {
-        let (compressed, _) = compressed_with_index1_exceptions();
-        assert!(try_decode::<256>(&compressed[..compressed.len() - 1]).is_err());
-    }
-
-    #[test]
-    fn decode_index1_pos_out_of_block() {
-        let mut data = vec![1u32; 128];
-        data[0] = 3;
-        let mut buf = encode_block::<128>(&data);
-        let start = meta_byte_start(&buf);
-        let bytes: &mut [u8] = cast_slice_mut(&mut buf);
-        if let Some((bb_off, _, mb_off)) = find_exception_block(bytes, start) {
-            if bytes[mb_off].wrapping_sub(bytes[bb_off]) == 1 && mb_off + 1 < bytes.len() {
-                bytes[mb_off + 1] = 200; // position 200 >= block_size 128
-            }
-        }
-        assert!(try_decode::<128>(&buf).is_err());
-    }
-
-    #[test]
-    fn decode_exception_pos_byte_missing() {
-        let (compressed, _) = compressed_with_exceptions();
-        assert!(try_decode::<256>(&compressed[..compressed.len() - 1]).is_err());
-    }
-
-    #[test]
-    fn decode_exception_pos_out_of_block() {
-        let data: Vec<u32> = (0..128u32)
-            .map(|i| if i % 4 == 0 { 1u32 << 30 } else { 1 })
-            .collect();
-        let mut buf = encode_block::<128>(&data);
-        let start = meta_byte_start(&buf);
-        let bytes: &mut [u8] = cast_slice_mut(&mut buf);
-        if let Some((bb_off, _, mb_off)) = find_exception_block(bytes, start) {
-            if bytes[mb_off].wrapping_sub(bytes[bb_off]) > 1 && mb_off + 1 < bytes.len() {
-                bytes[mb_off + 1] = 200; // position 200 >= block_size 128
-            }
-        }
-        assert!(try_decode::<128>(&buf).is_err());
     }
 
     /// `decode_blocks` with `expected_len: None` and header=0 returns `Ok` with empty output.
@@ -988,30 +778,5 @@ mod tests {
             .decode_blocks(&input, None, &mut out)
             .unwrap();
         assert!(out.is_empty());
-    }
-
-    #[test]
-    fn decode_exception_unpopulated_data_to_be_packed() {
-        // Hand-crafted compressed stream: out_length=256, where_meta=9,
-        // 8 packed zero words (bits=1), bytesize=4,
-        // meta=[bits=1, cexcept=1, maxbits=3, pos=0], bitmap=0.
-        // The exception buffer is never filled, so decoding must error.
-        let compressed: Vec<u32> = [
-            256u32, // out_length
-            9,      // where_meta
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,                                // 8 packed words
-            4,                                // bytesize = 4 bytes
-            u32::from_le_bytes([1, 1, 3, 0]), // meta: bits=1, cexcept=1, maxbits=3, pos=0
-            0,                                // bitmap=0
-        ]
-        .into();
-        assert!(try_decode::<256>(&compressed).is_err());
     }
 }
