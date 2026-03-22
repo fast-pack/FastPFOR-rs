@@ -10,6 +10,7 @@
 #![allow(missing_docs)]
 
 use core::ops::Range;
+use std::marker::PhantomData;
 
 #[allow(unused_imports)]
 use fastpfor::{AnyLenCodec, BlockCodec, slice_to_blocks};
@@ -180,7 +181,7 @@ pub struct CompressFixture<C: BlockCodec> {
     pub compressed: Vec<u32>,
     /// Number of blocks in `data`.
     pub n_blocks: usize,
-    _codec: std::marker::PhantomData<C>,
+    _codec: PhantomData<C>,
 }
 
 impl<C: BlockCodec + Default> CompressFixture<C> {
@@ -194,7 +195,7 @@ impl<C: BlockCodec + Default> CompressFixture<C> {
             data,
             compressed,
             n_blocks: block_count,
-            _codec: std::marker::PhantomData,
+            _codec: PhantomData,
         }
     }
 }
@@ -228,7 +229,7 @@ pub struct BlockSizeFixture<C: BlockCodec> {
     pub data: Vec<u32>,
     pub compressed: Vec<u32>,
     pub n_blocks: usize,
-    _codec: std::marker::PhantomData<C>,
+    _codec: PhantomData<C>,
 }
 
 impl<C: BlockCodec + Default> BlockSizeFixture<C> {
@@ -240,7 +241,7 @@ impl<C: BlockCodec + Default> BlockSizeFixture<C> {
             data,
             compressed,
             n_blocks: block_count,
-            _codec: std::marker::PhantomData,
+            _codec: PhantomData,
         }
     }
 }

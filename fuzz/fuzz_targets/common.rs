@@ -11,15 +11,20 @@ pub struct HexSlice<'a>(pub &'a [u32]);
 impl std::fmt::Debug for HexSlice<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         const MAX: usize = 20;
+
         let total = self.0.len();
         let shown = total.min(MAX);
+
         let mut list = f.debug_list();
+
         for v in &self.0[..shown] {
             list.entry(&format_args!("{v:#010x}"));
         }
+
         if total > MAX {
             list.entry(&format_args!(".. out of {total} total"));
         }
+
         list.finish()
     }
 }
@@ -33,11 +38,7 @@ pub struct FuzzInput<C> {
 
 pub type AnyLen = Box<dyn AnyLenCodec>;
 
-// ── List entry type ───────────────────────────────────────────────────────────
-
 pub type CodecEntry = (&'static str, fn() -> AnyLen);
-
-// ── Two codec lists ──────────────────────────────────────────────────────────
 
 /// Generates `(name, || Box::new(T::default()))` entries from a list of types.
 macro_rules! codec_list {

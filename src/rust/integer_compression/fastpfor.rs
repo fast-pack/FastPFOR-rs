@@ -1,4 +1,5 @@
 use std::array;
+use std::cmp::min;
 use std::io::Cursor;
 
 use bytemuck::cast_slice;
@@ -123,8 +124,7 @@ impl<const N: usize> FastPFor<N> {
         let inlength = greatest_multiple(input_length, N as u32);
         let final_inpos = input_offset.position() as u32 + inlength;
         while input_offset.position() as u32 != final_inpos {
-            let this_size =
-                std::cmp::min(self.page_size, final_inpos - input_offset.position() as u32);
+            let this_size = min(self.page_size, final_inpos - input_offset.position() as u32);
             self.encode_page(input, this_size, input_offset, output, output_offset);
         }
     }
@@ -140,8 +140,7 @@ impl<const N: usize> FastPFor<N> {
         let mynvalue = greatest_multiple(inlength, N as u32);
         let final_out = output_offset.position() as u32 + mynvalue;
         while output_offset.position() as u32 != final_out {
-            let this_size =
-                std::cmp::min(self.page_size, final_out - output_offset.position() as u32);
+            let this_size = min(self.page_size, final_out - output_offset.position() as u32);
             self.decode_page(input, input_offset, output, output_offset, this_size)?;
         }
         Ok(())
@@ -264,7 +263,7 @@ impl<const N: usize> FastPFor<N> {
     /// Analyzes frequency distribution to balance regular value bits against exception overhead.
     fn best_bit_from_data(&mut self, input: &[u32], pos: u32) {
         self.freqs.fill(0);
-        let k_end = std::cmp::min(pos + N as u32, input.len() as u32);
+        let k_end = min(pos + N as u32, input.len() as u32);
         for k in pos..k_end {
             self.freqs[bits(input[k as usize])] += 1;
         }
