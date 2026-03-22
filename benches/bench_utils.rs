@@ -16,7 +16,7 @@ use std::num::NonZeroU32;
 #[cfg(feature = "cpp")]
 use fastpfor::AnyLenCodec as _;
 #[cfg(feature = "cpp")]
-use fastpfor::cpp;
+use fastpfor::cpp::CppFastPFor128;
 pub use fastpfor::rust::{BLOCK_SIZE_128, BLOCK_SIZE_256, DEFAULT_PAGE_SIZE, FastPFOR, Integer};
 use rand::rngs::StdRng;
 use rand::{RngExt as _, SeedableRng};
@@ -171,7 +171,7 @@ fn prepare_compressed_data(data: &[u32], block_size: NonZeroU32) -> Vec<u32> {
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "cpp")]
-pub fn cpp_encode(codec: &mut cpp::FastPFor128Codec, data: &[u32]) -> Vec<u32> {
+pub fn cpp_encode(codec: &mut CppFastPFor128, data: &[u32]) -> Vec<u32> {
     let mut out = Vec::new();
     codec.encode(data, &mut out).unwrap();
     out
@@ -179,7 +179,7 @@ pub fn cpp_encode(codec: &mut cpp::FastPFor128Codec, data: &[u32]) -> Vec<u32> {
 
 #[cfg(feature = "cpp")]
 pub fn cpp_decode(
-    codec: &mut cpp::FastPFor128Codec,
+    codec: &mut CppFastPFor128,
     compressed: &[u32],
     decompressed: &mut [u32],
 ) -> usize {
@@ -275,7 +275,7 @@ pub struct CppDecodeFixture {
 impl CppDecodeFixture {
     fn new(name: &'static str, generator: DataGeneratorFn, size: usize) -> Self {
         let data = generator(size);
-        let mut codec = cpp::FastPFor128Codec::new();
+        let mut codec = CppFastPFor128::new();
         let cpp_compressed = cpp_encode(&mut codec, &data);
         let rust_compressed = prepare_compressed_data(&data, BLOCK_SIZE_128);
         Self {

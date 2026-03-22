@@ -5,14 +5,15 @@
 use std::io::Cursor;
 
 use fastpfor::rust::Integer as _;
-use fastpfor::{AnyLenCodec as _, cpp, rust};
+use fastpfor::{AnyLenCodec as _, rust};
 
 mod common;
 use common::{get_test_cases, test_input_sizes};
+use fastpfor::cpp::CppFastPFor128;
 
 #[test]
 fn test_rust_decompresses_cpp_encoded_data() {
-    let mut codec_cpp = cpp::FastPFor128Codec::new();
+    let mut codec_cpp = CppFastPFor128::new();
     let mut codec_rs = rust::FastPFOR::new(rust::DEFAULT_PAGE_SIZE, rust::BLOCK_SIZE_128);
 
     for n in test_input_sizes() {
@@ -56,7 +57,7 @@ fn test_rust_decompresses_cpp_encoded_data() {
 
 #[test]
 fn test_rust_and_cpp_fastpfor32_compression_matches() {
-    let mut codec_cpp = cpp::FastPFor128Codec::new();
+    let mut codec_cpp = CppFastPFor128::new();
     let mut codec_rs = rust::FastPFOR::new(rust::DEFAULT_PAGE_SIZE, rust::BLOCK_SIZE_128);
 
     for n in test_input_sizes() {

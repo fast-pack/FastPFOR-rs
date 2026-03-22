@@ -1,4 +1,5 @@
-use fastpfor::{AnyLenCodec, cpp, rust};
+use fastpfor::cpp::*;
+use fastpfor::{AnyLenCodec, rust};
 
 pub type BoxedCppCodec = Box<dyn AnyLenCodec>;
 
@@ -78,42 +79,40 @@ pub enum CppCodec {
 impl From<CppCodec> for BoxedCppCodec {
     fn from(codec: CppCodec) -> Self {
         match codec {
-            CppCodec::BP32 => Box::new(cpp::BP32Codec::default()),
-            CppCodec::Copy => Box::new(cpp::CopyCodec::default()),
-            CppCodec::FastBinaryPacking8 => Box::new(cpp::FastBinaryPacking8Codec::default()),
-            CppCodec::FastPFor128 => Box::new(cpp::FastPFor128Codec::default()),
-            CppCodec::FastPFor256 => Box::new(cpp::FastPFor256Codec::default()),
-            CppCodec::FastBinaryPacking16 => Box::new(cpp::FastBinaryPacking16Codec::default()),
-            CppCodec::FastBinaryPacking32 => Box::new(cpp::FastBinaryPacking32Codec::default()),
-            CppCodec::MaskedVByte => Box::new(cpp::MaskedVByteCodec::default()),
-            CppCodec::NewPFor => Box::new(cpp::NewPForCodec::default()),
-            CppCodec::OptPFor => Box::new(cpp::OptPForCodec::default()),
-            CppCodec::PFor2008 => Box::new(cpp::PFor2008Codec::default()),
-            CppCodec::PFor => Box::new(cpp::PForCodec::default()),
-            CppCodec::SimdBinaryPacking => Box::new(cpp::SimdBinaryPackingCodec::default()),
-            CppCodec::SimdFastPFor128 => Box::new(cpp::SimdFastPFor128Codec::default()),
-            CppCodec::SimdFastPFor256 => Box::new(cpp::SimdFastPFor256Codec::default()),
-            CppCodec::SimdGroupSimple => Box::new(cpp::SimdGroupSimpleCodec::default()),
-            CppCodec::SimdGroupSimpleRingBuf => {
-                Box::new(cpp::SimdGroupSimpleRingBufCodec::default())
-            }
-            CppCodec::SimdNewPFor => Box::new(cpp::SimdNewPForCodec::default()),
-            CppCodec::SimdOptPFor => Box::new(cpp::SimdOptPForCodec::default()),
-            CppCodec::SimdPFor => Box::new(cpp::SimdPForCodec::default()),
-            CppCodec::SimdSimplePFor => Box::new(cpp::SimdSimplePForCodec::default()),
-            // CppCodec::Simple16 => Box::new(cpp::Simple16Codec::default()),
-            // CppCodec::Simple8b => Box::new(cpp::Simple8bCodec::default()),
-            // CppCodec::Simple8bRle => Box::new(cpp::Simple8bRleCodec::default()),
-            // CppCodec::Simple9 => Box::new(cpp::Simple9Codec::default()),
-            // CppCodec::Simple9Rle => Box::new(cpp::Simple9RleCodec::default()),
-            // CppCodec::SimplePFor => Box::new(cpp::SimplePForCodec::default()),
-            // CppCodec::Snappy => Box::new(cpp::SnappyCodec::default()),
-            CppCodec::StreamVByte => Box::new(cpp::StreamVByteCodec::default()),
-            CppCodec::VByte => Box::new(cpp::VByteCodec::default()),
-            CppCodec::VarInt => Box::new(cpp::VarIntCodec::default()),
-            // CppCodec::VarIntG8iu => Box::new(cpp::VarIntG8iuCodec::default()),
-            CppCodec::VarIntGb => Box::new(cpp::VarIntGbCodec::default()),
-            // CppCodec::VsEncoding => Box::new(cpp::VsEncodingCodec::default()),
+            CppCodec::BP32 => Box::new(CppBP32::default()),
+            CppCodec::Copy => Box::new(CppCopy::default()),
+            CppCodec::FastBinaryPacking8 => Box::new(CppFastBinaryPacking8::default()),
+            CppCodec::FastPFor128 => Box::new(CppFastPFor128::default()),
+            CppCodec::FastPFor256 => Box::new(CppFastPFor256::default()),
+            CppCodec::FastBinaryPacking16 => Box::new(CppFastBinaryPacking16::default()),
+            CppCodec::FastBinaryPacking32 => Box::new(CppFastBinaryPacking32::default()),
+            CppCodec::MaskedVByte => Box::new(CppMaskedVByte::default()),
+            CppCodec::NewPFor => Box::new(CppNewPFor::default()),
+            CppCodec::OptPFor => Box::new(CppOptPFor::default()),
+            CppCodec::PFor2008 => Box::new(CppPFor2008::default()),
+            CppCodec::PFor => Box::new(CppPFor::default()),
+            CppCodec::SimdBinaryPacking => Box::new(CppSimdBinaryPacking::default()),
+            CppCodec::SimdFastPFor128 => Box::new(CppSimdFastPFor128::default()),
+            CppCodec::SimdFastPFor256 => Box::new(CppSimdFastPFor256::default()),
+            CppCodec::SimdGroupSimple => Box::new(CppSimdGroupSimple::default()),
+            CppCodec::SimdGroupSimpleRingBuf => Box::new(CppSimdGroupSimpleRingBuf::default()),
+            CppCodec::SimdNewPFor => Box::new(CppSimdNewPFor::default()),
+            CppCodec::SimdOptPFor => Box::new(CppSimdOptPFor::default()),
+            CppCodec::SimdPFor => Box::new(CppSimdPFor::default()),
+            CppCodec::SimdSimplePFor => Box::new(CppSimdSimplePFor::default()),
+            // CppCodec::Simple16 => Box::new(CppSimple16::default()),
+            // CppCodec::Simple8b => Box::new(CppSimple8b::default()),
+            // CppCodec::Simple8bRle => Box::new(CppSimple8bRle::default()),
+            // CppCodec::Simple9 => Box::new(CppSimple9::default()),
+            // CppCodec::Simple9Rle => Box::new(CppSimple9Rle::default()),
+            // CppCodec::SimplePFor => Box::new(CppSimplePFor::default()),
+            // CppCodec::Snappy => Box::new(CppSnappy::default()),
+            CppCodec::StreamVByte => Box::new(CppStreamVByte::default()),
+            CppCodec::VByte => Box::new(CppVByte::default()),
+            CppCodec::VarInt => Box::new(CppVarInt::default()),
+            // CppCodec::VarIntG8iu => Box::new(CppVarIntG8iu::default()),
+            CppCodec::VarIntGb => Box::new(CppVarIntGb::default()),
+            // CppCodec::VsEncoding => Box::new(CppVsEncoding::default()),
         }
     }
 }
