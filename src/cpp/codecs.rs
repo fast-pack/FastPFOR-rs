@@ -180,64 +180,98 @@ implement_cpp_codecs_64! {
 
 #[cfg(test)]
 pub(crate) mod tests {
+    use crate::codec::{AnyLenCodec, BlockCodec64};
     use crate::cpp::codecs::{CppFastPFor128, CppFastPFor256, CppVByte, CppVarInt};
-    use crate::test_utils::{decompress, decompress64, roundtrip, roundtrip64};
+
+    pub fn roundtrip_32(codec: &mut impl AnyLenCodec, input: &[u32]) {
+        let mut compressed = Vec::new();
+        codec.encode(input, &mut compressed).unwrap();
+        let mut decoded = Vec::new();
+        codec.decode(&compressed, &mut decoded, None).unwrap();
+        assert_eq!(decoded, input);
+    }
 
     /// C++ `fastpfor256_codec` returns `CompositeCodec<FastPFor<8>, VariableByte>` — already
     /// any-length. Use it directly; do not wrap in Rust `CompositeCodec`.
     #[test]
     fn test_cpp_fastpfor256_composite_anylen() {
-        roundtrip::<CppFastPFor256>(&[1, 2, 3, 4, 5]);
+        let mut codec = CppFastPFor256::new();
+        roundtrip_32(&mut codec, &[1, 2, 3, 4, 5]);
         let data: Vec<u32> = (0..600).collect();
-        roundtrip::<CppFastPFor256>(&data);
+        roundtrip_32(&mut codec, &data);
     }
 
     #[test]
     fn test_fastpfor128_anylen() {
         let data: Vec<u32> = (0..128).collect();
-        roundtrip::<CppFastPFor128>(&data);
+        roundtrip_32(&mut CppFastPFor128::new(), &data);
     }
 
     #[test]
     fn test_fastpfor256_anylen() {
         let data: Vec<u32> = (0..256).collect();
-        roundtrip::<CppFastPFor256>(&data);
+        roundtrip_32(&mut CppFastPFor256::new(), &data);
     }
 
     #[test]
     fn test_fastpfor256_u64() {
         let input: Vec<u64> = (0..256).collect();
-        roundtrip64::<CppFastPFor256>(&input);
+        let mut codec = CppFastPFor256::new();
+        let mut compressed = Vec::new();
+        codec.encode64(&input, &mut compressed).unwrap();
+        let mut decoded = Vec::new();
+        codec.decode64(&compressed, &mut decoded).unwrap();
+        assert_eq!(decoded, input);
     }
 
     #[test]
     fn test_varint_u64() {
-        roundtrip64::<CppVarInt>(&[1u64, 2, 3, 4, 5]);
+        let input = vec![1u64, 2, 3, 4, 5];
+        let mut codec = CppVarInt::new();
+        let mut compressed = Vec::new();
+        codec.encode64(&input, &mut compressed).unwrap();
+        let mut decoded = Vec::new();
+        codec.decode64(&compressed, &mut decoded).unwrap();
+        assert_eq!(decoded, input);
     }
 
     #[test]
     fn test_decode32_empty_input() {
-        assert!(decompress::<CppVByte>(&[], None).unwrap().is_empty());
+        let mut codec = CppVByte::new();
+        let mut out = Vec::new();
+        codec.decode(&[], &mut out, None).unwrap();
+        assert!(out.is_empty());
     }
 
     #[test]
     fn test_decode32_cpp_empty_format() {
-        let result = decompress::<CppFastPFor128>(&[0u32], Some(0)).unwrap();
-        assert!(result.is_empty());
+        let mut codec = CppFastPFor128::new();
+        let mut out = Vec::new();
+        codec.decode(&[0u32], &mut out, Some(0)).unwrap();
+        assert!(out.is_empty());
     }
 
     #[test]
     fn test_decode64_empty_input() {
-        assert!(decompress64::<CppFastPFor256>(&[]).unwrap().is_empty());
+        let mut codec = CppFastPFor256::new();
+        let mut out: Vec<u64> = Vec::new();
+        codec.decode64(&[], &mut out).unwrap();
+        assert!(out.is_empty());
     }
 
     #[test]
     fn test_decode64_empty_format() {
-        assert!(decompress64::<CppVarInt>(&[]).unwrap().is_empty());
+        let mut codec = CppVarInt::new();
+        let mut out: Vec<u64> = Vec::new();
+        codec.decode64(&[], &mut out).unwrap();
+        assert!(out.is_empty());
     }
 
     #[test]
     fn test_decode_empty_input() {
-        assert!(decompress::<CppFastPFor128>(&[], None).unwrap().is_empty());
+        let mut codec = CppFastPFor128::new();
+        let mut out = Vec::new();
+        codec.decode(&[], &mut out, None).unwrap();
+        assert!(out.is_empty());
     }
 }
