@@ -23,21 +23,6 @@ pub fn encode32_to_vec_ffi(
     Ok(())
 }
 
-fn decode32_to_vec_ffi(
-    codec: &UniquePtr<ffi::IntegerCODEC>,
-    input: &[u32],
-    out: &mut Vec<u32>,
-    capacity: usize,
-) -> FastPForResult<()> {
-    if !input.is_empty() {
-        let start = out.len();
-        out.resize(start + capacity, 0);
-        let n = ffi::codec_decode32(codec, input, &mut out[start..])?;
-        out.truncate(start + n);
-    }
-    Ok(())
-}
-
 pub fn decode32_anylen_ffi(
     codec: &UniquePtr<ffi::IntegerCODEC>,
     input: &[u32],
@@ -53,7 +38,18 @@ pub fn decode32_anylen_ffi(
         max
     };
     let start = out.len();
-    decode32_to_vec_ffi(codec, input, out, capacity)?;
+    if !input.is_empty() {
+        // Simple16/Simple9/Simple8b unpack functions always write a fixed number of
+        // values (up to 28) per word regardless of how many values remain. When the
+        // last word is decoded the function can write up to 27 elements past `nvalue`.
+        // Allocate extra padding so those writes land in owned memory rather than
+        // corrupting adjacent heap allocations.  The excess elements are discarded by
+        // the truncate below.
+        const DECODE_OVERFLOW_PADDING: usize = 32;
+        out.resize(start + capacity + DECODE_OVERFLOW_PADDING, 0);
+        let n = ffi::codec_decode32(codec, input, &mut out[start..])?;
+        out.truncate(start + n);
+    }
     if let Some(n) = expected_len {
         (out.len() - start).is_decoded_mismatch(n)?;
     }
