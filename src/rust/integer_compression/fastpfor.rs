@@ -10,6 +10,16 @@ use crate::rust::cursor::IncrementCursor;
 use crate::rust::integer_compression::{bitpacking, bitunpacking};
 use crate::{BlockCodec, FastPForError, FastPForResult};
 
+mod sealed {
+    /// Sealed marker trait: only `[u32; 128]` and `[u32; 256]` are valid `FastPFor` block arrays.
+    ///
+    /// This is intentionally private so that users cannot implement it for other sizes,
+    /// preventing instantiation of `FastPFor<N>` for unsupported `N` at compile time.
+    pub trait BlockSize: bytemuck::Pod {}
+    impl BlockSize for [u32; 128] {}
+    impl BlockSize for [u32; 256] {}
+}
+
 /// Overhead cost (in bits) for storing each exception's position in the block
 const OVERHEAD_OF_EACH_EXCEPT: u32 = 8;
 
@@ -63,36 +73,20 @@ pub struct FastPFor<const N: usize> {
 
 impl<const N: usize> Default for FastPFor<N>
 where
-    [u32; N]: bytemuck::Pod,
+    [u32; N]: sealed::BlockSize,
 {
     fn default() -> Self {
-        Self::create(DEFAULT_PAGE_SIZE)
+        Self::new(DEFAULT_PAGE_SIZE)
             .expect("DEFAULT_PAGE_SIZE is a multiple of all valid block sizes")
     }
 }
 
-impl FastPFor<128> {
-    /// Creates a new `FastPForBlock128` codec with the given page size.
+impl<const N: usize> FastPFor<N> {
+    /// Creates a new `FastPForBlock` with a codec with the given page size.
     ///
     /// Returns an error if `page_size` is not a multiple of 128.
     /// Use [`Default`] for the default page size.
     pub fn new(page_size: u32) -> FastPForResult<Self> {
-        Self::create(page_size)
-    }
-}
-
-impl FastPFor<256> {
-    /// Creates a new `FastPForBlock256` codec with the given page size.
-    ///
-    /// Returns an error if `page_size` is not a multiple of 256.
-    /// Use [`Default`] for the default page size.
-    pub fn new(page_size: u32) -> FastPForResult<Self> {
-        Self::create(page_size)
-    }
-}
-
-impl<const N: usize> FastPFor<N> {
-    fn create(page_size: u32) -> FastPForResult<Self> {
         if page_size % N as u32 != 0 {
             return Err(FastPForError::InvalidPageSize {
                 page_size,
@@ -499,7 +493,7 @@ impl<const N: usize> FastPFor<N> {
 
 impl<const N: usize> BlockCodec for FastPFor<N>
 where
-    [u32; N]: bytemuck::Pod,
+    [u32; N]: sealed::BlockSize,
 {
     type Block = [u32; N];
 

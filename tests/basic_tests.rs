@@ -5,12 +5,10 @@
 #[path = "../src/test_utils.rs"]
 mod test_utils;
 
-use bytemuck::cast_slice;
-use fastpfor::{BlockCodec, FastPForBlock128, FastPForBlock256, slice_to_blocks};
 use rand::rngs::StdRng;
 use rand::{RngExt as _, SeedableRng};
 
-use crate::test_utils::{RNG_SEED, block_compress, block_roundtrip_all, roundtrip_all};
+use crate::test_utils::{RNG_SEED, block_roundtrip_all, roundtrip_all};
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
