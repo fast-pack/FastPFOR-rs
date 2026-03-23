@@ -19,6 +19,11 @@ pub fn encode32_to_vec_ffi(
     let start = out.len();
     out.resize(start + capacity, 0);
     let n = ffi::codec_encode32(codec, input, &mut out[start..])?;
+    // SAFETY: It is better to panic than to have UB
+    assert!(
+        n <= capacity,
+        "C++ codec encoded more than the allocated capacity"
+    );
     out.truncate(start + n);
     Ok(())
 }
@@ -48,6 +53,11 @@ pub fn decode32_anylen_ffi(
         const DECODE_OVERFLOW_PADDING: usize = 32;
         out.resize(start + capacity + DECODE_OVERFLOW_PADDING, 0);
         let n = ffi::codec_decode32(codec, input, &mut out[start..])?;
+        // SAFETY: It is better to panic than to have UB
+        assert!(
+            n < capacity + DECODE_OVERFLOW_PADDING,
+            "C++ codec decoded more than the allocated capacity + padding"
+        );
         out.truncate(start + n);
     }
     if let Some(n) = expected_len {

@@ -108,9 +108,9 @@ impl<Blocks: BlockCodec, Tail: AnyLenCodec> AnyLenCodec for CompositeCodec<Block
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::FastPFor256;
     use crate::rust::{FastPForBlock128, FastPForBlock256, JustCopy, VariableByte};
     use crate::test_utils::{compress, decompress, roundtrip_composite, roundtrip_expected};
+    use crate::{FastPFor128, FastPFor256};
 
     #[test]
     fn test_fastpfor256_vbyte_exact_two_blocks() {
@@ -145,6 +145,42 @@ mod tests {
     fn test_decode_empty_input_with_expected_zero() {
         // Empty input with expected_len=0 must succeed.
         assert!(decompress::<FastPFor256>(&[], Some(0)).unwrap().is_empty());
+    }
+
+    /// Encoding empty input produces a single `[0]` header word — and Rust matches C++ exactly.
+    #[test]
+    fn test_empty_input_encodes_to_one_zero_word() {
+        let rust128 = compress::<FastPFor128>(&[]).unwrap();
+        assert_eq!(
+            rust128,
+            [0u32],
+            "FastPFor128: empty input must produce [0], got {rust128:?}"
+        );
+
+        let rust256 = compress::<FastPFor256>(&[]).unwrap();
+        assert_eq!(
+            rust256,
+            [0u32],
+            "FastPFor256: empty input must produce [0], got {rust256:?}"
+        );
+
+        // Verify C++ produces identical output — both codecs agree on [0] for empty.
+        #[cfg(feature = "cpp")]
+        {
+            use crate::cpp::{CppFastPFor128, CppFastPFor256};
+
+            let cpp128 = compress::<CppFastPFor128>(&[]).unwrap();
+            assert_eq!(
+                cpp128, rust128,
+                "CppFastPFor128 and FastPFor128 must agree on empty encoding"
+            );
+
+            let cpp256 = compress::<CppFastPFor256>(&[]).unwrap();
+            assert_eq!(
+                cpp256, rust256,
+                "CppFastPFor256 and FastPFor256 must agree on empty encoding"
+            );
+        }
     }
 
     #[test]
