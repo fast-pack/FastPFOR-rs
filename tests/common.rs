@@ -3,8 +3,12 @@
 #![cfg(any(feature = "rust", feature = "cpp"))]
 #![allow(dead_code, reason = "This file is shared by several test modules")]
 
+#[path = "../src/test_utils.rs"]
+mod test_utils;
+
 use rand::rngs::StdRng;
 use rand::{RngExt as _, SeedableRng as _};
+use test_utils::RNG_SEED;
 
 /// Returns various input sizes to test codec behavior (multiples of 128).
 #[must_use]
@@ -15,7 +19,7 @@ pub fn test_input_sizes() -> Vec<usize> {
 /// Generates test data vectors of size `n` with various patterns.
 #[must_use]
 pub fn get_test_cases(n: usize) -> Vec<Vec<u32>> {
-    let mut rng = StdRng::seed_from_u64(14);
+    let mut rng = StdRng::seed_from_u64(RNG_SEED);
 
     vec![
         // Zeroes

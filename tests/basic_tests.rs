@@ -10,7 +10,7 @@ use fastpfor::{BlockCodec, FastPForBlock128, FastPForBlock256, slice_to_blocks};
 use rand::rngs::StdRng;
 use rand::{RngExt as _, SeedableRng};
 
-use crate::test_utils::{block_compress, block_roundtrip_all, roundtrip_all};
+use crate::test_utils::{RNG_SEED, block_compress, block_roundtrip_all, roundtrip_all};
 
 mod common;
 
@@ -51,9 +51,8 @@ fn test_increasing_sequence() {
 
 #[test]
 fn test_random_numbers() {
-    let data: Vec<u32> = (0..65536)
-        .map(|_| StdRng::seed_from_u64(123456).random())
-        .collect();
+    let mut rng = StdRng::seed_from_u64(RNG_SEED);
+    let data: Vec<u32> = (0..65536).map(|_| rng.random()).collect();
     roundtrip_all(&data);
 }
 

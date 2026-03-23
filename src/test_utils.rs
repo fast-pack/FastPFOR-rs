@@ -25,7 +25,7 @@ use fastpfor::{
     FastPFor128, FastPFor256, FastPForBlock128, FastPForBlock256, JustCopy, VariableByte,
 };
 
-const SEED: u64 = 456;
+pub const RNG_SEED: u64 = 456;
 
 // ---------------------------------------------------------------------------
 // Generic codec helpers
@@ -165,12 +165,12 @@ mod rust_bench {
     use rand::rngs::StdRng;
     use rand::{RngExt as _, SeedableRng};
 
-    use super::{BlockCodec, block_compress};
+    use super::{BlockCodec, RNG_SEED, block_compress};
 
     type DataGeneratorFn = fn(usize) -> Vec<u32>;
 
     fn generate_uniform_data_from_range(size: usize, value_range: Range<u32>) -> Vec<u32> {
-        let mut rng = StdRng::seed_from_u64(super::SEED);
+        let mut rng = StdRng::seed_from_u64(RNG_SEED);
         (0..size)
             .map(|_| rng.random_range(value_range.clone()))
             .collect()
@@ -185,7 +185,7 @@ mod rust_bench {
     }
 
     fn generate_clustered_data(size: usize) -> Vec<u32> {
-        let mut rng = StdRng::seed_from_u64(super::SEED);
+        let mut rng = StdRng::seed_from_u64(RNG_SEED);
         let mut base = 0u32;
         (0..size)
             .map(|_| {
@@ -202,7 +202,7 @@ mod rust_bench {
     }
 
     fn generate_sparse_data(size: usize) -> Vec<u32> {
-        let mut rng = StdRng::seed_from_u64(super::SEED);
+        let mut rng = StdRng::seed_from_u64(RNG_SEED);
         (0..size)
             .map(|_| {
                 if rng.random_bool(0.9) {
@@ -215,7 +215,7 @@ mod rust_bench {
     }
 
     fn generate_constant_data(size: usize) -> Vec<u32> {
-        vec![super::SEED as u32; size]
+        vec![RNG_SEED as u32; size]
     }
 
     fn generate_geometric_data(size: usize) -> Vec<u32> {
