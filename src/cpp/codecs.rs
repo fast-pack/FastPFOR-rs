@@ -51,6 +51,28 @@ macro_rules! implement_cpp_codecs {
                 }
             }
         )*
+
+        #[cfg(test)]
+        mod cpp_default {
+            $(
+                #[test]
+                #[allow(non_snake_case)]
+                fn $name() {
+                    let _codec = $crate::cpp::$name::default();
+                }
+            )*
+        }
+
+        #[cfg(test)]
+        mod cpp_roundtrip {
+            $(
+                #[test]
+                #[allow(non_snake_case)]
+                fn $name() {
+                    $crate::test_utils::roundtrip::<$crate::cpp::$name>(&[1u32, 2, 3, 4, 5]);
+                }
+            )*
+        }
     };
 }
 
