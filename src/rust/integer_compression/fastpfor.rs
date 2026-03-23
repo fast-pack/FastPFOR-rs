@@ -589,30 +589,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::block_roundtrip;
 
     // ── Generic helpers ───────────────────────────────────────────────────────
-
-    /// Encode `data` with `FastPFor<N>`, decode it back, and return the result.
-    fn roundtrip<const N: usize>(data: &[u32]) -> Vec<u32>
-    where
-        FastPFor<N>: BlockCodec<Block = [u32; N]>,
-        [u32; N]: bytemuck::Pod,
-    {
-        let blocks: &[[u32; N]] = cast_slice(data);
-        let mut compressed = Vec::new();
-        FastPFor::<N>::default()
-            .encode_blocks(blocks, &mut compressed)
-            .unwrap();
-        let mut decoded = Vec::new();
-        FastPFor::<N>::default()
-            .decode_blocks(
-                &compressed,
-                Some((blocks.len() * N).try_into().unwrap()),
-                &mut decoded,
-            )
-            .unwrap();
-        decoded
-    }
 
     /// Encode `data` as a single batch of `[u32; N]` blocks and return the compressed words.
     fn encode_block<const N: usize>(data: &[u32]) -> Vec<u32>
@@ -649,14 +628,14 @@ mod tests {
     fn fastpfor_test() {
         let mut data = vec![0u32; 256];
         data[126] = u32::MAX;
-        assert_eq!(roundtrip::<256>(&data), data);
+        block_roundtrip::<FastPForBlock256>(&data);
     }
 
     #[test]
     fn fastpfor_test_128() {
         let mut data = vec![0u32; 128];
         data[126] = u32::MAX;
-        assert_eq!(roundtrip::<128>(&data), data);
+        block_roundtrip::<FastPForBlock128>(&data);
     }
 
     #[test]
@@ -677,31 +656,31 @@ mod tests {
     // Tests ported from C++
     #[test]
     fn test_constant_sequence() {
-        assert_eq!(roundtrip::<128>(&vec![42u32; 65536]), vec![42u32; 65536]);
+        block_roundtrip::<FastPForBlock128>(&vec![42u32; 65536]);
     }
 
     #[test]
     fn test_alternating_sequence() {
         let data: Vec<_> = (0..65536u32).map(|i| u32::from(i % 2 != 0)).collect();
-        assert_eq!(roundtrip::<128>(&data), data);
+        block_roundtrip::<FastPForBlock128>(&data);
     }
 
     #[test]
     fn test_large_numbers() {
         let data: Vec<u32> = (0..65536u32).map(|i| i + (1u32 << 30)).collect();
-        assert_eq!(roundtrip::<128>(&data), data);
+        block_roundtrip::<FastPForBlock128>(&data);
     }
 
     #[test]
     fn cursor_api_roundtrip() {
-        assert_eq!(roundtrip::<256>(&vec![42u32; 256]), vec![42u32; 256]);
+        block_roundtrip::<FastPForBlock256>(&vec![42u32; 256]);
     }
 
     #[test]
     fn headless_compress_unfit_pagesize() {
         // 640 values with 128-block codec spans two pages (512 + 128), exercising the loop.
         let input: Vec<u32> = (0..640u32).collect();
-        assert_eq!(roundtrip::<128>(&input), input);
+        block_roundtrip::<FastPForBlock128>(&input);
     }
 
     #[test]
@@ -710,7 +689,7 @@ mod tests {
         let input: Vec<u32> = (0..1024u32)
             .map(|i| if i % 2 == 0 { 1 << 30 } else { 3 })
             .collect();
-        assert_eq!(roundtrip::<128>(&input), input);
+        block_roundtrip::<FastPForBlock128>(&input);
     }
 
     // ── Error / edge tests not covered by `tests/decode_validation.rs` ─────
