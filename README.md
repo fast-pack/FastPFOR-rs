@@ -75,12 +75,12 @@ Create one instance per thread or synchronize access externally.
 
 ## Crate Features
 
-| Feature | Default | Description |
-|---------|---------|-------------|
-| `rust` | **yes** | Pure-Rust implementation — no `unsafe`, no build dependencies |
-| `cpp` | no | C++ wrapper via CXX — requires a C++14 compiler with SIMD support |
-| `cpp_portable` | no | Enables `cpp`, compiles C++ with SSE4.2 baseline (runs on any x86-64 from ~2008+) |
-| `cpp_native` | no | Enables `cpp`, compiles C++ with `-march=native` for maximum throughput on the build machine |
+| Feature        | Default | Description                                                                                  |
+|----------------|---------|----------------------------------------------------------------------------------------------|
+| `rust`         | **yes** | Pure-Rust implementation — no `unsafe`, no build dependencies                                |
+| `cpp`          | no      | C++ wrapper via CXX — requires a C++14 compiler with SIMD support                            |
+| `cpp_portable` | no      | Enables `cpp`, compiles C++ with SSE4.2 baseline (runs on any x86-64 from ~2008+)            |
+| `cpp_native`   | no      | Enables `cpp`, compiles C++ with `-march=native` for maximum throughput on the build machine |
 
 The `FASTPFOR_SIMD_MODE` environment variable (`portable` or `native`) can override the SIMD mode at build time.
 
@@ -92,14 +92,14 @@ The `FASTPFOR_SIMD_MODE` environment variable (`portable` or `native`) can overr
 
 Rust block codecs require block-aligned input. `CompositeCodec` chains a block codec with a tail codec (e.g. `VariableByte`) to handle arbitrary-length input. `FastPFor256` and `FastPFor128` are type aliases for such composites.
 
-| Codec                      | Description                                                                               |
-|----------------------------|-------------------------------------------------------------------------------------------|
-| `FastPFor256`              | `CompositeCodec` of `FastPForBlock256` + `VariableByte`. **Recommended for general use.** |
-| `FastPFor128`              | `CompositeCodec` of `FastPForBlock128` + `VariableByte`                                   |
-| `VariableByte`             | Variable-byte encoding only; good for small integers                                      |
-| `JustCopy`                 | No compression; useful as a baseline                                                      |
-| `FastPForBlock256` (block) | `FastPFor` with 256-element blocks; block-aligned input only                              |
-| `FastPForBlock128` (block) | `FastPFor` with 128-element blocks; block-aligned input only                              |
+| Codec              | Description                                                  |
+|--------------------|--------------------------------------------------------------|
+| `FastPFor256`      | `CompositeCodec` of `FastPForBlock256` + `VariableByte`      |
+| `FastPFor128`      | `CompositeCodec` of `FastPForBlock128` + `VariableByte`      |
+| `VariableByte`     | Variable-byte encoding, MSB is opposite to protobuf's varint |
+| `JustCopy`         | No compression; useful as a baseline                         |
+| `FastPForBlock256` | `FastPFor` with 256-element blocks; block-aligned input only |
+| `FastPForBlock128` | `FastPFor` with 128-element blocks; block-aligned input only |
 
 ### C++ (`cpp` feature)
 
@@ -108,8 +108,8 @@ All C++ codecs are composite (any-length) and implement `AnyLenCodec` only.
 
 | Codec                       | Notes                                                                  |
 |-----------------------------|------------------------------------------------------------------------|
-| `CppFastPFor128`            | `FastPFor + VByte` composite, 128-element blocks. Also supports `u64`.  |
-| `CppFastPFor256`            | `FastPFor + VByte` composite, 256-element blocks. Also supports `u64`.  |
+| `CppFastPFor128`            | `FastPFor + VByte` composite, 128-element blocks. Also supports `u64`. |
+| `CppFastPFor256`            | `FastPFor + VByte` composite, 256-element blocks. Also supports `u64`. |
 | `CppSimdFastPFor128`        | SIMD-optimized 128-element variant                                     |
 | `CppSimdFastPFor256`        | SIMD-optimized 256-element variant                                     |
 | `CppBP32`                   | Binary packing, 32-bit blocks                                          |
