@@ -1,23 +1,102 @@
 //! Shared data generators, codec helpers, and pre-computed fixtures used by
-//! both the Criterion benchmark (`fastpfor_benchmark.rs`) and the smoke-test
-//! suite (`tests/benchmark_smoke.rs`).
+//! the Criterion benchmark (`fastpfor_benchmark.rs`), smoke tests
+//! (`tests/benchmark_smoke.rs`), and targeted integration tests
+//! (`tests/encode_paths.rs`).
 //!
-//! Loaded as a module via `#[path]` in both consumers, so every item consumed
-//! from outside must be `pub`.
+//! Loaded as a module via `#[path]`, so every item consumed from outside must
+//! be `pub`. Each consumer uses a different subset, so dead-code is allowed
+//! at module scope.
 
 // This is an internal dev-only module; doc-comments on every field would add
 // noise without benefit.
-#![allow(missing_docs)]
+#![allow(dead_code, missing_docs)]
 
 use core::ops::Range;
 use std::marker::PhantomData;
 
 #[allow(unused_imports)]
 use fastpfor::{AnyLenCodec, BlockCodec, slice_to_blocks};
+use fastpfor::{
+    FastPFor128, FastPFor256, FastPForBlock128, FastPForBlock256, JustCopy, VariableByte,
+};
 use rand::rngs::StdRng;
 use rand::{RngExt as _, SeedableRng};
 
 const SEED: u64 = 456;
+
+// ---------------------------------------------------------------------------
+// Generic codec helpers
+// ---------------------------------------------------------------------------
+
+pub fn roundtrip<C: AnyLenCodec>(data: &[u32]) {
+    let compressed = compress::<C>(data);
+    let decompressed = decompress::<C>(&compressed, Some(data.len() as u32));
+    assert_eq!(decompressed, data);
+}
+
+pub fn compress<C: AnyLenCodec>(data: &[u32]) -> Vec<u32> {
+    let mut codec = C::default();
+    let mut compressed = Vec::new();
+    codec.encode(data, &mut compressed).unwrap();
+    compressed
+}
+
+pub fn decompress<C: AnyLenCodec>(compressed: &Vec<u32>, expected_len: Option<u32>) -> Vec<u32> {
+    let mut codec = C::default();
+    let mut decompressed = Vec::new();
+    codec
+        .decode(&compressed, &mut decompressed, expected_len)
+        .unwrap();
+    decompressed
+}
+
+pub fn block_roundtrip<C: BlockCodec>(data: &[u32]) {
+    let compressed = block_compress::<C>(data);
+    let decompressed = block_decompress::<C>(&compressed, Some(data.len() as u32));
+    assert_eq!(decompressed, data);
+}
+
+pub fn block_compress<C: BlockCodec>(data: &[u32]) -> Vec<u32> {
+    let mut codec = C::default();
+    let (blocks, remainder) = slice_to_blocks::<C>(data);
+    assert_eq!(
+        remainder.len(),
+        0,
+        "data length must be a multiple of block size"
+    );
+    let mut out = Vec::new();
+    codec.encode_blocks(blocks, &mut out).unwrap();
+    out
+}
+
+pub fn block_decompress<C: BlockCodec>(compressed: &[u32], expected_len: Option<u32>) -> Vec<u32> {
+    let mut codec = C::default();
+    let mut out = Vec::new();
+    codec
+        .decode_blocks(compressed, expected_len, &mut out)
+        .unwrap();
+    out
+}
+
+/// Interpret `data` as little-endian `u32` words (length must be a multiple of 4) and
+/// run [`roundtrip`] for every any-length codec covered here.
+pub fn roundtrip_all(data: &[u32]) {
+    roundtrip::<VariableByte>(data);
+    roundtrip::<JustCopy>(data);
+    roundtrip::<FastPFor256>(data);
+    roundtrip::<FastPFor128>(data);
+
+    #[cfg(feature = "cpp")]
+    {
+        use fastpfor::cpp::*;
+        roundtrip::<CppFastPFor128>(data);
+    }
+}
+
+pub fn block_roundtrip_all(data: &[u32]) {
+    block_roundtrip::<FastPForBlock256>(data);
+    block_roundtrip::<FastPForBlock128>(data);
+}
 
 // ---------------------------------------------------------------------------
 // Data generators (private — only used to build fixtures)
@@ -111,61 +190,6 @@ const ALL_PATTERNS: &[(&str, DataGeneratorFn)] = &[
 ];
 
 // ---------------------------------------------------------------------------
-// Generic codec helpers
-// ---------------------------------------------------------------------------
-
-/// Compress `data` with codec `C`, appending to `out` (which is cleared first).
-///
-/// Only the block-aligned prefix of `data` is compressed; any sub-block
-/// remainder is silently dropped, matching what the benchmarks measure.
-pub fn compress<C: BlockCodec + Default>(data: &[u32], out: &mut Vec<u32>) {
-    let mut codec = C::default();
-    let (blocks, _remainder) = slice_to_blocks::<C>(data);
-    out.clear();
-    codec.encode_blocks(blocks, out).unwrap();
-}
-
-/// Decompress `n_blocks` blocks of codec `C` from `compressed` into `out`
-/// (cleared first), returning the number of elements written.
-#[allow(dead_code)] // used by smoke tests; benches use codec directly
-pub fn decompress<C: BlockCodec + Default>(
-    compressed: &[u32],
-    n_blocks: usize,
-    out: &mut Vec<u32>,
-) -> usize {
-    let mut codec = C::default();
-    out.clear();
-    let expected_values = n_blocks * C::size();
-    codec
-        .decode_blocks(
-            compressed,
-            Some(u32::try_from(expected_values).expect("expected_values fits in u32")),
-            out,
-        )
-        .unwrap();
-    out.len()
-}
-
-/// Decompress with any-length codec `C`, using `expected_len` for validation/pre-allocation.
-#[allow(dead_code)] // used by smoke_cpp_vs_rust
-pub fn decompress_anylen<C: AnyLenCodec + Default>(
-    compressed: &[u32],
-    expected_len: usize,
-    out: &mut Vec<u32>,
-) -> usize {
-    let mut codec = C::default();
-    out.clear();
-    codec
-        .decode(
-            compressed,
-            out,
-            Some(u32::try_from(expected_len).expect("expected_len fits in u32")),
-        )
-        .unwrap();
-    out.len()
-}
-
-// ---------------------------------------------------------------------------
 // Pre-computed fixtures
 // ---------------------------------------------------------------------------
 
@@ -176,7 +200,7 @@ pub fn decompress_anylen<C: AnyLenCodec + Default>(
 pub struct CompressFixture<C: BlockCodec> {
     pub name: &'static str,
     /// Block-aligned uncompressed data (exactly `n_blocks * C::elements_per_block()` elements).
-    pub data: Vec<u32>,
+    pub original: Vec<u32>,
     /// Pre-compressed form, ready for decompression benchmarks.
     pub compressed: Vec<u32>,
     /// Number of blocks in `data`.
@@ -184,16 +208,36 @@ pub struct CompressFixture<C: BlockCodec> {
     _codec: PhantomData<C>,
 }
 
-impl<C: BlockCodec + Default> CompressFixture<C> {
+/// One row for the block-size comparison benchmark.
+///
+/// Parameterised by `C: BlockCodec` — create one per codec to compare.
+/// FIXME: deduplicate these two structs if possible
+pub struct BlockSizeFixture<C: BlockCodec> {
+    pub compressed: Vec<u32>,
+    pub original: Vec<u32>,
+    pub n_blocks: usize,
+    _codec: PhantomData<C>,
+}
+
+impl<C: BlockCodec> CompressFixture<C> {
     fn new(name: &'static str, generator: DataGeneratorFn, block_count: usize) -> Self {
-        let data = generator(block_count * C::size());
-        // Data is already exactly block_count * blen elements; no trimming needed.
-        let mut compressed = Vec::new();
-        compress::<C>(&data, &mut compressed);
+        let original = generator(block_count * C::size());
         Self {
             name,
-            data,
-            compressed,
+            compressed: block_compress::<C>(&original),
+            original,
+            n_blocks: block_count,
+            _codec: PhantomData,
+        }
+    }
+}
+
+impl<C: BlockCodec> BlockSizeFixture<C> {
+    pub fn new(block_count: usize) -> Self {
+        let original = generate_uniform_data_small_value_distribution(block_count * C::size());
+        Self {
+            compressed: block_compress::<C>(&original),
+            original,
             n_blocks: block_count,
             _codec: PhantomData,
         }
@@ -201,7 +245,7 @@ impl<C: BlockCodec + Default> CompressFixture<C> {
 }
 
 /// Build fixtures for every `COMPRESS_PATTERNS × block_counts` combination.
-pub fn compress_fixtures<C: BlockCodec + Default>(
+pub fn compress_fixtures<C: BlockCodec>(
     block_counts: &[usize],
 ) -> Vec<(usize, CompressFixture<C>)> {
     block_counts
@@ -215,33 +259,9 @@ pub fn compress_fixtures<C: BlockCodec + Default>(
 }
 
 /// Build fixtures for every `ALL_PATTERNS` at a single block count.
-pub fn ratio_fixtures<C: BlockCodec + Default>(block_count: usize) -> Vec<CompressFixture<C>> {
+pub fn ratio_fixtures<C: BlockCodec>(block_count: usize) -> Vec<CompressFixture<C>> {
     ALL_PATTERNS
         .iter()
         .map(|&(name, generator)| CompressFixture::<C>::new(name, generator, block_count))
         .collect()
-}
-
-/// One row for the block-size comparison benchmark.
-///
-/// Parameterised by `C: BlockCodec` — create one per codec to compare.
-pub struct BlockSizeFixture<C: BlockCodec> {
-    pub data: Vec<u32>,
-    pub compressed: Vec<u32>,
-    pub n_blocks: usize,
-    _codec: PhantomData<C>,
-}
-
-impl<C: BlockCodec + Default> BlockSizeFixture<C> {
-    pub fn new(block_count: usize) -> Self {
-        let data = generate_uniform_data_small_value_distribution(block_count * C::size());
-        let mut compressed = Vec::new();
-        compress::<C>(&data, &mut compressed);
-        Self {
-            data,
-            compressed,
-            n_blocks: block_count,
-            _codec: PhantomData,
-        }
-    }
 }

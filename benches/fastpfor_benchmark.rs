@@ -23,9 +23,9 @@ const BLOCK_COUNTS: &[usize] = &[8, 32];
 fn benchmark_compression(c: &mut Criterion) {
     let mut group = c.benchmark_group("compression");
     for (bc, fix) in compress_fixtures::<FastPForBlock128>(BLOCK_COUNTS) {
-        let n_elem = fix.data.len();
+        let n_elem = fix.original.len();
         group.throughput(Throughput::Elements(n_elem as u64));
-        group.bench_with_input(BenchmarkId::new(fix.name, bc), &fix.data, |b, data| {
+        group.bench_with_input(BenchmarkId::new(fix.name, bc), &fix.original, |b, data| {
             let mut codec = FastPForBlock128::default();
             let (blocks, _) = slice_to_blocks::<FastPForBlock128>(data);
             let mut out = Vec::new();
@@ -42,7 +42,7 @@ fn benchmark_compression(c: &mut Criterion) {
 fn benchmark_decompression(c: &mut Criterion) {
     let mut group = c.benchmark_group("decompression");
     for (bc, fix) in compress_fixtures::<FastPForBlock128>(BLOCK_COUNTS) {
-        let n_elem = fix.data.len();
+        let n_elem = fix.original.len();
         group.throughput(Throughput::Elements(n_elem as u64));
         group.bench_with_input(BenchmarkId::new(fix.name, bc), &fix, |b, fix| {
             let mut codec = FastPForBlock128::default();
@@ -113,14 +113,14 @@ fn benchmark_block_sizes(c: &mut Criterion) {
     for (label, data, compressed, n_blocks, is_256) in [
         (
             "128",
-            &fix128.data,
+            &fix128.original,
             &fix128.compressed,
             fix128.n_blocks,
             false,
         ),
         (
             "256",
-            &fix256.data,
+            &fix256.original,
             &fix256.compressed,
             fix256.n_blocks,
             true,
@@ -185,7 +185,7 @@ fn benchmark_compression_ratio(c: &mut Criterion) {
     for fix in ratio_fixtures::<FastPForBlock128>(bc) {
         group.bench_function(fix.name, |b| {
             let mut codec = FastPForBlock128::default();
-            let (blocks, _) = slice_to_blocks::<FastPForBlock128>(&fix.data);
+            let (blocks, _) = slice_to_blocks::<FastPForBlock128>(&fix.original);
             let mut out = Vec::new();
             b.iter(|| {
                 out.clear();
@@ -194,7 +194,7 @@ fn benchmark_compression_ratio(c: &mut Criterion) {
                     clippy::cast_precision_loss,
                     reason = "Loss of precision is acceptable for compression ratio calculation"
                 )]
-                black_box(fix.data.len() as f64 / out.len() as f64)
+                black_box(fix.original.len() as f64 / out.len() as f64)
             });
         });
     }
@@ -207,11 +207,11 @@ fn benchmark_compression_ratio(c: &mut Criterion) {
 fn benchmark_cpp_vs_rust(c: &mut Criterion) {
     let mut group = c.benchmark_group("cpp_vs_rust/encode");
     for (bc, fix) in compress_fixtures::<FastPForBlock128>(BLOCK_COUNTS) {
-        let n_elem = fix.data.len();
+        let n_elem = fix.original.len();
         group.throughput(Throughput::Elements(n_elem as u64));
         group.bench_with_input(
             BenchmarkId::new(format!("cpp/{}", fix.name), bc),
-            &fix.data,
+            &fix.original,
             |b, data| {
                 let mut codec = CppFastPFor128::default();
                 let mut out = Vec::new();
@@ -224,7 +224,7 @@ fn benchmark_cpp_vs_rust(c: &mut Criterion) {
         );
         group.bench_with_input(
             BenchmarkId::new(format!("rust/{}", fix.name), bc),
-            &fix.data,
+            &fix.original,
             |b, data| {
                 let mut codec = FastPForBlock128::default();
                 let (blocks, _) = slice_to_blocks::<FastPForBlock128>(data);

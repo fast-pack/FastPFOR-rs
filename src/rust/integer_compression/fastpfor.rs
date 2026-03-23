@@ -503,7 +503,7 @@ where
 {
     type Block = [u32; N];
 
-    fn encode_blocks(&mut self, blocks: &[[u32; N]], out: &mut Vec<u32>) -> FastPForResult<()> {
+    fn encode_blocks(&mut self, blocks: &[Self::Block], out: &mut Vec<u32>) -> FastPForResult<()> {
         let n_values = (blocks.len() * N) as u32;
         if blocks.is_empty() {
             out.push(n_values);

@@ -10,23 +10,25 @@
 mod bench_utils;
 
 #[cfg(feature = "cpp")]
-use bench_utils::decompress_anylen;
-use bench_utils::{BlockSizeFixture, compress, compress_fixtures, decompress, ratio_fixtures};
-#[cfg(feature = "cpp")]
 use fastpfor::BlockCodec;
 #[cfg(feature = "cpp")]
 use fastpfor::cpp::CppFastPFor128;
 use fastpfor::{FastPForBlock128, FastPForBlock256};
+
+#[cfg(feature = "cpp")]
+use crate::bench_utils::decompress;
+use crate::bench_utils::{
+    BlockSizeFixture, block_compress, block_decompress, block_roundtrip, compress_fixtures,
+    ratio_fixtures,
+};
 
 const SMOKE_BLOCK_COUNT: usize = 2;
 
 #[test]
 fn smoke_compression() {
     for (_, fix) in compress_fixtures::<FastPForBlock128>(&[SMOKE_BLOCK_COUNT]) {
-        let mut out = Vec::new();
-        compress::<FastPForBlock128>(&fix.data, &mut out);
         assert!(
-            !out.is_empty(),
+            !fix.original.is_empty(),
             "{}: compressed output must be non-empty",
             fix.name
         );
@@ -36,15 +38,19 @@ fn smoke_compression() {
 #[test]
 fn smoke_decompression() {
     for (_, fix) in compress_fixtures::<FastPForBlock128>(&[SMOKE_BLOCK_COUNT]) {
-        let mut decompressed = Vec::new();
-        let n = decompress::<FastPForBlock128>(&fix.compressed, fix.n_blocks, &mut decompressed);
+        let decompressed =
+            block_decompress::<FastPForBlock128>(&fix.compressed, Some(fix.original.len() as u32));
         assert_eq!(
-            n,
-            fix.data.len(),
+            decompressed.len(),
+            fix.original.len(),
             "{}: decompressed length mismatch",
             fix.name
         );
-        assert_eq!(decompressed, fix.data, "{}: roundtrip mismatch", fix.name);
+        assert_eq!(
+            decompressed, fix.original,
+            "{}: roundtrip mismatch",
+            fix.name
+        );
     }
 }
 
@@ -52,12 +58,7 @@ fn smoke_decompression() {
 #[test]
 fn smoke_roundtrip() {
     for (_, fix) in compress_fixtures::<FastPForBlock128>(&[SMOKE_BLOCK_COUNT]) {
-        let mut compressed = Vec::new();
-        compress::<FastPForBlock128>(&fix.data, &mut compressed);
-        let mut decompressed = Vec::new();
-        let n = decompress::<FastPForBlock128>(&compressed, fix.n_blocks, &mut decompressed);
-        assert_eq!(n, fix.data.len(), "{}: roundtrip length mismatch", fix.name);
-        assert_eq!(decompressed, fix.data, "{}: roundtrip mismatch", fix.name);
+        block_roundtrip::<FastPForBlock128>(&fix.original);
     }
 }
 
@@ -68,34 +69,43 @@ fn smoke_block_sizes() {
 
     // 128-element blocks
     {
-        let mut compressed = Vec::new();
-        compress::<FastPForBlock128>(&fix128.data, &mut compressed);
+        let compressed = block_compress::<FastPForBlock128>(&fix128.original);
         assert_eq!(
             compressed, fix128.compressed,
             "128: compress output mismatch"
         );
-        let mut decompressed = Vec::new();
-        let n = decompress::<FastPForBlock128>(&compressed, fix128.n_blocks, &mut decompressed);
-        assert_eq!(n, fix128.data.len(), "128: decompressed length mismatch");
-        assert_eq!(decompressed, fix128.data, "128: roundtrip mismatch");
+        let decompressed =
+            block_decompress::<FastPForBlock128>(&compressed, Some(fix128.original.len() as u32));
+        assert_eq!(
+            decompressed.len(),
+            fix128.original.len(),
+            "128: decompressed length mismatch"
+        );
+        assert_eq!(decompressed, fix128.original, "128: roundtrip mismatch");
     }
 
     // 256-element blocks
     {
-        let mut compressed = Vec::new();
-        compress::<FastPForBlock256>(&fix256.data, &mut compressed);
-        let mut decompressed = Vec::new();
-        let n = decompress::<FastPForBlock256>(&compressed, fix256.n_blocks, &mut decompressed);
-        assert_eq!(n, fix256.data.len(), "256: decompressed length mismatch");
-        assert_eq!(decompressed, fix256.data, "256: roundtrip mismatch");
+        let compressed = block_compress::<FastPForBlock256>(&fix256.original);
+        assert_eq!(
+            compressed, fix256.compressed,
+            "256: compress output mismatch"
+        );
+        let decompressed =
+            block_decompress::<FastPForBlock256>(&compressed, Some(fix256.original.len() as u32));
+        assert_eq!(
+            decompressed.len(),
+            fix256.original.len(),
+            "256: decompressed length mismatch"
+        );
+        assert_eq!(decompressed, fix256.original, "256: roundtrip mismatch");
     }
 }
 
 #[test]
 fn smoke_compression_ratio() {
     for fix in ratio_fixtures::<FastPForBlock128>(SMOKE_BLOCK_COUNT) {
-        let mut out = Vec::new();
-        compress::<FastPForBlock128>(&fix.data, &mut out);
+        let out = block_compress::<FastPForBlock128>(&fix.original);
         assert!(
             !out.is_empty(),
             "{}: compressed output must be non-empty",
@@ -105,7 +115,7 @@ fn smoke_compression_ratio() {
             clippy::cast_precision_loss,
             reason = "Loss of precision is acceptable for compression ratio calculation"
         )]
-        let ratio = fix.data.len() as f64 / out.len() as f64;
+        let ratio = fix.original.len() as f64 / out.len() as f64;
         assert!(
             ratio > 0.0,
             "{}: compression ratio must be positive",
@@ -120,24 +130,11 @@ fn smoke_cpp_vs_rust() {
     for (_, fix) in compress_fixtures::<FastPForBlock128>(&[SMOKE_BLOCK_COUNT]) {
         let expected_len = fix.n_blocks * FastPForBlock128::size();
 
-        // C++ decode (same wire format as Rust; C++ uses AnyLenCodec)
-        let mut cpp_out = Vec::new();
-        let n = decompress_anylen::<CppFastPFor128>(&fix.compressed, expected_len, &mut cpp_out);
-        assert_eq!(
-            n, expected_len,
-            "{}: C++ decoded wrong element count",
-            fix.name
-        );
-        assert_eq!(cpp_out, fix.data, "{}: C++ roundtrip mismatch", fix.name);
+        let out = decompress::<CppFastPFor128>(&fix.compressed, Some(expected_len as u32));
+        assert_eq!(out, fix.original, "{}: Bad C++ roundtrip", fix.name);
 
-        // Rust decode
-        let mut rust_out = Vec::new();
-        let n = decompress::<FastPForBlock128>(&fix.compressed, fix.n_blocks, &mut rust_out);
-        assert_eq!(
-            n, expected_len,
-            "{}: Rust decoded wrong element count",
-            fix.name
-        );
-        assert_eq!(rust_out, fix.data, "{}: Rust roundtrip mismatch", fix.name);
+        let out =
+            block_decompress::<FastPForBlock128>(&fix.compressed, Some(fix.original.len() as u32));
+        assert_eq!(out, fix.original, "{}: Bad Rust roundtrip", fix.name);
     }
 }
