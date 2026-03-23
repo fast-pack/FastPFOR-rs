@@ -6,8 +6,6 @@
 //! **Thread safety:** instances have internal state and are not thread-safe. Use one per thread.
 
 mod codecs;
-#[cfg(test)]
-mod tests;
 mod wrappers;
 
 pub use codecs::*;

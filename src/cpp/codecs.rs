@@ -53,10 +53,10 @@ macro_rules! implement_cpp_codecs {
         )*
 
         #[cfg(test)]
+        #[allow(non_snake_case)]
         mod cpp_default {
             $(
                 #[test]
-                #[allow(non_snake_case)]
                 fn $name() {
                     let _codec = $crate::cpp::$name::default();
                 }
@@ -64,12 +64,24 @@ macro_rules! implement_cpp_codecs {
         }
 
         #[cfg(test)]
-        mod cpp_roundtrip {
+        #[allow(non_snake_case)]
+        mod cpp_short_roundtrip {
             $(
                 #[test]
-                #[allow(non_snake_case)]
                 fn $name() {
                     $crate::test_utils::roundtrip::<$crate::cpp::$name>(&[1u32, 2, 3, 4, 5]);
+                }
+            )*
+        }
+
+        #[cfg(test)]
+        #[allow(non_snake_case)]
+        mod cpp_128bit_roundtrip {
+            $(
+                #[test]
+                fn $name() {
+                    let input: Vec<u32> = (1..=128).collect();
+                    $crate::test_utils::roundtrip::<$crate::cpp::$name>(&input);
                 }
             )*
         }
