@@ -706,9 +706,7 @@ mod tests {
     fn decode_index1_branch_valid() {
         let mut data = vec![1u32; 256];
         data[0] = 3;
-        let compressed = block_compress::<FastPForBlock256>(&data).unwrap();
-        let out = block_decompress::<FastPForBlock256>(&compressed, Some(256)).unwrap();
-        assert_eq!(out, data);
+        block_roundtrip::<FastPForBlock256>(&data);
     }
 
     /// `decode_blocks` with `expected_len: None` and header=0 returns `Ok` with empty output.

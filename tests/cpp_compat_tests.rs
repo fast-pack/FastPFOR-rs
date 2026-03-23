@@ -9,39 +9,26 @@
 mod test_utils;
 
 use fastpfor::{FastPFor128, FastPFor256, FastPForBlock128};
-use test_utils::{block_compress, compress, decompress, roundtrip};
+use test_utils::{block_compress, block_decompress, compress, decompress, roundtrip};
 
 mod common;
 use common::{get_test_cases, test_input_sizes};
 use fastpfor::cpp::CppFastPFor128;
-use fastpfor::{AnyLenCodec, BlockCodec, slice_to_blocks};
+
+use crate::test_utils::roundtrip_full;
 
 /// C++ `AnyLenCodec` encode → Rust `BlockCodec` decode (same wire format for block-aligned data).
 #[test]
 fn test_rust_decompresses_cpp_encoded_data() {
-    let mut codec_cpp = CppFastPFor128::default();
-    let mut codec_rs = FastPForBlock128::default();
-    let mut cpp_compressed = Vec::new();
-
     for n in test_input_sizes() {
         for input in get_test_cases(n + 128) {
             if input.len() % 128 != 0 || input.is_empty() {
                 continue;
             }
-            let n_blocks = input.len() / 128;
-
-            cpp_compressed.truncate(0);
-            codec_cpp.encode(&input, &mut cpp_compressed).unwrap();
-
-            let mut rust_decoded = Vec::new();
-            codec_rs
-                .decode_blocks(
-                    &cpp_compressed,
-                    Some(u32::try_from(n_blocks * 128).expect("block count fits in u32")),
-                    &mut rust_decoded,
-                )
-                .unwrap_or_else(|e| panic!("Rust decompress of C++ data failed: {e:?}"));
-
+            let cpp_compressed = compress::<CppFastPFor128>(&input).unwrap();
+            let rust_decoded =
+                block_decompress::<FastPForBlock128>(&cpp_compressed, Some(input.len() as u32))
+                    .unwrap_or_else(|e| panic!("Rust decompress of C++ data failed: {e:?}"));
             assert_eq!(
                 rust_decoded,
                 input,
@@ -55,35 +42,14 @@ fn test_rust_decompresses_cpp_encoded_data() {
 /// Rust `BlockCodec` encode → C++ `AnyLenCodec` decode (same wire format).
 #[test]
 fn test_cpp_decompresses_rust_block_encoded_data() {
-    let mut codec_cpp = CppFastPFor128::default();
-    let mut codec_rs = FastPForBlock128::default();
-
     for n in test_input_sizes() {
         for input in get_test_cases(n + 128) {
             if input.len() % 128 != 0 || input.is_empty() {
                 continue;
             }
-            let (blocks, _) = slice_to_blocks::<FastPForBlock128>(&input);
-            let n_blocks = blocks.len();
-            let expected_len = n_blocks * 128;
-
-            let mut rs_compressed = Vec::new();
-            codec_rs.encode_blocks(blocks, &mut rs_compressed).unwrap();
-
-            let mut cpp_decoded = Vec::new();
-            codec_cpp
-                .decode(
-                    &rs_compressed,
-                    &mut cpp_decoded,
-                    Some(u32::try_from(expected_len).expect("expected len fits in u32")),
-                )
-                .unwrap_or_else(|e| panic!("C++ decompress of Rust data failed: {e:?}"));
-
-            assert_eq!(
-                cpp_decoded,
-                input,
-                "Rust→C++ roundtrip mismatch for len {}",
-                input.len()
+            roundtrip_full::<FastPFor128, CppFastPFor128>(
+                &input,
+                Some(input.len().try_into().unwrap()),
             );
         }
     }
@@ -123,16 +89,9 @@ fn test_rust_and_cpp_compression_matches() {
 /// Rust `AnyLenCodec` (`CompositeCodec`) encoder → round-trip.
 #[test]
 fn test_rust_anylen_roundtrip() {
-    let mut codec = FastPFor256::default();
-    let mut compressed = Vec::new();
-    let mut decoded = Vec::new();
     for n in test_input_sizes() {
         for input in get_test_cases(n) {
-            compressed.truncate(0);
-            decoded.truncate(0);
-            codec.encode(&input, &mut compressed).unwrap();
-            codec.decode(&compressed, &mut decoded, None).unwrap();
-            assert_eq!(decoded, input, "Rust AnyLenCodec round-trip failed");
+            roundtrip::<FastPFor256>(&input);
         }
     }
 }
