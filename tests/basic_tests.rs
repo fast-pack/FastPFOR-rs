@@ -12,8 +12,6 @@ use rand::{RngExt as _, SeedableRng};
 
 use crate::test_utils::{RNG_SEED, block_compress, block_roundtrip_all, roundtrip_all};
 
-mod common;
-
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[test]
