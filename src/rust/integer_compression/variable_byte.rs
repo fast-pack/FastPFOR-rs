@@ -365,6 +365,8 @@ mod tests {
 
     use super::*;
 
+    use crate::test_utils::{compress, decompress, roundtrip};
+
     fn verify_u32_roundtrip(input: &[u32]) {
         let mut encoded: Vec<u32> = vec![0; input.len() * 2 + 1];
         let mut input_offset = Cursor::new(0);
@@ -582,13 +584,8 @@ mod tests {
 
     #[test]
     fn test_variable_byte_default() {
-        let mut codec = <VariableByte as Default>::default();
         let data = vec![1u32, 2, 3];
-        let mut out = Vec::new();
-        codec.encode(&data, &mut out).unwrap();
-        let mut decoded = Vec::new();
-        codec.decode(&out, &mut decoded, None).unwrap();
-        assert_eq!(decoded, data);
+        roundtrip::<VariableByte>(&data);
     }
 
     /// `decompress_from_u32_slice` returns `OutputBufferTooSmall` when the
@@ -661,23 +658,19 @@ mod tests {
     #[test]
     fn test_anylen_decode_with_expected_len_ok() {
         let data = vec![1u32, 2, 3];
-        let mut encoded = Vec::new();
-        VariableByte::new().encode(&data, &mut encoded).unwrap();
-        let mut decoded = Vec::new();
-        VariableByte::new()
-            .decode(&encoded, &mut decoded, Some(3))
-            .unwrap();
+        let encoded = compress::<VariableByte>(&data);
+        let decoded = decompress::<VariableByte>(&encoded, Some(3));
         assert_eq!(decoded, data);
     }
 
     #[test]
+    #[expect(clippy::default_constructed_unit_structs)]
     fn test_anylen_decode_expected_len_mismatch_errors() {
         // expected_len must be >= actual to avoid OutputBufferTooSmall; use a larger
         // value to exercise the is_decoded_mismatch path.
         let data = vec![1u32, 2, 3];
-        let mut encoded = Vec::new();
-        VariableByte::new().encode(&data, &mut encoded).unwrap();
-        let err = VariableByte::new()
+        let encoded = compress::<VariableByte>(&data);
+        let err = VariableByte::default()
             .decode(&encoded, &mut Vec::new(), Some(10))
             .unwrap_err();
         assert!(matches!(

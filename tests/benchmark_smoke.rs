@@ -1,13 +1,13 @@
 //! Smoke tests that execute every benchmark code path exactly once.
 //!
-//! All logic lives in `benches/bench_utils.rs`; this file just drives the
+//! All logic lives in `src/bench_utils.rs`; this file just drives the
 //! shared fixtures through assertions so `cargo test` and coverage tools
 //! cover the benchmark code paths without Criterion overhead.
 
 #![cfg(feature = "rust")]
 
-#[path = "../benches/bench_utils.rs"]
-mod bench_utils;
+#[path = "../src/test_utils.rs"]
+mod test_utils;
 
 #[cfg(feature = "cpp")]
 use fastpfor::BlockCodec;
@@ -16,8 +16,8 @@ use fastpfor::cpp::CppFastPFor128;
 use fastpfor::{FastPForBlock128, FastPForBlock256};
 
 #[cfg(feature = "cpp")]
-use crate::bench_utils::decompress;
-use crate::bench_utils::{
+use crate::test_utils::decompress;
+use crate::test_utils::{
     BlockSizeFixture, block_compress, block_decompress, block_roundtrip, compress_fixtures,
     ratio_fixtures,
 };

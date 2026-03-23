@@ -6,11 +6,11 @@
 
 #![cfg(feature = "rust")]
 
-#[path = "../benches/bench_utils.rs"]
-mod bench_utils;
+#[path = "../src/test_utils.rs"]
+mod test_utils;
 
-use bench_utils::{block_roundtrip, roundtrip};
-use fastpfor::{AnyLenCodec, FastPFor128, FastPFor256, FastPForBlock256, JustCopy, VariableByte};
+use fastpfor::{FastPFor128, FastPFor256, FastPForBlock256, JustCopy, VariableByte};
+use test_utils::{block_roundtrip, decompress, roundtrip};
 
 // ── VariableByte round-trip ───────────────────────────────────────────────────
 
@@ -95,10 +95,7 @@ fn fastpfor_encode_128_block_with_exceptions() {
 /// Decompressing an empty stream succeeds with empty output.
 #[test]
 fn variable_byte_anylen_decompress_short_input() {
-    let mut codec = VariableByte::new();
-    let mut out = Vec::new();
-    let result = codec.decode(&[], &mut out, None);
-    assert!(result.is_ok());
+    let out = decompress::<VariableByte>(&[], None);
     assert!(out.is_empty());
 }
 
@@ -106,12 +103,5 @@ fn variable_byte_anylen_decompress_short_input() {
 #[test]
 fn variable_byte_anylen_decompress_into_small_vec() {
     let data: Vec<u32> = (1..=20).collect();
-    let mut compressed = Vec::new();
-    VariableByte::new().encode(&data, &mut compressed).unwrap();
-
-    let mut out = Vec::new();
-    VariableByte::new()
-        .decode(&compressed, &mut out, None)
-        .unwrap();
-    assert_eq!(out, data);
+    roundtrip::<VariableByte>(&data);
 }

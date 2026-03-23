@@ -7,14 +7,15 @@ use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_m
 use fastpfor::AnyLenCodec;
 use fastpfor::{BlockCodec as _, FastPForBlock128, FastPForBlock256, slice_to_blocks};
 
-#[path = "bench_utils.rs"]
-mod bench_utils;
-use bench_utils::{
+// Shared helpers live in `src/bench_utils.rs` (library exposes the same file only under `cfg(test)`).
+#[path = "../src/test_utils.rs"]
+mod test_utils;
+#[cfg(feature = "cpp")]
+use fastpfor::cpp::CppFastPFor128;
+use test_utils::{
     BlockSizeFixture, compress_fixtures, generate_uniform_data_small_value_distribution,
     ratio_fixtures,
 };
-#[cfg(feature = "cpp")]
-use fastpfor::cpp::CppFastPFor128;
 
 /// Number of blocks per benchmark run.  The element count per run is
 /// `BLOCK_COUNTS[i] * C::elements_per_block()`, e.g. 8 × 128 = 1,024 or 32 × 128 = 4,096.

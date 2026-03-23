@@ -1,4 +1,4 @@
-use crate::cpp::codecs::tests::roundtrip_32;
+use crate::test_utils::roundtrip_with;
 
 /// Test all codecs compile and do a basic 32-bit roundtrip
 macro_rules! test_anylen {
@@ -7,7 +7,7 @@ macro_rules! test_anylen {
             #[test]
             #[allow(non_snake_case)]
             fn $name() {
-                roundtrip_32(&mut $crate::cpp::$name::new(), &[1u32, 2, 3, 4, 5]);
+                roundtrip_with(&mut $crate::cpp::$name::default(), &[1u32, 2, 3, 4, 5]);
             }
         )*
     };
@@ -51,7 +51,7 @@ macro_rules! test_anylen_128 {
                 #[allow(non_snake_case)]
                 fn $name() {
                     let input: Vec<u32> = (1..=128).collect();
-                    roundtrip_32(&mut $crate::cpp::$name::new(), &input);
+                    roundtrip_with(&mut $crate::cpp::$name::default(), &input);
                 }
             )*
         };

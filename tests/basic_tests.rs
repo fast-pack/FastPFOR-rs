@@ -2,14 +2,14 @@
 
 #![cfg(feature = "rust")]
 
-#[path = "../benches/bench_utils.rs"]
-mod bench_utils;
+#[path = "../src/test_utils.rs"]
+mod test_utils;
 
 use fastpfor::{BlockCodec, FastPForBlock128, FastPForBlock256, slice_to_blocks};
 use rand::rngs::StdRng;
 use rand::{RngExt as _, SeedableRng};
 
-use crate::bench_utils::{block_roundtrip_all, roundtrip_all};
+use crate::test_utils::{block_roundtrip_all, roundtrip_all};
 
 mod common;
 

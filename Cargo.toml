@@ -21,12 +21,6 @@ name = "fastpfor_benchmark"
 required-features = ["rust"]
 harness = false
 
-[[bench]]
-name = "bench_utils"
-required-features = ["rust"]
-harness = false
-bench = false
-
 [features]
 default = ["rust"]
 # Used internally for testing and benchmarking. Not intended for public use.

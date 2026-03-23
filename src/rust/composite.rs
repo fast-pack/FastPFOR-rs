@@ -45,11 +45,7 @@ pub struct CompositeCodec<Blocks: BlockCodec, Tail: AnyLenCodec> {
     tail: Tail,
 }
 
-impl<Blocks, Tail> Default for CompositeCodec<Blocks, Tail>
-where
-    Blocks: BlockCodec + Default,
-    Tail: AnyLenCodec + Default,
-{
+impl<Blocks: BlockCodec, Tail: AnyLenCodec> Default for CompositeCodec<Blocks, Tail> {
     fn default() -> Self {
         Self::new(Blocks::default(), Tail::default())
     }
@@ -114,73 +110,50 @@ mod tests {
     use super::*;
     use crate::FastPForError;
     use crate::rust::{FastPForBlock128, FastPForBlock256, JustCopy, VariableByte};
+    use crate::test_utils::{compress, decompress, roundtrip_composite};
 
-    fn roundtrip<C: AnyLenCodec>(codec: &mut C, data: &[u32]) {
-        let mut encoded = Vec::new();
-        codec.encode(data, &mut encoded).unwrap();
-        let mut decoded = Vec::new();
-        codec.decode(&encoded, &mut decoded, None).unwrap();
-        assert_eq!(decoded, data);
-    }
+    type Comp256Vb = CompositeCodec<FastPForBlock256, VariableByte>;
 
     #[test]
     fn test_fastpfor256_vbyte_exact_two_blocks() {
         let data: Vec<u32> = (0..512).collect();
-        roundtrip(
-            &mut CompositeCodec::new(FastPForBlock256::default(), VariableByte::new()),
-            &data,
-        );
+        roundtrip_composite::<FastPForBlock256, VariableByte>(&data);
     }
 
     #[test]
     fn test_fastpfor256_vbyte_with_remainder() {
         let data: Vec<u32> = (0..600).collect();
-        roundtrip(
-            &mut CompositeCodec::new(FastPForBlock256::default(), VariableByte::new()),
-            &data,
-        );
+        roundtrip_composite::<FastPForBlock256, VariableByte>(&data);
     }
 
     #[test]
     fn test_fastpfor128_justcopy_with_remainder() {
         let data: Vec<u32> = (0..300).collect();
-        roundtrip(
-            &mut CompositeCodec::new(FastPForBlock128::default(), JustCopy::new()),
-            &data,
-        );
+        roundtrip_composite::<FastPForBlock128, JustCopy>(&data);
     }
 
     #[test]
     fn test_empty_input() {
-        roundtrip(
-            &mut CompositeCodec::new(FastPForBlock256::default(), VariableByte::new()),
-            &[],
-        );
+        roundtrip_composite::<FastPForBlock256, VariableByte>(&[]);
     }
 
     #[test]
     fn test_decode_truly_empty_input() {
         // Decoding a zero-length slice (not even a header word) must succeed with empty output.
-        let mut codec = CompositeCodec::new(FastPForBlock256::default(), VariableByte::new());
-        let mut out = Vec::new();
-        codec.decode(&[], &mut out, None).unwrap();
-        assert!(out.is_empty());
+        assert!(decompress::<Comp256Vb>(&[], None).is_empty());
     }
 
     #[test]
     fn test_decode_empty_input_with_expected_zero() {
         // Empty input with expected_len=0 must succeed.
-        let mut codec = CompositeCodec::new(FastPForBlock256::default(), VariableByte::new());
-        let mut out = Vec::new();
-        codec.decode(&[], &mut out, Some(0)).unwrap();
-        assert!(out.is_empty());
+        assert!(decompress::<Comp256Vb>(&[], Some(0)).is_empty());
     }
 
     #[test]
     fn test_decode_empty_input_with_nonzero_expected_errors() {
         // Empty input: max_decompressed_len(0) == 0, so any expected_len > 0 fails
         // with ExpectedCountExceedsMax before decoding begins.
-        let mut codec = CompositeCodec::new(FastPForBlock256::default(), VariableByte::new());
+        let mut codec = CompositeCodec::<FastPForBlock256, VariableByte>::default();
         let err = codec.decode(&[], &mut Vec::new(), Some(5)).unwrap_err();
         assert!(matches!(
             err,
@@ -197,7 +170,7 @@ mod tests {
         // than attempting a multi-gigabyte allocation.
         // Regression: fuzzer found bytes [0x04, 0x35, 0x19] → u32 LE 0x00193504 = 1_651_460
         // fed to FastPFor256.decode caused an OOM via a ~2.5 GB Vec::resize.
-        let mut codec = CompositeCodec::new(FastPForBlock256::default(), VariableByte::new());
+        let mut codec = CompositeCodec::<FastPForBlock256, VariableByte>::default();
         let mut out = Vec::new();
         let input = [0x0019_3504u32]; // n_blocks = 1_651_460, rest is empty
         assert!(codec.decode(&input, &mut out, None).is_err());
@@ -207,31 +180,25 @@ mod tests {
     #[test]
     fn test_sub_block_only() {
         let data: Vec<u32> = (0..10).collect();
-        roundtrip(
-            &mut CompositeCodec::new(FastPForBlock256::default(), VariableByte::new()),
-            &data,
-        );
+        roundtrip_composite::<FastPForBlock256, VariableByte>(&data);
     }
 
     #[test]
     fn test_decode_with_expected_len() {
         let data: Vec<u32> = (0..600).collect();
-        let mut codec = CompositeCodec::new(FastPForBlock256::default(), VariableByte::new());
-        let mut encoded = Vec::new();
-        codec.encode(&data, &mut encoded).unwrap();
-        let mut decoded = Vec::new();
-        codec.decode(&encoded, &mut decoded, Some(600)).unwrap();
+        let encoded = compress::<Comp256Vb>(&data);
+        let decoded = decompress::<Comp256Vb>(&encoded, Some(600));
         assert_eq!(decoded, data);
     }
 
     #[test]
     fn test_decode_expected_len_mismatch_errors() {
         let data: Vec<u32> = (0..100).collect();
-        let mut codec = CompositeCodec::new(FastPForBlock256::default(), VariableByte::new());
-        let mut encoded = Vec::new();
-        codec.encode(&data, &mut encoded).unwrap();
-        let mut decoded = Vec::new();
-        let err = codec.decode(&encoded, &mut decoded, Some(50)).unwrap_err();
+        let encoded = compress::<Comp256Vb>(&data);
+        let mut codec = Comp256Vb::default();
+        let err = codec
+            .decode(&encoded, &mut Vec::new(), Some(50))
+            .unwrap_err();
         assert!(matches!(
             err,
             FastPForError::DecodedCountMismatch {
@@ -244,15 +211,11 @@ mod tests {
     #[test]
     fn test_decode_expected_len_exceeds_max_errors() {
         let data: Vec<u32> = (0..10).collect();
-        let mut codec = CompositeCodec::new(FastPForBlock256::default(), VariableByte::new());
-        let mut encoded = Vec::new();
-        codec.encode(&data, &mut encoded).unwrap();
-        let mut decoded = Vec::new();
-        let huge =
-            (CompositeCodec::<FastPForBlock256, VariableByte>::max_decompressed_len(encoded.len())
-                + 1) as u32;
+        let encoded = compress::<Comp256Vb>(&data);
+        let huge = (Comp256Vb::max_decompressed_len(encoded.len()) + 1) as u32;
+        let mut codec = Comp256Vb::default();
         let err = codec
-            .decode(&encoded, &mut decoded, Some(huge))
+            .decode(&encoded, &mut Vec::new(), Some(huge))
             .unwrap_err();
         assert!(matches!(err, FastPForError::ExpectedCountExceedsMax { .. }));
     }

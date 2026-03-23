@@ -33,3 +33,10 @@ pub use rust::{
     CompositeCodec, FastPFor, FastPFor128, FastPFor256, FastPForBlock128, FastPForBlock256,
     JustCopy, VariableByte,
 };
+
+// `src/test_utils.rs` uses `fastpfor::...`; alias this crate for unit tests only.
+#[cfg(test)]
+extern crate self as fastpfor;
+
+#[cfg(test)]
+pub(crate) mod test_utils;

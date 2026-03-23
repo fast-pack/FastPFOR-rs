@@ -5,9 +5,14 @@
 
 #![cfg(all(feature = "rust", feature = "cpp"))]
 
+#[path = "../src/test_utils.rs"]
+mod test_utils;
+
 use fastpfor::{FastPFor128, FastPFor256, FastPForBlock128};
+use test_utils::{compress, decompress};
 
 mod common;
+use crate::test_utils::{block_compress, roundtrip};
 use common::{get_test_cases, test_input_sizes};
 use fastpfor::cpp::CppFastPFor128;
 use fastpfor::{AnyLenCodec, BlockCodec, slice_to_blocks};
@@ -15,7 +20,7 @@ use fastpfor::{AnyLenCodec, BlockCodec, slice_to_blocks};
 /// C++ `AnyLenCodec` encode → Rust `BlockCodec` decode (same wire format for block-aligned data).
 #[test]
 fn test_rust_decompresses_cpp_encoded_data() {
-    let mut codec_cpp = CppFastPFor128::new();
+    let mut codec_cpp = CppFastPFor128::default();
     let mut codec_rs = FastPForBlock128::default();
 
     for n in test_input_sizes() {
@@ -50,7 +55,7 @@ fn test_rust_decompresses_cpp_encoded_data() {
 /// Rust `BlockCodec` encode → C++ `AnyLenCodec` decode (same wire format).
 #[test]
 fn test_cpp_decompresses_rust_block_encoded_data() {
-    let mut codec_cpp = CppFastPFor128::new();
+    let mut codec_cpp = CppFastPFor128::default();
     let mut codec_rs = FastPForBlock128::default();
 
     for n in test_input_sizes() {
@@ -87,28 +92,28 @@ fn test_cpp_decompresses_rust_block_encoded_data() {
 /// Cross-check: Rust block encode and C++ any-length encode produce identical bytes for block-aligned input.
 #[test]
 fn test_rust_and_cpp_compression_matches() {
-    let mut codec_cpp = CppFastPFor128::new();
-    let mut codec_rs = FastPForBlock128::default();
-
     for n in test_input_sizes() {
         for input in get_test_cases(n + 128) {
             if input.len() % 128 != 0 || input.is_empty() {
                 continue;
             }
-            let (blocks_rs, _) = slice_to_blocks::<FastPForBlock128>(&input);
-
-            let mut cpp_compressed = Vec::new();
-            codec_cpp.encode(&input, &mut cpp_compressed).unwrap();
-
-            let mut rs_compressed = Vec::new();
-            codec_rs
-                .encode_blocks(blocks_rs, &mut rs_compressed)
-                .unwrap();
-
+            let compressed = compress::<CppFastPFor128>(&input);
             assert_eq!(
-                cpp_compressed,
-                rs_compressed,
+                compressed,
+                block_compress::<FastPForBlock128>(&input),
                 "Compressed bytes differ for input len {}",
+                input.len()
+            );
+            assert_eq!(
+                decompress::<CppFastPFor128>(&compressed, None),
+                input,
+                "Rust→C++ roundtrip mismatch for len {}",
+                input.len()
+            );
+            assert_eq!(
+                decompress::<FastPFor128>(&compressed, None),
+                input,
+                "Rust→C++ roundtrip mismatch for len {}",
                 input.len()
             );
         }
@@ -134,13 +139,8 @@ fn test_rust_anylen_roundtrip() {
 #[test]
 fn test_rust_anylen_128_roundtrip() {
     for n in test_input_sizes() {
-        let mut codec = FastPFor128::default();
         for input in get_test_cases(n) {
-            let mut compressed = Vec::new();
-            codec.encode(&input, &mut compressed).unwrap();
-            let mut decoded = Vec::new();
-            codec.decode(&compressed, &mut decoded, None).unwrap();
-            assert_eq!(decoded, input, "Rust AnyLenCodec 128 round-trip failed");
+            roundtrip::<FastPFor128>(&input);
         }
     }
 }
