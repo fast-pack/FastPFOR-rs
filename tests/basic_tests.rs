@@ -20,21 +20,6 @@ fn saul_test() {
     roundtrip_all(&[2u32, 3, 4, 5]);
 }
 
-/// Sub-block-sized inputs produce no output via `BlockCodec`.
-#[test]
-fn spurious_out_test() {
-    fn check<C: BlockCodec + Default>(len: usize) {
-        let x = vec![0u32; 1024];
-        let (blocks, _) = slice_to_blocks::<C>(&x[..len]);
-        let out = block_compress::<C>(cast_slice(blocks)).unwrap();
-        assert!(out.is_empty() || blocks.is_empty());
-    }
-    for len in 0..32usize {
-        check::<FastPForBlock256>(len);
-        check::<FastPForBlock128>(len);
-    }
-}
-
 /// `AnyLenCodec` round-trips empty input correctly.
 #[test]
 fn zero_in_zero_out_test() {

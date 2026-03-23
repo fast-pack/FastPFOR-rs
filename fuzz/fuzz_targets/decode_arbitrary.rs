@@ -4,7 +4,7 @@
 //!
 //! Why this target is needed
 //! -------------------------
-//! The existing `compress_oracle` target only feeds *well-formed* data to the Rust
+//! The existing `encode_oracle` target only feeds *well-formed* data to the Rust
 //! decoder (it first compresses valid input, then decompresses).
 //! That means corrupted or truncated compressed streams never reach the decoder, so
 //! out-of-bounds panics in `decode_page` are invisible to the fuzzer.

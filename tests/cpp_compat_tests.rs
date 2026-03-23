@@ -8,11 +8,12 @@
 #[path = "../src/test_utils.rs"]
 mod test_utils;
 
-use fastpfor::{FastPFor128, FastPFor256, FastPForBlock128};
-use test_utils::{block_compress, block_decompress, compress, roundtrip, roundtrip_full};
-
 use fastpfor::cpp::CppFastPFor128;
-use test_utils::{get_test_cases, test_input_sizes};
+use fastpfor::{FastPFor128, FastPFor256, FastPForBlock128};
+use test_utils::{
+    block_compress, block_decompress, compress, get_test_cases, roundtrip, roundtrip_full,
+    test_input_sizes,
+};
 
 use crate::test_utils::decompress;
 

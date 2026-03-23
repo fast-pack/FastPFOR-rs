@@ -2,12 +2,6 @@
 //! Criterion benchmarks, integration tests, and `#[cfg(test)]` unit tests in the
 //! `fastpfor` crate.
 //!
-//! - **Library unit tests:** `crate::test_utils` via `#[cfg(test)] mod bench_utils` in `lib.rs`
-//!   and `extern crate self as fastpfor` so this file can `use fastpfor::...`.
-//! - **Integration tests:** `#[cfg(test)] #[path = "../src/test_utils.rs"] mod bench_utils`.
-//! - **Criterion benchmarks:** `#[path = "../src/test_utils.rs"] mod bench_utils` (`cfg(test)` is not
-//!   enabled for bench targets, so the module is included unconditionally there).
-//!
 //! Loaded as a module via `#[path]` or as a normal child module, so every item
 //! consumed from outside must be `pub`. Each consumer uses a different subset,
 //! so dead-code is allowed at module scope.

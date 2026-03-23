@@ -13,7 +13,7 @@ use crate::{BlockCodec, FastPForError, FastPForResult};
 /// Overhead cost (in bits) for storing each exception's position in the block
 const OVERHEAD_OF_EACH_EXCEPT: u32 = 8;
 
-/// Default page size in number of integers (64 KiB / 4 bytes = 16 Ki integers).
+/// Default page size in number of integers.
 const DEFAULT_PAGE_SIZE: u32 = 65536;
 
 /// Type alias for [`FastPFor`] with 128-element blocks.

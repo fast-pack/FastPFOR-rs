@@ -34,7 +34,7 @@ run-iters target iters='10000' *args:
 # Run encode_oracle (pure Rust roundtrip, no C++ required)
 rust-encode *args: (run 'encode_oracle' args)
 
-# Run decode_oracle (parallel Rust + C++ roundtrips, cross-checks decodeed values)
+# Run decode_oracle (parallel Rust + C++ roundtrips, cross-checks decoded values)
 rust-decode *args: (run 'decode_oracle' args)
 
 # Feed arbitrary bytes directly to the Rust decodeor (no panic check)
