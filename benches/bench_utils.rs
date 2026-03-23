@@ -10,14 +10,10 @@
 #![allow(missing_docs)]
 
 use core::ops::Range;
-pub use std::io::Cursor;
-use std::num::NonZeroU32;
+use std::marker::PhantomData;
 
-#[cfg(feature = "cpp")]
-use fastpfor::AnyLenCodec as _;
-#[cfg(feature = "cpp")]
-use fastpfor::cpp::CppFastPFor128;
-pub use fastpfor::rust::{BLOCK_SIZE_128, BLOCK_SIZE_256, DEFAULT_PAGE_SIZE, FastPFOR, Integer};
+#[allow(unused_imports)]
+use fastpfor::{AnyLenCodec, BlockCodec, slice_to_blocks};
 use rand::rngs::StdRng;
 use rand::{RngExt as _, SeedableRng};
 
@@ -115,79 +111,57 @@ const ALL_PATTERNS: &[(&str, DataGeneratorFn)] = &[
 ];
 
 // ---------------------------------------------------------------------------
-// Codec helpers
+// Generic codec helpers
 // ---------------------------------------------------------------------------
 
-/// Compress `data` and return the compressed words.
-pub fn compress_data(codec: &mut FastPFOR, data: &[u32]) -> Vec<u32> {
-    let mut compressed = vec![0u32; data.len() * 2 + 1024];
-    let mut input_offset = Cursor::new(0);
-    let mut output_offset = Cursor::new(0);
-    codec
-        .compress(
-            data,
-            data.len() as u32,
-            &mut input_offset,
-            &mut compressed,
-            &mut output_offset,
-        )
-        .unwrap();
-    let len = output_offset.position() as usize;
-    compressed.truncate(len);
-    compressed
-}
-
-/// Decompress `compressed` into the caller-provided `decompressed` buffer and
-/// return the number of elements written.
+/// Compress `data` with codec `C`, appending to `out` (which is cleared first).
 ///
-/// The buffer must be allocated outside the timed loop so that allocation cost
-/// is not measured.
-pub fn decompress_data(
-    codec: &mut FastPFOR,
+/// Only the block-aligned prefix of `data` is compressed; any sub-block
+/// remainder is silently dropped, matching what the benchmarks measure.
+pub fn compress<C: BlockCodec + Default>(data: &[u32], out: &mut Vec<u32>) {
+    let mut codec = C::default();
+    let (blocks, _remainder) = slice_to_blocks::<C>(data);
+    out.clear();
+    codec.encode_blocks(blocks, out).unwrap();
+}
+
+/// Decompress `n_blocks` blocks of codec `C` from `compressed` into `out`
+/// (cleared first), returning the number of elements written.
+#[allow(dead_code)] // used by smoke tests; benches use codec directly
+pub fn decompress<C: BlockCodec + Default>(
     compressed: &[u32],
-    decompressed: &mut [u32],
+    n_blocks: usize,
+    out: &mut Vec<u32>,
 ) -> usize {
-    let mut input_offset = Cursor::new(0);
-    let mut output_offset = Cursor::new(0);
+    let mut codec = C::default();
+    out.clear();
+    let expected_values = n_blocks * C::size();
     codec
-        .uncompress(
+        .decode_blocks(
             compressed,
-            compressed.len() as u32,
-            &mut input_offset,
-            decompressed,
-            &mut output_offset,
+            Some(u32::try_from(expected_values).expect("expected_values fits in u32")),
+            out,
         )
         .unwrap();
-    output_offset.position() as usize
+    out.len()
 }
 
-/// Pre-compress `data` with a specific `block_size` and return the compressed buffer.
-fn prepare_compressed_data(data: &[u32], block_size: NonZeroU32) -> Vec<u32> {
-    compress_data(&mut FastPFOR::new(DEFAULT_PAGE_SIZE, block_size), data)
-}
-
-// ---------------------------------------------------------------------------
-// C++ helpers (compiled only when the `cpp` feature is active)
-// ---------------------------------------------------------------------------
-
-#[cfg(feature = "cpp")]
-pub fn cpp_encode(codec: &mut CppFastPFor128, data: &[u32]) -> Vec<u32> {
-    let mut out = Vec::new();
-    codec.encode(data, &mut out).unwrap();
-    out
-}
-
-#[cfg(feature = "cpp")]
-pub fn cpp_decode(
-    codec: &mut CppFastPFor128,
+/// Decompress with any-length codec `C`, using `expected_len` for validation/pre-allocation.
+#[allow(dead_code)] // used by smoke_cpp_vs_rust
+pub fn decompress_anylen<C: AnyLenCodec + Default>(
     compressed: &[u32],
-    decompressed: &mut [u32],
+    expected_len: usize,
+    out: &mut Vec<u32>,
 ) -> usize {
-    let mut out = Vec::new();
+    let mut codec = C::default();
+    out.clear();
     codec
-        .decode(compressed, &mut out, Some(decompressed.len() as u32))
+        .decode(
+            compressed,
+            out,
+            Some(u32::try_from(expected_len).expect("expected_len fits in u32")),
+        )
         .unwrap();
-    decompressed.copy_from_slice(&out);
     out.len()
 }
 
@@ -196,106 +170,78 @@ pub fn cpp_decode(
 // ---------------------------------------------------------------------------
 
 /// One row of pre-computed data for compression / decompression benchmarks.
-pub struct CompressFixture {
+///
+/// Parameterised by `C: BlockCodec` so the same struct works for both 128-
+/// and 256-element block codecs.
+pub struct CompressFixture<C: BlockCodec> {
     pub name: &'static str,
+    /// Block-aligned uncompressed data (exactly `n_blocks * C::elements_per_block()` elements).
     pub data: Vec<u32>,
-    /// Rust-compressed form (`BLOCK_SIZE_128`), ready for decompression benchmarks.
-    pub rust_compressed: Vec<u32>,
+    /// Pre-compressed form, ready for decompression benchmarks.
+    pub compressed: Vec<u32>,
+    /// Number of blocks in `data`.
+    pub n_blocks: usize,
+    _codec: PhantomData<C>,
 }
 
-impl CompressFixture {
-    fn new(name: &'static str, generator: DataGeneratorFn, size: usize) -> Self {
-        let data = generator(size);
-        let rust_compressed = prepare_compressed_data(&data, BLOCK_SIZE_128);
+impl<C: BlockCodec + Default> CompressFixture<C> {
+    fn new(name: &'static str, generator: DataGeneratorFn, block_count: usize) -> Self {
+        let data = generator(block_count * C::size());
+        // Data is already exactly block_count * blen elements; no trimming needed.
+        let mut compressed = Vec::new();
+        compress::<C>(&data, &mut compressed);
         Self {
             name,
-            data,
-            rust_compressed,
-        }
-    }
-}
-
-/// Build fixtures for every `COMPRESS_PATTERNS × sizes` combination.
-pub fn compress_fixtures(sizes: &[usize]) -> Vec<(usize, CompressFixture)> {
-    sizes
-        .iter()
-        .flat_map(|&size| {
-            COMPRESS_PATTERNS
-                .iter()
-                .map(move |&(name, generator)| (size, CompressFixture::new(name, generator, size)))
-        })
-        .collect()
-}
-
-/// Build fixtures for every `ALL_PATTERNS` at a single size.
-pub fn ratio_fixtures(size: usize) -> Vec<CompressFixture> {
-    ALL_PATTERNS
-        .iter()
-        .map(|&(name, generator)| CompressFixture::new(name, generator, size))
-        .collect()
-}
-
-/// One row for the block-size benchmark.
-pub struct BlockSizeFixture {
-    pub block_size: NonZeroU32,
-    pub data: Vec<u32>,
-    pub compressed: Vec<u32>,
-}
-
-impl BlockSizeFixture {
-    fn new(block_size: NonZeroU32, size: usize) -> Self {
-        let data = generate_uniform_data_small_value_distribution(size);
-        let compressed = prepare_compressed_data(&data, block_size);
-        Self {
-            block_size,
             data,
             compressed,
+            n_blocks: block_count,
+            _codec: PhantomData,
         }
     }
 }
 
-/// Build fixtures for both block sizes at a given `size`.
-pub fn block_size_fixtures(size: usize) -> Vec<BlockSizeFixture> {
-    [BLOCK_SIZE_128, BLOCK_SIZE_256]
+/// Build fixtures for every `COMPRESS_PATTERNS × block_counts` combination.
+pub fn compress_fixtures<C: BlockCodec + Default>(
+    block_counts: &[usize],
+) -> Vec<(usize, CompressFixture<C>)> {
+    block_counts
         .iter()
-        .map(|&bs| BlockSizeFixture::new(bs, size))
-        .collect()
-}
-
-/// One row for the C++ vs Rust decode benchmark.
-#[cfg(feature = "cpp")]
-pub struct CppDecodeFixture {
-    pub name: &'static str,
-    pub cpp_compressed: Vec<u32>,
-    pub rust_compressed: Vec<u32>,
-    pub original_len: usize,
-}
-
-#[cfg(feature = "cpp")]
-impl CppDecodeFixture {
-    fn new(name: &'static str, generator: DataGeneratorFn, size: usize) -> Self {
-        let data = generator(size);
-        let mut codec = CppFastPFor128::new();
-        let cpp_compressed = cpp_encode(&mut codec, &data);
-        let rust_compressed = prepare_compressed_data(&data, BLOCK_SIZE_128);
-        Self {
-            name,
-            cpp_compressed,
-            rust_compressed,
-            original_len: size,
-        }
-    }
-}
-
-/// Build C++ vs Rust decode fixtures for every `COMPRESS_PATTERNS × sizes` combination.
-#[cfg(feature = "cpp")]
-pub fn cpp_decode_fixtures(sizes: &[usize]) -> Vec<(usize, CppDecodeFixture)> {
-    sizes
-        .iter()
-        .flat_map(|&size| {
+        .flat_map(|&bc| {
             COMPRESS_PATTERNS
                 .iter()
-                .map(move |&(name, generator)| (size, CppDecodeFixture::new(name, generator, size)))
+                .map(move |&(name, generator)| (bc, CompressFixture::<C>::new(name, generator, bc)))
         })
         .collect()
+}
+
+/// Build fixtures for every `ALL_PATTERNS` at a single block count.
+pub fn ratio_fixtures<C: BlockCodec + Default>(block_count: usize) -> Vec<CompressFixture<C>> {
+    ALL_PATTERNS
+        .iter()
+        .map(|&(name, generator)| CompressFixture::<C>::new(name, generator, block_count))
+        .collect()
+}
+
+/// One row for the block-size comparison benchmark.
+///
+/// Parameterised by `C: BlockCodec` — create one per codec to compare.
+pub struct BlockSizeFixture<C: BlockCodec> {
+    pub data: Vec<u32>,
+    pub compressed: Vec<u32>,
+    pub n_blocks: usize,
+    _codec: PhantomData<C>,
+}
+
+impl<C: BlockCodec + Default> BlockSizeFixture<C> {
+    pub fn new(block_count: usize) -> Self {
+        let data = generate_uniform_data_small_value_distribution(block_count * C::size());
+        let mut compressed = Vec::new();
+        compress::<C>(&data, &mut compressed);
+        Self {
+            data,
+            compressed,
+            n_blocks: block_count,
+            _codec: PhantomData,
+        }
+    }
 }

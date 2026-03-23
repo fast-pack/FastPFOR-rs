@@ -75,9 +75,9 @@ jobs:
       matrix:
         include:
           - fuzz_target: cpp_roundtrip
-          - fuzz_target: rust_compress_oracle
-          - fuzz_target: rust_decompress_oracle
-          - fuzz_target: rust_decompress_arbitrary
+          - fuzz_target: encode_oracle
+          - fuzz_target: decode_oracle
+          - fuzz_target: decode_arbitrary
     steps:
       - uses: actions/checkout@v6
         with: {persist-credentials: false, submodules: recursive}

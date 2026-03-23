@@ -32,6 +32,25 @@ cargo +nightly fuzz run rust_compress_oracle
 cargo +nightly fuzz run rust_decompress_oracle
 # or
 cargo +nightly fuzz run cpp_roundtrip
+# or encode_compare (Rust vs C++ bit-identical output)
+cargo +nightly fuzz run encode_compare
+```
+
+### encode_compare: Bit-identical encode test
+
+The `encode_compare` target encodes the same input with Rust and C++ implementations and asserts the compressed output is bit-identical. Use it to find discrepancies between implementations.
+
+Codec pairs: FastPFor128/CppFastPFor128, FastPFor256/CppFastPFor256, VariableByte/CppVarInt, JustCopy/CppCopy.
+
+**Environment variables:**
+
+| Variable                                            | Description                               |
+|-----------------------------------------------------|-------------------------------------------|
+| `FUZZ_PAIR=NAME` or `FUZZ_ENCODE_COMPARE_PAIR=NAME` | Restrict to one pair (e.g. `FastPFor128`) |
+
+Example:
+```bash
+FUZZ_PAIR=FastPFor128 cargo +nightly fuzz run encode_compare
 ```
 
 Run for a specific duration (e.g., 60 seconds):

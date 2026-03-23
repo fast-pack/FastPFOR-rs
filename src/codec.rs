@@ -60,6 +60,9 @@ pub trait BlockCodec {
 
     /// Decompress blocks from `input`, using the length stored in the header.
     ///
+    /// Returns the number of input `u32` words consumed, so the caller (e.g.
+    /// [`CompositeCodec`](crate::CompositeCodec)) can locate the tail without parsing the block format.
+    ///
     /// When `expected_len` is `Some(n)`:
     /// - Validates that the header value equals `n` (must be a multiple of
     ///   [`size`](BlockCodec::size)).
@@ -152,7 +155,7 @@ pub trait AnyLenCodec {
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```
 /// # use fastpfor::{slice_to_blocks, FastPForBlock256};
 /// let data: Vec<u32> = (0..600).collect(); // 2 × 256 + 88 remainder
 /// let (blocks, remainder) = slice_to_blocks::<FastPForBlock256>(&data);

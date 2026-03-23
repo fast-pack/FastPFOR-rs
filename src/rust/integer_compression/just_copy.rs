@@ -1,6 +1,6 @@
-use std::io::Cursor;
-
-use crate::rust::{FastPForError, FastPForResult, Integer, Skippable};
+use crate::FastPForResult;
+use crate::codec::AnyLenCodec;
+use crate::helpers::AsUsize;
 
 /// A no-op codec that copies data without compression.
 ///
@@ -22,103 +22,64 @@ impl Default for JustCopy {
     }
 }
 
-impl Skippable for JustCopy {
-    fn headless_compress(
-        &mut self,
-        input: &[u32],
-        input_length: u32,
-        input_offset: &mut Cursor<u32>,
-        output: &mut [u32],
-        output_offset: &mut Cursor<u32>,
-    ) -> FastPForResult<()> {
-        let start_input = input_offset.position() as usize;
-        let end_input = start_input + input_length as usize;
-        let start_output = output_offset.position() as usize;
-        let end_output = start_output + input_length as usize;
-
-        if end_input > input.len() {
-            return Err(FastPForError::NotEnoughData);
-        }
-        if end_output > output.len() {
-            return Err(FastPForError::OutputBufferTooSmall);
-        }
-
-        output[start_output..end_output].copy_from_slice(&input[start_input..end_input]);
-
-        input_offset.set_position(end_input as u64);
-        output_offset.set_position(end_output as u64);
-
+impl AnyLenCodec for JustCopy {
+    fn encode(&mut self, input: &[u32], out: &mut Vec<u32>) -> FastPForResult<()> {
+        out.extend_from_slice(input);
         Ok(())
     }
 
-    fn headless_uncompress(
+    fn decode(
         &mut self,
         input: &[u32],
-        #[expect(unused)] input_length: u32,
-        input_offset: &mut Cursor<u32>,
-        output: &mut [u32],
-        output_offset: &mut Cursor<u32>,
-        num: u32,
+        out: &mut Vec<u32>,
+        expected_len: Option<u32>,
     ) -> FastPForResult<()> {
-        let start_input = input_offset.position() as usize;
-        let end_input = start_input + num as usize;
-        let start_output = output_offset.position() as usize;
-        let end_output = start_output + num as usize;
-
-        if end_input > input.len() {
-            return Err(FastPForError::NotEnoughData);
+        if let Some(expected) = expected_len {
+            let expected = expected.is_valid_expected(Self::max_decompressed_len(input.len()))?;
+            input.len().is_decoded_mismatch(expected)?;
         }
-        if end_output > output.len() {
-            return Err(FastPForError::OutputBufferTooSmall);
-        }
-
-        output[start_output..end_output].copy_from_slice(&input[start_input..end_input]);
-
-        input_offset.set_position(end_input as u64);
-        output_offset.set_position(end_output as u64);
+        out.extend_from_slice(input);
         Ok(())
     }
 }
 
-impl Integer<u32> for JustCopy {
-    fn compress(
-        &mut self,
-        input: &[u32],
-        input_length: u32,
-        input_offset: &mut Cursor<u32>,
-        output: &mut [u32],
-        output_offset: &mut Cursor<u32>,
-    ) -> FastPForResult<()> {
-        self.headless_compress(input, input_length, input_offset, output, output_offset)
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::FastPForError;
+
+    #[test]
+    fn justcopy_default_and_roundtrip() {
+        // Exercise the Default impl explicitly.
+        let mut codec = <JustCopy as Default>::default();
+        let data = vec![1u32, 2, 3];
+        let mut compressed = Vec::new();
+        codec.encode(&data, &mut compressed).unwrap();
+        let mut decoded = Vec::new();
+        codec.decode(&compressed, &mut decoded, None).unwrap();
+        assert_eq!(decoded, data);
     }
 
-    fn uncompress(
-        &mut self,
-        input: &[u32],
-        input_length: u32,
-        input_offset: &mut Cursor<u32>,
-        output: &mut [u32],
-        output_offset: &mut Cursor<u32>,
-    ) -> FastPForResult<()> {
-        let start_input = input_offset.position() as usize;
-        let end_input = start_input + input_length as usize;
-        let start_output = output_offset.position() as usize;
-        let end_output = start_output + input_length as usize;
+    #[test]
+    fn justcopy_decode_with_expected_len_ok() {
+        let data = vec![1u32, 2, 3];
+        let mut out = Vec::new();
+        JustCopy::new().decode(&data, &mut out, Some(3)).unwrap();
+        assert_eq!(out, data);
+    }
 
-        // Ensure we don't exceed the slice bounds
-        if end_input > input.len() {
-            return Err(FastPForError::NotEnoughData);
-        }
-        if end_output > output.len() {
-            return Err(FastPForError::OutputBufferTooSmall);
-        }
-
-        output[start_output..end_output].copy_from_slice(&input[start_input..end_input]);
-
-        // Update the cursor positions
-        input_offset.set_position(end_input as u64);
-        output_offset.set_position(end_output as u64);
-
-        Ok(())
+    #[test]
+    fn justcopy_decode_expected_len_mismatch_errors() {
+        let data = vec![1u32, 2, 3];
+        let err = JustCopy::new()
+            .decode(&data, &mut Vec::new(), Some(2))
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            FastPForError::DecodedCountMismatch {
+                actual: 3,
+                expected: 2
+            }
+        ));
     }
 }

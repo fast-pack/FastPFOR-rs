@@ -16,6 +16,16 @@ fastpfor = { path = "..", features = ["cpp", "rust"] }
 [workspace]
 members = ["."]
 
+[lints.rust]
+unused_qualifications = "warn"
+
+[lints.clippy]
+cargo = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+# Allow certain lints that are common in fuzz targets and not worth fixing.
+doc_markdown = "allow"
+wildcard_imports = "allow"
+
 [[bin]]
 name = "cpp_roundtrip"
 path = "fuzz_targets/cpp_roundtrip.rs"
@@ -23,19 +33,31 @@ test = false
 doc = false
 
 [[bin]]
-name = "rust_compress_oracle"
-path = "fuzz_targets/rust_compress_oracle.rs"
+name = "encode_oracle"
+path = "fuzz_targets/encode_oracle.rs"
 test = false
 doc = false
 
 [[bin]]
-name = "rust_decompress_oracle"
-path = "fuzz_targets/rust_decompress_oracle.rs"
+name = "decode_oracle"
+path = "fuzz_targets/decode_oracle.rs"
 test = false
 doc = false
 
 [[bin]]
-name = "rust_decompress_arbitrary"
-path = "fuzz_targets/rust_decompress_arbitrary.rs"
+name = "decode_arbitrary"
+path = "fuzz_targets/decode_arbitrary.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "encode_compare"
+path = "fuzz_targets/encode_compare.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "compare_fastpfor_128"
+path = "fuzz_targets/compare_fastpfor_128.rs"
 test = false
 doc = false

@@ -17,7 +17,6 @@ pub trait AsUsize: Eq + Copy {
     fn as_usize(self) -> usize;
 
     #[inline]
-    #[cfg(feature = "cpp")]
     fn is_decoded_mismatch(self, expected: impl AsUsize) -> FastPForResult<()> {
         let actual = self.as_usize();
         let expected = expected.as_usize();
@@ -30,7 +29,6 @@ pub trait AsUsize: Eq + Copy {
 
     /// Returns an error if `expected` exceeds `max`.
     #[inline]
-    #[cfg(feature = "cpp")]
     fn is_valid_expected(self, max: impl AsUsize) -> FastPForResult<usize> {
         let expected = self.as_usize();
         let max = max.as_usize();

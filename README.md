@@ -8,48 +8,140 @@
 [![CI build status](https://github.com/fast-pack/FastPFOR-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/fast-pack/FastPFOR-rs/actions)
 [![Codecov](https://img.shields.io/codecov/c/github/fast-pack/FastPFOR-rs)](https://app.codecov.io/gh/fast-pack/FastPFOR-rs)
 
-This is a Rust wrapper for the [C++ FastPFor library](https://github.com/fast-pack/FastPFor), as well as a pure Rust re-implementation.  Supports 32-bit and 64-bit integers, and SIMD-optimized codecs for 128-bit and 256-bit vectors. Based on the [Decoding billions of integers per second through vectorization, 2012](https://arxiv.org/abs/1209.2137) paper.
+Fast integer compression for Rust — both a pure-Rust implementation and a wrapper around the [C++ FastPFor library](https://github.com/fast-pack/FastPFor).
+Supports 32-bit (and for some codecs 64-bit) integers.
+Based on the [Decoding billions of integers per second through vectorization, 2012](https://arxiv.org/abs/1209.2137) paper.
 
 The Rust **decoder** is about 29% faster than the C++ version. The Rust implementation contains no `unsafe` code, and when built without the `cpp` feature this crate has `#![forbid(unsafe_code)]`.
 
-### Supported algorithms
-Unless otherwise specified, all codecs support `&[u32]` only.
+## Usage
 
-```text
-* BP32
-* Copy
-* FastBinaryPacking16
-* FastBinaryPacking32
-* FastBinaryPacking8
-* FastPFor128 (both `&[u32]` and `&[u64]`)
-* FastPFor256 (both `&[u32]` and `&[u64]`)
-* MaskedVByte
-* NewPFor
-* OptPFor
-* PFor
-* PFor2008
-* SimdBinaryPacking
-* SimdFastPFor128
-* SimdFastPFor256
-* SimdGroupSimple
-* SimdGroupSimpleRingBuf
-* SimdNewPFor
-* SimdOptPFor
-* SimdPFor
-* SimdSimplePFor
-* Simple16
-* Simple8b
-* Simple8bRle
-* Simple9
-* Simple9Rle
-* SimplePFor
-* StreamVByte
-* VByte
-* VarInt (both `&[u32]` and `&[u64]`)
-* VarIntGb
+### Rust Implementation (default)
+
+The simplest way is `FastPFor256` — a composite codec that handles any input
+length by compressing aligned 256-element blocks with `FastPForBlock256` and encoding any
+leftover values with `VariableByte`.
+
+```rust
+use fastpfor::{AnyLenCodec, FastPFor256};
+
+let mut codec = FastPFor256::default();
+let input: Vec<u32> = (0..1000).collect();
+
+let mut encoded = Vec::new();
+codec.encode(&input, &mut encoded).unwrap();
+
+let mut decoded = Vec::new();
+codec.decode(&encoded, &mut decoded, None).unwrap();
+
+assert_eq!(decoded, input);
 ```
 
+For block-aligned inputs you can use the lower-level `BlockCodec` API:
+
+```rust
+use fastpfor::{BlockCodec, FastPForBlock256, slice_to_blocks};
+
+let mut codec = FastPForBlock256::default();
+let input: Vec<u32> = (0..512).collect();   // exactly 2 blocks of 256
+
+let (blocks, remainder) = slice_to_blocks::<FastPForBlock256>(&input);
+assert_eq!(blocks.len(), 2);
+assert!(remainder.is_empty());
+
+let mut encoded = Vec::new();
+codec.encode_blocks(blocks, &mut encoded).unwrap();
+
+let mut decoded = Vec::new();
+codec.decode_blocks(&encoded, Some(u32::try_from(blocks.len() * 256).expect("block count fits in u32")), &mut decoded).unwrap();
+
+assert_eq!(decoded, input);
+```
+
+### C++ Wrapper (`cpp` feature)
+
+Enable the `cpp` feature in `Cargo.toml`:
+
+```toml
+fastpfor = { version = "0.1", features = ["cpp"] }
+```
+
+All C++ codecs implement the same `AnyLenCodec` trait (`encode` / `decode`), so
+the usage pattern is identical to the Rust examples above — just swap the codec type,
+e.g. `cpp::CppFastPFor128::new()`.
+
+**Thread safety:** C++ codec instances have internal state and are **not thread-safe**.
+Create one instance per thread or synchronize access externally.
+
+## Crate Features
+
+| Feature | Default | Description |
+|---------|---------|-------------|
+| `rust` | **yes** | Pure-Rust implementation — no `unsafe`, no build dependencies |
+| `cpp` | no | C++ wrapper via CXX — requires a C++14 compiler with SIMD support |
+| `cpp_portable` | no | Enables `cpp`, compiles C++ with SSE4.2 baseline (runs on any x86-64 from ~2008+) |
+| `cpp_native` | no | Enables `cpp`, compiles C++ with `-march=native` for maximum throughput on the build machine |
+
+The `FASTPFOR_SIMD_MODE` environment variable (`portable` or `native`) can override the SIMD mode at build time.
+
+**Recommendation:** Use `cpp_portable` (not `cpp_native`) for distributable binaries.
+
+## Supported Algorithms
+
+### Rust (`rust` feature)
+
+Rust block codecs require block-aligned input. `CompositeCodec` chains a block codec with a tail codec (e.g. `VariableByte`) to handle arbitrary-length input. `FastPFor256` and `FastPFor128` are type aliases for such composites.
+
+| Codec                      | Description                                                                               |
+|----------------------------|-------------------------------------------------------------------------------------------|
+| `FastPFor256`              | `CompositeCodec` of `FastPForBlock256` + `VariableByte`. **Recommended for general use.** |
+| `FastPFor128`              | `CompositeCodec` of `FastPForBlock128` + `VariableByte`                                   |
+| `VariableByte`             | Variable-byte encoding only; good for small integers                                      |
+| `JustCopy`                 | No compression; useful as a baseline                                                      |
+| `FastPForBlock256` (block) | `FastPFor` with 256-element blocks; block-aligned input only                              |
+| `FastPForBlock128` (block) | `FastPFor` with 128-element blocks; block-aligned input only                              |
+
+### C++ (`cpp` feature)
+
+All C++ codecs are composite (any-length) and implement `AnyLenCodec` only.
+`u64`-capable codecs (`CppFastPFor128`, `CppFastPFor256`, `CppVarInt`) also implement `BlockCodec64` with `encode64` / `decode64`.
+
+| Codec                       | Notes                                                                  |
+|-----------------------------|------------------------------------------------------------------------|
+| `CppFastPFor128`            | `FastPFor + VByte` composite, 128-element blocks. Also supports `u64`.  |
+| `CppFastPFor256`            | `FastPFor + VByte` composite, 256-element blocks. Also supports `u64`.  |
+| `CppSimdFastPFor128`        | SIMD-optimized 128-element variant                                     |
+| `CppSimdFastPFor256`        | SIMD-optimized 256-element variant                                     |
+| `CppBP32`                   | Binary packing, 32-bit blocks                                          |
+| `CppFastBinaryPacking8`     | Binary packing, 8-bit groups                                           |
+| `CppFastBinaryPacking16`    | Binary packing, 16-bit groups                                          |
+| `CppFastBinaryPacking32`    | Binary packing, 32-bit groups                                          |
+| `CppSimdBinaryPacking`      | SIMD-optimized binary packing                                          |
+| `CppPFor`                   | Patched frame-of-reference                                             |
+| `CppSimplePFor`             | Simplified `PFor` variant                                              |
+| `CppNewPFor`                | `PFor` with improved exception handling                                |
+| `CppOptPFor`                | Optimized `PFor`                                                       |
+| `CppPFor2008`               | Reference implementation from original paper                           |
+| `CppSimdPFor`               | SIMD `PFor`                                                            |
+| `CppSimdSimplePFor`         | SIMD `SimplePFor`                                                      |
+| `CppSimdNewPFor`            | SIMD `NewPFor`                                                         |
+| `CppSimdOptPFor`            | SIMD `OptPFor`                                                         |
+| `CppSimple16`               | 16 packing modes in 32-bit words                                       |
+| `CppSimple9`                | 9 packing modes                                                        |
+| `CppSimple9Rle`             | Simple9 with run-length encoding                                       |
+| `CppSimple8b`               | 8 packing modes in 64-bit words                                        |
+| `CppSimple8bRle`            | Simple8b with run-length encoding                                      |
+| `CppSimdGroupSimple`        | SIMD group-simple encoding                                             |
+| `CppSimdGroupSimpleRingBuf` | SIMD group-simple with ring buffer                                     |
+| `CppVByte`                  | Standard variable-byte encoding                                        |
+| `CppMaskedVByte`            | SIMD masked variable-byte                                              |
+| `CppStreamVByte`            | SIMD stream variable-byte                                              |
+| `CppVarInt`                 | Standard varint. Also supports `u64`.                                  |
+| `CppVarIntGb`               | Group varint                                                           |
+| `CppCopy`                   | No compression (baseline)                                              |
+
 ## Benchmarks
+
 ### Decoding
 
 Using Linux x86-64 running `just bench::cpp-vs-rust-decode native`. The values below are time measurements; smaller values indicate faster decoding.
@@ -67,92 +159,49 @@ Using Linux x86-64 running `just bench::cpp-vs-rust-decode native`. The values b
 | `uniform_small_value_distribution/1024` | 606.4    | 405.44    | 33.14%   |
 | `uniform_small_value_distribution/4096` | 2017.3   | 1403.7    | 30.42%   |
 
-Rust Encoding has not yet been either optimized or even fully verified.
-
-## Usage
-
-### Crate Features
-* `cpp` - C++ implementation (uses portable SIMD mode)
-* `rust` - Rust implementation (safe Rust code, no `unsafe` blocks)
-
-#### SIMD Mode Configuration
-
-The C++ backend can be compiled with different SIMD instruction sets. Control this by enabling one of these features:
-| Mode | Description |
-|------|-------------|
-| `cpp_portable` | **Default.** Uses SSE4.2 baseline only. Binaries run on any x86-64 CPU from ~2008+. Best for distributable libraries. |
-| `cpp_native` | Uses `-march=native` to enable all SIMD instructions supported by the build machine (AVX, AVX2, etc.). Maximum performance but may crash on CPUs lacking those instructions. |
-
-Feature selection can be overridden with the `FASTPFOR_SIMD_MODE` environment variable set to "portable" or "native".
-
-**Recommendation:** Use `portable` (default) for libraries and distributed binaries. Use `native` only when building for a specific machine where you need maximum performance.
-
-### Using C++ Wrapper
-
-```rust
-use fastpfor::AnyLenCodec as _;
-use fastpfor::cpp::CppSimdFastPFor128;
-
-fn main() {
-  let mut codec = CppSimdFastPFor128::new();
-
-  let input = vec![1u32, 2, 3, 4, 5];
-  let mut compressed = Vec::new();
-  codec.encode(&input, &mut compressed).unwrap();
-
-  let mut decoded = Vec::new();
-  codec
-    .decode(&compressed, &mut decoded, None)
-    .unwrap();
-
-  assert_eq!(input, decoded);
-}
-```
+Rust encoding has not yet been fully optimized or verified.
 
 ## Build Requirements
 
-- When using the **Rust implementation**:
-  no additional dependencies are required.
-- When using the **C++ implementation**:
-  you need to have a C++ compiler that supports C++14 and SIMD intrinsics.
+- **Rust feature** (`rust`, the default): no additional dependencies.
+- **C++ feature** (`cpp`): requires a C++14-capable compiler with SIMD intrinsics.
   See [FastPFor C++ requirements](https://github.com/fast-pack/FastPFor?tab=readme-ov-file#software-requirements).
 
 ### Linux
 
-The default GitHub action runner for Linux has all the needed dependencies.
+The default GitHub Actions runner has all needed dependencies.
 
-For local development, you may need to install the following packages:
+For local development:
 
 ```bash
 # This list may be incomplete
 sudo apt-get install build-essential
 ```
 
-`libsimde-dev` is optional. On ARM/aarch64, the C++ build fetches `SIMDe` via `CMake`,
-and the Rust CXX bridge now reuses that fetched include path automatically.
-Install `libsimde-dev` only if you prefer a system package fallback.
+`libsimde-dev` is optional. On ARM/aarch64, the C++ build fetches `SIMDe` via `CMake`
+and the CXX bridge reuses that include path automatically.
 
 ### macOS
-On Apple Silicon, manual `SIMDe` installation is usually not required.
-The C++ build fetches `SIMDe` via `CMake`, and the Rust CXX bridge reuses that path.
 
-If you prefer a system package fallback, install `SIMDe` with Homebrew and set include flags.
+On Apple Silicon, `SIMDe` installation is usually not required — the C++ build fetches it via `CMake`.
+
+If you prefer a Homebrew fallback:
 
 ```bash
-# optional: install SIMDe via Homebrew
 brew install simde
-
-# optional fallback: ensure the compiler can find Homebrew headers
 export CXXFLAGS="-I/opt/homebrew/include"
 export CFLAGS="-I/opt/homebrew/include"
 ```
 
 ## Development
 
-* This project is easier to develop with [just](https://github.com/casey/just#readme), a modern alternative to `make`.
-  Install it with `cargo install just`.
-* To get a list of available commands, run `just`.
-* To run tests, use `just test`.
+This project uses [just](https://github.com/casey/just#readme) as a task runner:
+
+```bash
+cargo install just   # install once
+just                 # list available commands
+just test            # run all tests
+```
 
 ## License
 
@@ -160,7 +209,8 @@ Licensed under either of
 
 * Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or <https://www.apache.org/licenses/LICENSE-2.0>)
 * MIT license ([LICENSE-MIT](LICENSE-MIT) or <https://opensource.org/licenses/MIT>)
-  at your option.
+
+at your option.
 
 ### Contribution
 

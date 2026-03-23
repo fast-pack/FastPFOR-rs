@@ -23,6 +23,15 @@ pub enum FastPForError {
     #[error("Invalid input length {0}")]
     InvalidInputLength(usize),
 
+    /// Page size is not a multiple of the block size
+    #[error("Page size {page_size} is not a multiple of block size {block_size}")]
+    InvalidPageSize {
+        /// The page size that was provided
+        page_size: u32,
+        /// The block size that the page size must be a multiple of
+        block_size: u32,
+    },
+
     /// Error propagated from the C++ `FastPFOR` library
     #[cfg(feature = "cpp")]
     #[error("C++ exception: {0}")]

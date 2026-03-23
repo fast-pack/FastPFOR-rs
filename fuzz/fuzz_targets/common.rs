@@ -1,125 +1,14 @@
+// The fuzz crate always enables both "rust" and "cpp" features of fastpfor.
+// Items here may only be used by some binaries; suppress dead_code lint.
+#![allow(dead_code)]
+
 use fastpfor::cpp::*;
-use fastpfor::{AnyLenCodec, rust};
-
-pub type BoxedCppCodec = Box<dyn AnyLenCodec>;
-
-#[derive(arbitrary::Arbitrary)]
-pub struct FuzzInput<C> {
-    pub data: Vec<u32>,
-    pub codec: C,
-}
-
-impl<C: std::fmt::Debug> std::fmt::Debug for FuzzInput<C> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("FuzzInput")
-            .field("codec", &self.codec)
-            .field("data", &HexSlice(&self.data))
-            .finish()
-    }
-}
-
-#[derive(arbitrary::Arbitrary, Clone, Copy, PartialEq, Eq, Debug)]
-pub enum RustCodec {
-    FastPFOR256,
-    FastPFOR128,
-    VariableByte,
-    JustCopy,
-}
-
-impl From<RustCodec> for rust::Codec {
-    fn from(codec: RustCodec) -> Self {
-        use rust::*;
-        match codec {
-            RustCodec::FastPFOR256 => Codec::from(FastPFOR::new(DEFAULT_PAGE_SIZE, BLOCK_SIZE_256)),
-            RustCodec::FastPFOR128 => Codec::from(FastPFOR::new(DEFAULT_PAGE_SIZE, BLOCK_SIZE_128)),
-            RustCodec::VariableByte => Codec::from(VariableByte::new()),
-            RustCodec::JustCopy => Codec::from(JustCopy::new()),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Eq, PartialEq, arbitrary::Arbitrary, Debug)]
-pub enum CppCodec {
-    BP32,
-    Copy,
-    FastBinaryPacking8,
-    FastPFor128,
-    FastPFor256,
-    FastBinaryPacking16,
-    FastBinaryPacking32,
-    MaskedVByte,
-    NewPFor,
-    OptPFor,
-    PFor2008,
-    PFor,
-    SimdBinaryPacking,
-    SimdFastPFor128,
-    SimdFastPFor256,
-    SimdGroupSimple,
-    SimdGroupSimpleRingBuf,
-    SimdNewPFor,
-    SimdOptPFor,
-    SimdPFor,
-    SimdSimplePFor,
-    // Simple16, // cannot encode arbitrary bytes
-    // Simple8b, // cannot encode arbitrary bytes
-    // Simple8bRle, // cannot encode arbitrary bytes
-    // Simple9, // cannot encode arbitrary bytes
-    // Simple9Rle, // cannot encode arbitrary bytes
-    // SimplePFor, // cannot encode arbitrary bytes
-    // Snappy,  // Conditional with #ifdef
-    StreamVByte,
-    VByte,
-    VarInt,
-    // VarIntG8iu,  // Conditional with #ifdef
-    VarIntGb,
-    // VsEncoding,  // This is leaking memory
-}
-
-impl From<CppCodec> for BoxedCppCodec {
-    fn from(codec: CppCodec) -> Self {
-        match codec {
-            CppCodec::BP32 => Box::new(CppBP32::default()),
-            CppCodec::Copy => Box::new(CppCopy::default()),
-            CppCodec::FastBinaryPacking8 => Box::new(CppFastBinaryPacking8::default()),
-            CppCodec::FastPFor128 => Box::new(CppFastPFor128::default()),
-            CppCodec::FastPFor256 => Box::new(CppFastPFor256::default()),
-            CppCodec::FastBinaryPacking16 => Box::new(CppFastBinaryPacking16::default()),
-            CppCodec::FastBinaryPacking32 => Box::new(CppFastBinaryPacking32::default()),
-            CppCodec::MaskedVByte => Box::new(CppMaskedVByte::default()),
-            CppCodec::NewPFor => Box::new(CppNewPFor::default()),
-            CppCodec::OptPFor => Box::new(CppOptPFor::default()),
-            CppCodec::PFor2008 => Box::new(CppPFor2008::default()),
-            CppCodec::PFor => Box::new(CppPFor::default()),
-            CppCodec::SimdBinaryPacking => Box::new(CppSimdBinaryPacking::default()),
-            CppCodec::SimdFastPFor128 => Box::new(CppSimdFastPFor128::default()),
-            CppCodec::SimdFastPFor256 => Box::new(CppSimdFastPFor256::default()),
-            CppCodec::SimdGroupSimple => Box::new(CppSimdGroupSimple::default()),
-            CppCodec::SimdGroupSimpleRingBuf => Box::new(CppSimdGroupSimpleRingBuf::default()),
-            CppCodec::SimdNewPFor => Box::new(CppSimdNewPFor::default()),
-            CppCodec::SimdOptPFor => Box::new(CppSimdOptPFor::default()),
-            CppCodec::SimdPFor => Box::new(CppSimdPFor::default()),
-            CppCodec::SimdSimplePFor => Box::new(CppSimdSimplePFor::default()),
-            // CppCodec::Simple16 => Box::new(CppSimple16::default()),
-            // CppCodec::Simple8b => Box::new(CppSimple8b::default()),
-            // CppCodec::Simple8bRle => Box::new(CppSimple8bRle::default()),
-            // CppCodec::Simple9 => Box::new(CppSimple9::default()),
-            // CppCodec::Simple9Rle => Box::new(CppSimple9Rle::default()),
-            // CppCodec::SimplePFor => Box::new(CppSimplePFor::default()),
-            // CppCodec::Snappy => Box::new(CppSnappy::default()),
-            CppCodec::StreamVByte => Box::new(CppStreamVByte::default()),
-            CppCodec::VByte => Box::new(CppVByte::default()),
-            CppCodec::VarInt => Box::new(CppVarInt::default()),
-            // CppCodec::VarIntG8iu => Box::new(CppVarIntG8iu::default()),
-            CppCodec::VarIntGb => Box::new(CppVarIntGb::default()),
-            // CppCodec::VsEncoding => Box::new(CppVsEncoding::default()),
-        }
-    }
-}
+use fastpfor::{AnyLenCodec, FastPFor128, FastPFor256, JustCopy, VariableByte};
+// ── Debug helper ─────────────────────────────────────────────────────────────
 
 pub struct HexSlice<'a>(pub &'a [u32]);
 
-impl<'a> std::fmt::Debug for HexSlice<'a> {
+impl std::fmt::Debug for HexSlice<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         const MAX: usize = 20;
 
@@ -129,13 +18,151 @@ impl<'a> std::fmt::Debug for HexSlice<'a> {
         let mut list = f.debug_list();
 
         for v in &self.0[..shown] {
-            list.entry(&format_args!("{:#010x}", v));
+            list.entry(&format_args!("{v:#010x}"));
         }
 
         if total > MAX {
-            list.entry(&format_args!(".. out of {} total", total));
+            list.entry(&format_args!(".. out of {total} total"));
         }
 
         list.finish()
     }
+}
+
+/// A fuzz input pairing arbitrary data with a codec selector.
+#[derive(arbitrary::Arbitrary, Debug)]
+pub struct FuzzInput<C> {
+    pub data: Vec<u32>,
+    pub codec: C,
+}
+
+pub type AnyLen = Box<dyn AnyLenCodec>;
+
+pub type CodecEntry = (&'static str, fn() -> AnyLen);
+
+/// Generates `(name, || Box::new(T::default()))` entries from a list of types.
+macro_rules! codec_list {
+    ($($t:ty),* $(,)?) => {
+        &[
+            $( (stringify!($t), || Box::new(<$t>::default())) ),*
+        ]
+    };
+}
+
+/// Rust codecs. Block codecs are wrapped in `CompositeCodec<_, VariableByte>`.
+pub static RUST: &[CodecEntry] = codec_list!(FastPFor256, FastPFor128, VariableByte, JustCopy,);
+
+/// C++ codecs (any-length; block codecs are already composites in the C++ library).
+pub static CPP: &[CodecEntry] = codec_list!(
+    CppBP32,
+    CppCopy,
+    CppFastBinaryPacking8,
+    CppFastPFor128,
+    CppFastPFor256,
+    CppFastBinaryPacking16,
+    CppFastBinaryPacking32,
+    CppMaskedVByte,
+    CppNewPFor,
+    CppOptPFor,
+    CppPFor2008,
+    CppPFor,
+    CppSimdBinaryPacking,
+    CppSimdFastPFor128,
+    CppSimdFastPFor256,
+    CppSimdGroupSimple,
+    CppSimdGroupSimpleRingBuf,
+    CppSimdNewPFor,
+    CppSimdOptPFor,
+    CppSimdPFor,
+    CppSimdSimplePFor,
+    // Simple16 / Simple8b / Simple8bRle / Simple9 / Simple9Rle / SimplePFor:
+    //   cannot encode arbitrary u32 values.
+    // Snappy / VarIntG8iu: conditional #ifdef in C++.
+    // VsEncoding: leaks memory.
+    CppStreamVByte,
+    CppVByte,
+    CppVarInt,
+    CppVarIntGb,
+);
+
+// ── Codec selector (Arbitrary) ─────────────────────────────────────────────────
+
+/// Selects a codec by index. `idx` is wrapped modulo the list length.
+/// `use_cpp` switches between [`RUST`] and [`CPP`].
+#[derive(arbitrary::Arbitrary, Clone, Copy, Debug)]
+pub struct AnyLenSelector {
+    pub idx: u8,
+    pub use_cpp: bool,
+}
+
+/// Instantiate a codec, returning `(name, codec)`.
+pub fn instantiate_anylen_codec(sel: AnyLenSelector) -> (&'static str, AnyLen) {
+    let list = if sel.use_cpp { CPP } else { RUST };
+    let (name, make) = list[sel.idx as usize % list.len()];
+    (name, make())
+}
+
+// ── Encode compare: Rust vs C++ bit-identical pairs ────────────────────────────
+
+/// A pair of codecs that should produce bit-identical compressed output.
+/// `rust` = Rust implementation, `cpp` = C++ implementation
+#[derive(Clone, Copy)]
+pub struct CodecPair {
+    pub name: &'static str,
+    pub make_rust: fn() -> AnyLen,
+    pub make_cpp: fn() -> AnyLen,
+}
+
+macro_rules! codec_pair {
+    ($name:expr, $rust:ty, $cpp:ty) => {
+        CodecPair {
+            name: $name,
+            make_rust: || Box::new(<$rust>::default()),
+            make_cpp: || Box::new(<$cpp>::default()),
+        }
+    };
+    ($name:expr, $rust:ty, $cpp:ty, $cpp_alt:ty) => {
+        CodecPair {
+            name: $name,
+            make_rust: || Box::new(<$rust>::default()),
+            make_cpp: || Box::new(<$cpp>::default()),
+        }
+    };
+}
+
+/// Pairs of Rust and C++ codecs expected to produce bit-identical output.
+pub static ENCODE_COMPARE_PAIRS: &[CodecPair] = &[
+    codec_pair!("FastPFor128", FastPFor128, CppFastPFor128),
+    codec_pair!("FastPFor256", FastPFor256, CppFastPFor256),
+    codec_pair!("VariableByte", VariableByte, CppVarInt),
+    codec_pair!("JustCopy", JustCopy, CppCopy),
+];
+
+/// Optional pair filter: if set, only the named pair is tested.
+/// Set `FUZZ_PAIR=FastPFor128` or `FUZZ_ENCODE_COMPARE_PAIR=FastPFor128` to restrict.
+pub fn encode_compare_pair_filter() -> Option<String> {
+    std::env::var("FUZZ_PAIR")
+        .ok()
+        .or_else(|| std::env::var("FUZZ_ENCODE_COMPARE_PAIR").ok())
+}
+
+/// Resolve a pair index to a `CodecPair`, applying filter and alternative substitution.
+pub fn resolve_encode_compare_pair(idx: u8) -> Option<CodecPair> {
+    let filter = encode_compare_pair_filter();
+    let pairs = ENCODE_COMPARE_PAIRS;
+    let i = idx as usize % pairs.len();
+    let pair = pairs[i];
+    if let Some(ref f) = filter
+        && !f.eq_ignore_ascii_case(pair.name)
+    {
+        return None;
+    }
+    Some(pair)
+}
+
+/// Instantiate both codecs for a pair, using the alternative C++ when requested.
+pub fn instantiate_pair(pair: CodecPair) -> (AnyLen, AnyLen) {
+    let rust_codec = (pair.make_rust)();
+    let cpp_codec = (pair.make_cpp)();
+    (rust_codec, cpp_codec)
 }
