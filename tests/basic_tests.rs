@@ -5,11 +5,12 @@
 #[path = "../src/test_utils.rs"]
 mod test_utils;
 
+use bytemuck::cast_slice;
 use fastpfor::{BlockCodec, FastPForBlock128, FastPForBlock256, slice_to_blocks};
 use rand::rngs::StdRng;
 use rand::{RngExt as _, SeedableRng};
 
-use crate::test_utils::{block_roundtrip_all, roundtrip_all};
+use crate::test_utils::{block_compress, block_roundtrip_all, roundtrip_all};
 
 mod common;
 
@@ -27,8 +28,7 @@ fn spurious_out_test() {
     fn check<C: BlockCodec + Default>(len: usize) {
         let x = vec![0u32; 1024];
         let (blocks, _) = slice_to_blocks::<C>(&x[..len]);
-        let mut out = Vec::new();
-        C::default().encode_blocks(blocks, &mut out).unwrap();
+        let out = block_compress::<C>(cast_slice(blocks)).unwrap();
         assert!(out.is_empty() || blocks.is_empty());
     }
     for len in 0..32usize {

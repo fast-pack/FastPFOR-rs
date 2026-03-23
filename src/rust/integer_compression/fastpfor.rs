@@ -665,11 +665,7 @@ mod tests {
     #[test]
     fn uncompress_zero_input_length_err() {
         // Truly empty input (no header word at all) is invalid — C++ would crash reading *in.
-        assert!(
-            FastPForBlock256::default()
-                .decode_blocks(&[], None, &mut Vec::new())
-                .is_err()
-        );
+        block_decompress::<FastPForBlock256>(&[], None).unwrap_err();
     }
 
     #[test]
