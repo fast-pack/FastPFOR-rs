@@ -605,7 +605,11 @@ mod tests {
             .unwrap();
         let mut decoded = Vec::new();
         FastPFor::<N>::default()
-            .decode_blocks(&compressed, Some((blocks.len() * N) as u32), &mut decoded)
+            .decode_blocks(
+                &compressed,
+                Some((blocks.len() * N).try_into().unwrap()),
+                &mut decoded,
+            )
             .unwrap();
         decoded
     }

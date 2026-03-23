@@ -21,6 +21,7 @@ use fastpfor::{AnyLenCodec, BlockCodec, slice_to_blocks};
 fn test_rust_decompresses_cpp_encoded_data() {
     let mut codec_cpp = CppFastPFor128::default();
     let mut codec_rs = FastPForBlock128::default();
+    let mut cpp_compressed = Vec::new();
 
     for n in test_input_sizes() {
         for input in get_test_cases(n + 128) {
@@ -29,7 +30,7 @@ fn test_rust_decompresses_cpp_encoded_data() {
             }
             let n_blocks = input.len() / 128;
 
-            let mut cpp_compressed = Vec::new();
+            cpp_compressed.truncate(0);
             codec_cpp.encode(&input, &mut cpp_compressed).unwrap();
 
             let mut rust_decoded = Vec::new();
@@ -122,12 +123,14 @@ fn test_rust_and_cpp_compression_matches() {
 /// Rust `AnyLenCodec` (`CompositeCodec`) encoder → round-trip.
 #[test]
 fn test_rust_anylen_roundtrip() {
+    let mut codec = FastPFor256::default();
+    let mut compressed = Vec::new();
+    let mut decoded = Vec::new();
     for n in test_input_sizes() {
-        let mut codec = FastPFor256::default();
         for input in get_test_cases(n) {
-            let mut compressed = Vec::new();
+            compressed.truncate(0);
+            decoded.truncate(0);
             codec.encode(&input, &mut compressed).unwrap();
-            let mut decoded = Vec::new();
             codec.decode(&compressed, &mut decoded, None).unwrap();
             assert_eq!(decoded, input, "Rust AnyLenCodec round-trip failed");
         }

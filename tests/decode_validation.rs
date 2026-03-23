@@ -10,9 +10,10 @@
 #[path = "../src/test_utils.rs"]
 mod test_utils;
 
-use crate::test_utils::{block_compress, decompress};
 use bytemuck::cast_slice_mut;
 use fastpfor::{FastPFor128, FastPForBlock128};
+
+use crate::test_utils::{block_compress, decompress};
 
 /// Matches `DEFAULT_PAGE_SIZE` in `fastpfor` (64 Ki integers per page).
 const DEFAULT_PAGE_SIZE: u32 = 65536;
