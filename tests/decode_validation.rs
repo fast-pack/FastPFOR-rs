@@ -25,12 +25,6 @@ fn compressed_with_exceptions() -> Vec<u32> {
     block_compress::<FastPForBlock128>(&data).unwrap()
 }
 
-fn compressed_with_index1_exceptions() -> Vec<u32> {
-    let mut data = vec![1u32; 128];
-    data[0] = 3;
-    block_compress::<FastPForBlock128>(&data).unwrap()
-}
-
 fn meta_byte_start(compressed: &[u32]) -> usize {
     let where_meta = compressed[1] as usize;
     (1 + where_meta + 1) * 4
@@ -189,7 +183,9 @@ fn decode_returns_error_when_exception_index_equals_optimal_bits() {
 
 #[test]
 fn decode_returns_error_when_index1_exception_position_byte_truncated() {
-    let compressed = compressed_with_index1_exceptions();
+    let mut data = vec![1u32; 128];
+    data[0] = 3;
+    let compressed = block_compress::<FastPForBlock128>(&data).unwrap();
     decompress::<FastPFor128>(&compressed[..compressed.len() - 1], Some(128)).unwrap_err();
 }
 

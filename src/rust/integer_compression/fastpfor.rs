@@ -589,38 +589,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::block_roundtrip;
+    use crate::test_utils::{block_compress, block_decompress, block_roundtrip};
 
     // ── Generic helpers ───────────────────────────────────────────────────────
-
-    /// Encode `data` as a single batch of `[u32; N]` blocks and return the compressed words.
-    fn encode_block<const N: usize>(data: &[u32]) -> Vec<u32>
-    where
-        FastPFor<N>: BlockCodec<Block = [u32; N]>,
-        [u32; N]: bytemuck::Pod,
-    {
-        let mut out = Vec::new();
-        FastPFor::<N>::default()
-            .encode_blocks(cast_slice(data), &mut out)
-            .expect("compression must succeed");
-        out
-    }
-
-    /// Compressed data containing at least one non-trivial exception group.
-    fn compressed_with_exceptions() -> (Vec<u32>, Vec<u32>) {
-        let data: Vec<u32> = (0..256u32)
-            .map(|i| if i % 2 == 0 { 1u32 << 30 } else { 3 })
-            .collect();
-        (encode_block::<256>(&data), data)
-    }
-
-    /// Compressed data whose exception group uses bit-width difference == 1
-    /// (`maxbits - optimal_bits == 1`), triggering the `index == 1` branch.
-    fn compressed_with_index1_exceptions() -> (Vec<u32>, Vec<u32>) {
-        let mut data = vec![1u32; 256];
-        data[0] = 3; // needs 2 bits → encoder picks optimal_bits=1, maxbits=2, index=1
-        (encode_block::<256>(&data), data)
-    }
 
     // ── Round-trip tests ──────────────────────────────────────────────────────
 
@@ -641,16 +612,10 @@ mod tests {
     #[test]
     fn test_empty_blocks_ok() {
         // Empty input encodes to length header [0] (matches C++ FastPFor) and decodes cleanly.
-        let mut enc = Vec::new();
-        FastPForBlock256::default()
-            .encode_blocks(&[], &mut enc)
-            .unwrap();
+        let enc = block_compress::<FastPForBlock256>(&[]).unwrap();
         assert_eq!(enc, [0]);
-        let mut dec = Vec::new();
-        FastPForBlock256::default()
-            .decode_blocks(&enc, Some(0), &mut dec)
-            .unwrap();
-        assert_eq!(dec, []);
+        let dec = block_decompress::<FastPForBlock256>(&enc, Some(0)).unwrap();
+        assert!(dec.is_empty());
     }
 
     // Tests ported from C++
@@ -723,7 +688,11 @@ mod tests {
     #[test]
     fn decode_where_meta_overflow() {
         // `decode_headless_blocks` only: no `AnyLenCodec` entry point passes this layout.
-        let (compressed, _) = compressed_with_exceptions();
+        let data: Vec<u32> = (0..256u32)
+            .map(|i| if i % 2 == 0 { 1u32 << 30 } else { 3 })
+            .collect();
+        let compressed = block_compress::<FastPForBlock256>(&data).unwrap();
+
         let mut padded = vec![0u32];
         padded.extend_from_slice(&compressed);
         padded[2] = u32::MAX;
@@ -743,11 +712,10 @@ mod tests {
 
     #[test]
     fn decode_index1_branch_valid() {
-        let (compressed, data) = compressed_with_index1_exceptions();
-        let mut out = Vec::new();
-        FastPForBlock256::default()
-            .decode_blocks(&compressed, Some(256), &mut out)
-            .expect("decompression of index-1 data must succeed");
+        let mut data = vec![1u32; 256];
+        data[0] = 3;
+        let compressed = block_compress::<FastPForBlock256>(&data).unwrap();
+        let out = block_decompress::<FastPForBlock256>(&compressed, Some(256)).unwrap();
         assert_eq!(out, data);
     }
 
@@ -756,10 +724,7 @@ mod tests {
     fn decode_blocks_header_only_input() {
         // Input with just the length header [0]: no blocks to decode.
         let input = vec![0u32];
-        let mut out = Vec::new();
-        FastPForBlock256::default()
-            .decode_blocks(&input, None, &mut out)
-            .unwrap();
+        let out = block_decompress::<FastPForBlock256>(&input, None).unwrap();
         assert!(out.is_empty());
     }
 }
