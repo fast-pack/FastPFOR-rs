@@ -9,10 +9,9 @@
 mod test_utils;
 
 use fastpfor::{FastPFor128, FastPFor256, FastPForBlock128};
-use test_utils::{compress, decompress};
+use test_utils::{block_compress, compress, decompress, roundtrip};
 
 mod common;
-use crate::test_utils::{block_compress, roundtrip};
 use common::{get_test_cases, test_input_sizes};
 use fastpfor::cpp::CppFastPFor128;
 use fastpfor::{AnyLenCodec, BlockCodec, slice_to_blocks};
@@ -97,21 +96,21 @@ fn test_rust_and_cpp_compression_matches() {
             if input.len() % 128 != 0 || input.is_empty() {
                 continue;
             }
-            let compressed = compress::<CppFastPFor128>(&input);
+            let compressed = compress::<CppFastPFor128>(&input).unwrap();
             assert_eq!(
                 compressed,
-                block_compress::<FastPForBlock128>(&input),
+                block_compress::<FastPForBlock128>(&input).unwrap(),
                 "Compressed bytes differ for input len {}",
                 input.len()
             );
             assert_eq!(
-                decompress::<CppFastPFor128>(&compressed, None),
+                decompress::<CppFastPFor128>(&compressed, None).unwrap(),
                 input,
                 "Rust→C++ roundtrip mismatch for len {}",
                 input.len()
             );
             assert_eq!(
-                decompress::<FastPFor128>(&compressed, None),
+                decompress::<FastPFor128>(&compressed, None).unwrap(),
                 input,
                 "Rust→C++ roundtrip mismatch for len {}",
                 input.len()

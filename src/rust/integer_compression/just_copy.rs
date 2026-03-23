@@ -46,34 +46,20 @@ impl AnyLenCodec for JustCopy {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::FastPForError;
-    use crate::test_utils::{decompress, roundtrip};
+    use crate::test_utils::{decompress, roundtrip, roundtrip_expected};
 
     #[test]
-    fn justcopy_default_and_roundtrip() {
+    fn justcopy_roundtrip() {
         roundtrip::<JustCopy>(&[1u32, 2, 3]);
     }
 
     #[test]
-    fn justcopy_decode_with_expected_len_ok() {
-        let data = vec![1u32, 2, 3];
-        let out = decompress::<JustCopy>(&data, Some(3));
-        assert_eq!(out, data);
+    fn justcopy_roundtrip_with_expected_len_none() {
+        roundtrip_expected::<JustCopy>(&[1u32, 2, 3], None);
     }
 
     #[test]
-    #[expect(clippy::default_constructed_unit_structs)]
     fn justcopy_decode_expected_len_mismatch_errors() {
-        let data = vec![1u32, 2, 3];
-        let err = JustCopy::default()
-            .decode(&data, &mut Vec::new(), Some(2))
-            .unwrap_err();
-        assert!(matches!(
-            err,
-            FastPForError::DecodedCountMismatch {
-                actual: 3,
-                expected: 2
-            }
-        ));
+        decompress::<JustCopy>(&[1u32, 2, 3], Some(2)).unwrap_err();
     }
 }

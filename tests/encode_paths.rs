@@ -95,7 +95,7 @@ fn fastpfor_encode_128_block_with_exceptions() {
 /// Decompressing an empty stream succeeds with empty output.
 #[test]
 fn variable_byte_anylen_decompress_short_input() {
-    let out = decompress::<VariableByte>(&[], None);
+    let out = decompress::<VariableByte>(&[], None).unwrap();
     assert!(out.is_empty());
 }
 

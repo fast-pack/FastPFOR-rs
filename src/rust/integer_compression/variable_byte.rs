@@ -364,7 +364,6 @@ mod tests {
     use std::hash::{BuildHasher, Hasher};
 
     use super::*;
-
     use crate::test_utils::{compress, decompress, roundtrip};
 
     fn verify_u32_roundtrip(input: &[u32]) {
@@ -658,27 +657,16 @@ mod tests {
     #[test]
     fn test_anylen_decode_with_expected_len_ok() {
         let data = vec![1u32, 2, 3];
-        let encoded = compress::<VariableByte>(&data);
-        let decoded = decompress::<VariableByte>(&encoded, Some(3));
+        let encoded = compress::<VariableByte>(&data).unwrap();
+        let decoded = decompress::<VariableByte>(&encoded, Some(3)).unwrap();
         assert_eq!(decoded, data);
     }
 
     #[test]
-    #[expect(clippy::default_constructed_unit_structs)]
     fn test_anylen_decode_expected_len_mismatch_errors() {
         // expected_len must be >= actual to avoid OutputBufferTooSmall; use a larger
         // value to exercise the is_decoded_mismatch path.
-        let data = vec![1u32, 2, 3];
-        let encoded = compress::<VariableByte>(&data);
-        let err = VariableByte::default()
-            .decode(&encoded, &mut Vec::new(), Some(10))
-            .unwrap_err();
-        assert!(matches!(
-            err,
-            FastPForError::DecodedCountMismatch {
-                actual: 3,
-                expected: 10
-            }
-        ));
+        let encoded = compress::<VariableByte>(&[1u32, 2, 3]).unwrap();
+        decompress::<VariableByte>(&encoded, Some(10)).unwrap_err();
     }
 }

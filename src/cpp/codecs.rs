@@ -212,32 +212,32 @@ pub(crate) mod tests {
 
     #[test]
     fn test_varint_u64() {
-        let input = vec![1u64, 2, 3, 4, 5];
-        roundtrip64::<CppVarInt>(&input);
+        roundtrip64::<CppVarInt>(&[1u64, 2, 3, 4, 5]);
     }
 
     #[test]
     fn test_decode32_empty_input() {
-        assert!(decompress::<CppVByte>(&[], None).is_empty());
+        assert!(decompress::<CppVByte>(&[], None).unwrap().is_empty());
     }
 
     #[test]
     fn test_decode32_cpp_empty_format() {
-        assert!(decompress::<CppFastPFor128>(&[0u32], Some(0)).is_empty());
+        let result = decompress::<CppFastPFor128>(&[0u32], Some(0)).unwrap();
+        assert!(result.is_empty());
     }
 
     #[test]
     fn test_decode64_empty_input() {
-        assert!(decompress64::<CppFastPFor256>(&[]).is_empty());
+        assert!(decompress64::<CppFastPFor256>(&[]).unwrap().is_empty());
     }
 
     #[test]
     fn test_decode64_empty_format() {
-        assert!(decompress64::<CppVarInt>(&[]).is_empty());
+        assert!(decompress64::<CppVarInt>(&[]).unwrap().is_empty());
     }
 
     #[test]
     fn test_decode_empty_input() {
-        assert!(decompress::<CppFastPFor128>(&[], None).is_empty());
+        assert!(decompress::<CppFastPFor128>(&[], None).unwrap().is_empty());
     }
 }

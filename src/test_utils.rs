@@ -19,7 +19,7 @@
 #[cfg(feature = "cpp")]
 use fastpfor::BlockCodec64;
 #[allow(unused_imports)]
-use fastpfor::{AnyLenCodec, BlockCodec, slice_to_blocks};
+use fastpfor::{AnyLenCodec, BlockCodec, FastPForResult, slice_to_blocks};
 #[cfg(feature = "rust")]
 use fastpfor::{
     FastPFor128, FastPFor256, FastPForBlock128, FastPForBlock256, JustCopy, VariableByte,
@@ -32,43 +32,43 @@ const SEED: u64 = 456;
 // ---------------------------------------------------------------------------
 
 /// Encode `data` with a caller-owned codec, decode with `expected_len: None`, assert round-trip.
-pub fn roundtrip_with<C: AnyLenCodec>(codec: &mut C, data: &[u32]) {
+pub fn roundtrip_expected<C: AnyLenCodec>(data: &[u32], expected_len: Option<u32>) {
+    let mut codec = C::default();
     let mut compressed = Vec::new();
     codec.encode(data, &mut compressed).unwrap();
     let mut decoded = Vec::new();
-    codec.decode(&compressed, &mut decoded, None).unwrap();
+    codec
+        .decode(&compressed, &mut decoded, expected_len)
+        .unwrap();
     assert_eq!(decoded, data);
 }
 
 pub fn roundtrip<C: AnyLenCodec>(data: &[u32]) {
-    let mut codec = C::default();
-    roundtrip_with(&mut codec, data);
+    roundtrip_expected::<C>(data, Some(data.len().try_into().unwrap()));
 }
 
-pub fn compress<C: AnyLenCodec>(data: &[u32]) -> Vec<u32> {
-    let mut codec = C::default();
+pub fn compress<C: AnyLenCodec>(data: &[u32]) -> FastPForResult<Vec<u32>> {
     let mut compressed = Vec::new();
-    codec.encode(data, &mut compressed).unwrap();
-    compressed
+    C::default().encode(data, &mut compressed)?;
+    Ok(compressed)
 }
 
-pub fn decompress<C: AnyLenCodec>(compressed: &[u32], expected_len: Option<u32>) -> Vec<u32> {
-    let mut codec = C::default();
+pub fn decompress<C: AnyLenCodec>(
+    compressed: &[u32],
+    expected_len: Option<u32>,
+) -> FastPForResult<Vec<u32>> {
     let mut decompressed = Vec::new();
-    codec
-        .decode(compressed, &mut decompressed, expected_len)
-        .unwrap();
-    decompressed
+    C::default().decode(compressed, &mut decompressed, expected_len)?;
+    Ok(decompressed)
 }
 
 pub fn block_roundtrip<C: BlockCodec>(data: &[u32]) {
-    let compressed = block_compress::<C>(data);
-    let decompressed = block_decompress::<C>(&compressed, Some(data.len() as u32));
+    let compressed = block_compress::<C>(data).unwrap();
+    let decompressed = block_decompress::<C>(&compressed, Some(data.len() as u32)).unwrap();
     assert_eq!(decompressed, data);
 }
 
-pub fn block_compress<C: BlockCodec>(data: &[u32]) -> Vec<u32> {
-    let mut codec = C::default();
+pub fn block_compress<C: BlockCodec>(data: &[u32]) -> FastPForResult<Vec<u32>> {
     let (blocks, remainder) = slice_to_blocks::<C>(data);
     assert_eq!(
         remainder.len(),
@@ -76,17 +76,17 @@ pub fn block_compress<C: BlockCodec>(data: &[u32]) -> Vec<u32> {
         "data length must be a multiple of block size"
     );
     let mut out = Vec::new();
-    codec.encode_blocks(blocks, &mut out).unwrap();
-    out
+    C::default().encode_blocks(blocks, &mut out)?;
+    Ok(out)
 }
 
-pub fn block_decompress<C: BlockCodec>(compressed: &[u32], expected_len: Option<u32>) -> Vec<u32> {
-    let mut codec = C::default();
+pub fn block_decompress<C: BlockCodec>(
+    compressed: &[u32],
+    expected_len: Option<u32>,
+) -> FastPForResult<Vec<u32>> {
     let mut out = Vec::new();
-    codec
-        .decode_blocks(compressed, expected_len, &mut out)
-        .unwrap();
-    out
+    C::default().decode_blocks(compressed, expected_len, &mut out)?;
+    Ok(out)
 }
 
 #[cfg(feature = "cpp")]
@@ -100,19 +100,17 @@ pub fn roundtrip64<C: BlockCodec64 + Default>(data: &[u64]) {
 }
 
 #[cfg(feature = "cpp")]
-pub fn compress64<C: BlockCodec64 + Default>(data: &[u64]) -> Vec<u32> {
-    let mut codec = C::default();
+pub fn compress64<C: BlockCodec64 + Default>(data: &[u64]) -> FastPForResult<Vec<u32>> {
     let mut compressed = Vec::new();
-    codec.encode64(data, &mut compressed).unwrap();
-    compressed
+    C::default().encode64(data, &mut compressed)?;
+    Ok(compressed)
 }
 
 #[cfg(feature = "cpp")]
-pub fn decompress64<C: BlockCodec64 + Default>(compressed: &[u32]) -> Vec<u64> {
-    let mut codec = C::default();
+pub fn decompress64<C: BlockCodec64 + Default>(compressed: &[u32]) -> FastPForResult<Vec<u64>> {
     let mut out = Vec::new();
-    codec.decode64(compressed, &mut out).unwrap();
-    out
+    C::default().decode64(compressed, &mut out)?;
+    Ok(out)
 }
 
 /// Run [`roundtrip`] for every pure-Rust any-length codec covered here (and optionally C++).
@@ -145,8 +143,7 @@ where
     B: BlockCodec + Default,
     T: AnyLenCodec + Default,
 {
-    let mut codec = fastpfor::CompositeCodec::<B, T>::default();
-    roundtrip_with(&mut codec, data);
+    roundtrip::<fastpfor::CompositeCodec<B, T>>(data);
 }
 
 // ---------------------------------------------------------------------------
@@ -273,7 +270,7 @@ mod rust_bench {
             let original = generator(block_count * C::size());
             Self {
                 name,
-                compressed: block_compress::<C>(&original),
+                compressed: block_compress::<C>(&original).unwrap(),
                 original,
                 n_blocks: block_count,
                 _codec: PhantomData,
@@ -285,7 +282,7 @@ mod rust_bench {
         pub fn new(block_count: usize) -> Self {
             let original = generate_uniform_data_small_value_distribution(block_count * C::size());
             Self {
-                compressed: block_compress::<C>(&original),
+                compressed: block_compress::<C>(&original).unwrap(),
                 original,
                 n_blocks: block_count,
                 _codec: PhantomData,
