@@ -25,6 +25,7 @@ pub(crate) fn default_max_decoded_len(compressed_words: usize) -> usize {
 ///
 /// ```
 /// # use fastpfor::{BlockCodec, FastPForResult};
+/// #[derive(Default)]
 /// struct MyCodec;
 /// impl BlockCodec for MyCodec {
 ///     type Block = [u32; 256];
@@ -34,7 +35,7 @@ pub(crate) fn default_max_decoded_len(compressed_words: usize) -> usize {
 ///         out: &mut Vec<u32>) -> FastPForResult<usize> { todo!() }
 /// }
 /// ```
-pub trait BlockCodec {
+pub trait BlockCodec: Default {
     /// The fixed-size block type.  Must be plain-old-data (`Pod`).
     /// In practice this will be `[u32; 128]` or `[u32; 256]`.
     type Block: Pod;
@@ -59,6 +60,9 @@ pub trait BlockCodec {
     fn encode_blocks(&mut self, blocks: &[Self::Block], out: &mut Vec<u32>) -> FastPForResult<()>;
 
     /// Decompress blocks from `input`, using the length stored in the header.
+    ///
+    /// Returns the number of input `u32` words consumed, so the caller (e.g.
+    /// [`CompositeCodec`](crate::CompositeCodec)) can locate the tail without parsing the block format.
     ///
     /// When `expected_len` is `Some(n)`:
     /// - Validates that the header value equals `n` (must be a multiple of
@@ -109,7 +113,7 @@ pub trait BlockCodec64 {
 /// variable-length codecs (e.g. `VariableByte`, `JustCopy`) implement this
 /// trait directly.  Block-oriented codecs are wrapped in `CompositeCodec`
 /// to produce an `AnyLenCodec`.
-pub trait AnyLenCodec {
+pub trait AnyLenCodec: Default {
     /// Compress an arbitrary-length slice of `u32` values.
     fn encode(&mut self, input: &[u32], out: &mut Vec<u32>) -> FastPForResult<()>;
 
@@ -152,7 +156,7 @@ pub trait AnyLenCodec {
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```
 /// # use fastpfor::{slice_to_blocks, FastPForBlock256};
 /// let data: Vec<u32> = (0..600).collect(); // 2 × 256 + 88 remainder
 /// let (blocks, remainder) = slice_to_blocks::<FastPForBlock256>(&data);

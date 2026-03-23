@@ -1,18 +1,17 @@
+mod composite;
 mod cursor;
 mod integer_compression;
 
-pub use cursor::IncrementCursor;
-pub use integer_compression::bitpacking::fast_pack;
-pub use integer_compression::bitunpacking::fast_unpack;
-pub use integer_compression::codec::Codec;
-pub use integer_compression::composition::Composition;
-pub use integer_compression::differential::Delta;
-pub use integer_compression::fastpfor::{
-    BLOCK_SIZE_128, BLOCK_SIZE_256, DEFAULT_PAGE_SIZE, FastPFOR,
-};
-pub use integer_compression::integer_codec::Integer;
+pub use composite::CompositeCodec;
+/// Type-safe block codec with block size encoded in the type.
+pub use integer_compression::fastpfor::{FastPFor, FastPForBlock128, FastPForBlock256};
+/// Pass-through codec — implements [`AnyLenCodec`](crate::codec::AnyLenCodec).
 pub use integer_compression::just_copy::JustCopy;
-pub use integer_compression::skippable_codec::Skippable;
+/// Variable-byte codec — implements [`AnyLenCodec`](crate::codec::AnyLenCodec).
 pub use integer_compression::variable_byte::VariableByte;
 
-pub use crate::{FastPForError, FastPForResult};
+/// `FastPForBlock256` blocks + `VariableByte` remainder — the most common composite.
+pub type FastPFor256 = CompositeCodec<FastPForBlock256, VariableByte>;
+
+/// `FastPForBlock128` blocks + `VariableByte` remainder.
+pub type FastPFor128 = CompositeCodec<FastPForBlock128, VariableByte>;

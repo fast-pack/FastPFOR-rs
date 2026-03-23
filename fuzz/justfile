@@ -1,6 +1,6 @@
 #!/usr/bin/env just --justfile
 # Fuzz testing recipes. All commands must be run from the repo root:
-#   just fuzz::run rust_compress_oracle
+#   just fuzz::run encode_oracle
 # cargo-fuzz requires nightly Rust and must be run from inside the fuzz/ directory.
 
 # How to call the current just executable. Note that just_executable() may have `\` in Windows paths, so we need to quote it.
@@ -31,21 +31,23 @@ run-time target seconds='60' *args:
 run-iters target iters='10000' *args:
     JUST_FUZZ_EXTRA_ARGS='-runs={{iters}}' {{just}} run {{target}} {{args}}
 
-# Run rust_compress_oracle (Rust only, no C++ required)
-rust-compress *args: (run 'rust_compress_oracle' args)
+# Run encode_oracle (pure Rust roundtrip, no C++ required)
+rust-encode *args: (run 'encode_oracle' args)
 
-# Run rust_decompress_oracle (uses C++ as oracle)
-rust-decompress *args: (run 'rust_decompress_oracle' args)
+# Run decode_oracle (parallel Rust + C++ roundtrips, cross-checks decoded values)
+rust-decode *args: (run 'decode_oracle' args)
 
-# Feed arbitrary bytes directly to the Rust decompressor; runs=0 means run indefinitely (Ctrl-C to stop)
-rust-decompress-arbitrary *args: (run 'rust_decompress_arbitrary' args)
+# Feed arbitrary bytes directly to the Rust decodeor (no panic check)
+rust-decode-arbitrary *args: (run 'decode_arbitrary' args)
 
 # Run cpp_roundtrip (C++ roundtrip)
 cpp-roundtrip *args: (run 'cpp_roundtrip' args)
 
-# Reproduce a specific crash artifact
-repro target artifact:
-    cargo +nightly fuzz run {{target}} {{artifact}}
+# Run cpp_roundtrip (C++ roundtrip)
+compare-fastpfor-128 *args: (run 'compare_fastpfor_128' args)
+
+# Run encode_compare (Rust vs C++ bit-identical encode)
+full-compare *args: (run 'encode_compare' args)
 
 # Run a single pass of every fuzz target (CI smoke test; stops after 1 iteration each).
 ci-test:

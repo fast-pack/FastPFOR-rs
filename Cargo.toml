@@ -21,16 +21,8 @@ name = "fastpfor_benchmark"
 required-features = ["rust"]
 harness = false
 
-[[bench]]
-name = "bench_utils"
-required-features = ["rust"]
-harness = false
-bench = false
-
 [features]
-# Eventually we may want to build without the C++ bindings by default.
-# Keeping it on for now to simplify development.
-default = ["cpp", "rust"]
+default = ["rust"]
 # Used internally for testing and benchmarking. Not intended for public use.
 _all_compatible = ["cpp_portable", "rust"]
 # Use portable C++ code that will not rely on the latest CPU features. This is the default for the C++ bindings.
