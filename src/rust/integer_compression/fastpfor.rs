@@ -591,10 +591,6 @@ mod tests {
     use super::*;
     use crate::test_utils::{block_compress, block_decompress, block_roundtrip};
 
-    // ── Generic helpers ───────────────────────────────────────────────────────
-
-    // ── Round-trip tests ──────────────────────────────────────────────────────
-
     #[test]
     fn fastpfor_test() {
         let mut data = vec![0u32; 256];

@@ -140,8 +140,8 @@ pub fn block_roundtrip_all(data: &[u32]) {
 #[cfg(feature = "rust")]
 pub fn roundtrip_composite<B, T>(data: &[u32])
 where
-    B: BlockCodec + Default,
-    T: AnyLenCodec + Default,
+    B: BlockCodec,
+    T: AnyLenCodec,
 {
     roundtrip::<fastpfor::CompositeCodec<B, T>>(data);
 }

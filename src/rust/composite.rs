@@ -108,11 +108,9 @@ impl<Blocks: BlockCodec, Tail: AnyLenCodec> AnyLenCodec for CompositeCodec<Block
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::FastPForError;
+    use crate::FastPFor256;
     use crate::rust::{FastPForBlock128, FastPForBlock256, JustCopy, VariableByte};
-    use crate::test_utils::{compress, decompress, roundtrip_composite};
-
-    type Comp256Vb = CompositeCodec<FastPForBlock256, VariableByte>;
+    use crate::test_utils::{compress, decompress, roundtrip_composite, roundtrip_expected};
 
     #[test]
     fn test_fastpfor256_vbyte_exact_two_blocks() {
@@ -140,20 +138,20 @@ mod tests {
     #[test]
     fn test_decode_truly_empty_input() {
         // Decoding a zero-length slice (not even a header word) must succeed with empty output.
-        assert!(decompress::<Comp256Vb>(&[], None).unwrap().is_empty());
+        assert!(decompress::<FastPFor256>(&[], None).unwrap().is_empty());
     }
 
     #[test]
     fn test_decode_empty_input_with_expected_zero() {
         // Empty input with expected_len=0 must succeed.
-        assert!(decompress::<Comp256Vb>(&[], Some(0)).unwrap().is_empty());
+        assert!(decompress::<FastPFor256>(&[], Some(0)).unwrap().is_empty());
     }
 
     #[test]
     fn test_decode_empty_input_with_nonzero_expected_errors() {
         // Empty input: max_decompressed_len(0) == 0, so any expected_len > 0 fails
         // with ExpectedCountExceedsMax before decoding begins.
-        decompress::<CompositeCodec<FastPForBlock256, VariableByte>>(&[], Some(5)).unwrap_err();
+        decompress::<FastPFor256>(&[], Some(5)).unwrap_err();
     }
 
     #[test]
@@ -163,7 +161,7 @@ mod tests {
         // Regression: fuzzer found bytes [0x04, 0x35, 0x19] → u32 LE 0x00193504 = 1_651_460
         // fed to FastPFor256.decode caused an OOM via a ~2.5 GB Vec::resize.
         let input = &[0x0019_3504u32]; // n_blocks = 1_651_460, rest is empty
-        decompress::<CompositeCodec<FastPForBlock256, VariableByte>>(input, None).unwrap_err();
+        decompress::<FastPFor256>(input, None).unwrap_err();
     }
 
     #[test]
@@ -175,36 +173,21 @@ mod tests {
     #[test]
     fn test_decode_with_expected_len() {
         let data: Vec<u32> = (0..600).collect();
-        let encoded = compress::<Comp256Vb>(&data).unwrap();
-        let decoded = decompress::<Comp256Vb>(&encoded, Some(600)).unwrap();
-        assert_eq!(decoded, data);
+        roundtrip_expected::<FastPFor256>(&data, Some(600));
     }
 
     #[test]
     fn test_decode_expected_len_mismatch_errors() {
         let data: Vec<u32> = (0..100).collect();
-        let encoded = compress::<Comp256Vb>(&data).unwrap();
-        let mut codec = Comp256Vb::default();
-        let err = codec
-            .decode(&encoded, &mut Vec::new(), Some(50))
-            .unwrap_err();
-        assert!(matches!(
-            err,
-            FastPForError::DecodedCountMismatch {
-                actual: 100,
-                expected: 50
-            }
-        ));
+        let encoded = compress::<FastPFor256>(&data).unwrap();
+        decompress::<FastPFor256>(&encoded, Some(50)).unwrap_err();
     }
 
     #[test]
     fn test_decode_expected_len_exceeds_max_errors() {
         let data: Vec<u32> = (0..10).collect();
-        let encoded = compress::<Comp256Vb>(&data).unwrap();
-        let huge = (Comp256Vb::max_decompressed_len(encoded.len()) + 1) as u32;
-        let err = Comp256Vb::default()
-            .decode(&encoded, &mut Vec::new(), Some(huge))
-            .unwrap_err();
-        assert!(matches!(err, FastPForError::ExpectedCountExceedsMax { .. }));
+        let encoded = compress::<FastPFor256>(&data).unwrap();
+        let huge = (FastPFor256::max_decompressed_len(encoded.len()) + 1) as u32;
+        decompress::<FastPFor256>(&encoded, Some(huge)).unwrap_err();
     }
 }
