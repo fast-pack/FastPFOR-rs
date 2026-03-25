@@ -8,7 +8,7 @@ use crate::rust::cursor::IncrementCursor;
 use crate::{FastPForError, FastPForResult};
 
 /// Variable-byte encoding codec for integer compression.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct VariableByte;
 
 // Helper functions with const generics for extracting 7-bit chunks
@@ -298,12 +298,6 @@ impl VariableByte {
         output_offset.set_position(tmp_outpos);
         input_offset.add(input_length);
         Ok(())
-    }
-}
-
-impl Default for VariableByte {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

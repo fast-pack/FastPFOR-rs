@@ -12,7 +12,7 @@ impl JustCopy {
     /// Creates a new instance
     #[must_use]
     pub fn new() -> Self {
-        Self::default()
+        Self
     }
 }
 
