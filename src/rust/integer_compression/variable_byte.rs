@@ -8,7 +8,7 @@ use crate::rust::cursor::IncrementCursor;
 use crate::{FastPForError, FastPForResult};
 
 /// Variable-byte encoding codec for integer compression.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct VariableByte;
 
 // Helper functions with const generics for extracting 7-bit chunks
@@ -28,8 +28,8 @@ impl VariableByte {
 impl VariableByte {
     /// Creates a new instance
     #[must_use]
-    pub fn new() -> VariableByte {
-        VariableByte
+    pub fn new() -> Self {
+        Self
     }
 
     /// Compress `input_length` u32 values from `input[input_offset..]` into
@@ -301,12 +301,6 @@ impl VariableByte {
     }
 }
 
-impl Default for VariableByte {
-    fn default() -> Self {
-        VariableByte::new()
-    }
-}
-
 impl AnyLenCodec for VariableByte {
     fn encode(&mut self, input: &[u32], out: &mut Vec<u32>) -> FastPForResult<()> {
         let capacity = input.len() * 2 + 4;
@@ -314,7 +308,7 @@ impl AnyLenCodec for VariableByte {
         out.resize(start + capacity, 0);
         let mut in_off = Cursor::new(0u32);
         let mut out_off = Cursor::new(0u32);
-        VariableByte::compress_into_slice(
+        Self::compress_into_slice(
             input,
             input.len() as u32,
             &mut in_off,
@@ -342,7 +336,7 @@ impl AnyLenCodec for VariableByte {
         out.resize(start + capacity, 0);
         let mut in_off = Cursor::new(0u32);
         let mut out_off = Cursor::new(0u32);
-        VariableByte::decompress_from_u32_slice(
+        Self::decompress_from_u32_slice(
             input,
             input.len() as u32,
             &mut in_off,
