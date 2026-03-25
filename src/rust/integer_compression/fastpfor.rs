@@ -93,7 +93,7 @@ impl<const N: usize> FastPFor<N> {
                 block_size: N as u32,
             });
         }
-        Ok(FastPFor {
+        Ok(Self {
             bytes_container: BytesMut::with_capacity(
                 (3 * page_size / N as u32 + page_size) as usize,
             ),

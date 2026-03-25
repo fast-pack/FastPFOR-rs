@@ -22,6 +22,7 @@ unused_qualifications = "warn"
 [lints.clippy]
 cargo = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
+use_self = "warn"
 # Allow certain lints that are common in fuzz targets and not worth fixing.
 doc_markdown = "allow"
 wildcard_imports = "allow"
