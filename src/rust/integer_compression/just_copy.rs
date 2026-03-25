@@ -5,20 +5,14 @@ use crate::helpers::AsUsize;
 /// A no-op codec that copies data without compression.
 ///
 /// Useful as a baseline for benchmarking or when a codec interface is required.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct JustCopy;
 
 impl JustCopy {
     /// Creates a new instance
     #[must_use]
     pub fn new() -> Self {
-        Self
-    }
-}
-
-impl Default for JustCopy {
-    fn default() -> Self {
-        Self::new()
+        Self::default()
     }
 }
 
