@@ -66,7 +66,7 @@ jobs:
         id: msrv
         run: echo "value=$(just get-msrv)" >> $GITHUB_OUTPUT
       - name: Install MSRV Rust ${{ steps.msrv.outputs.value }}
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
           toolchain: ${{ steps.msrv.outputs.value }}
       - run: just ci_mode=0 ci-test-msrv  # Ignore warnings in MSRV
