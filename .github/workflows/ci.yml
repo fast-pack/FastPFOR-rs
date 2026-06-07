@@ -14,6 +14,8 @@ defaults:
 jobs:
   test:
     name: Test ${{ matrix.os }} (${{ matrix.simd_mode }})
+    permissions:
+      contents: read
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -23,38 +25,42 @@ jobs:
     env:
       FASTPFOR_SIMD_MODE: ${{ matrix.simd_mode }}
     steps:
-      - uses: actions/checkout@v6
-        with: { submodules: recursive }
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with: {persist-credentials: false, submodules: recursive}
       - if: github.event_name != 'release' && github.event_name != 'workflow_dispatch'
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           prefix-key: "v0-${{ matrix.simd_mode }}"
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@56545b37b57562edd73171cb6c62cc509db4c34e # v2.81.7
         with: { tool: 'just,cargo-binstall' }
       - run: just ci-test
 
   test-nightly:
     name: Nightly-specific tests
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-        with: { submodules: recursive }
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with: {persist-credentials: false, submodules: recursive}
       - if: github.event_name != 'release' && github.event_name != 'workflow_dispatch'
-        uses: Swatinem/rust-cache@v2
-      - uses: taiki-e/install-action@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - uses: taiki-e/install-action@56545b37b57562edd73171cb6c62cc509db4c34e # v2.81.7
         with: { tool: 'just' }
       - run: rustup install nightly --profile minimal
       - run: just test-publish
 
   test-msrv:
     name: Test MSRV
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-        with: { submodules: recursive }
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with: {persist-credentials: false, submodules: recursive}
       - if: github.event_name != 'release' && github.event_name != 'workflow_dispatch'
-        uses: Swatinem/rust-cache@v2
-      - uses: taiki-e/install-action@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - uses: taiki-e/install-action@56545b37b57562edd73171cb6c62cc509db4c34e # v2.81.7
         with: { tool: 'just' }
       - name: Read MSRV
         id: msrv
@@ -67,6 +73,8 @@ jobs:
 
   fuzz:
     name: Fuzz
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     env:
       # The number of seconds to run the fuzz target.
@@ -79,13 +87,13 @@ jobs:
           - fuzz_target: decode_oracle
           - fuzz_target: decode_arbitrary
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with: {persist-credentials: false, submodules: recursive}
       # Install the nightly Rust channel.
       - run: rustup toolchain install nightly
       - run: rustup default nightly
       # Install and cache `cargo-fuzz`.
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@56545b37b57562edd73171cb6c62cc509db4c34e # v2.81.7
         with:
           tool: cargo-binstall
       - run: cargo binstall -y cargo-fuzz@0.13.1 # Pinned to avoid breakage.
@@ -94,7 +102,7 @@ jobs:
       - run: cargo fuzz build --target x86_64-unknown-linux-gnu ${{ matrix.fuzz_target }}
       - run: cargo fuzz run --target x86_64-unknown-linux-gnu ${{ matrix.fuzz_target }} -- -max_total_time=${{ env.FUZZ_TIME }}
       # Upload fuzzing artifacts on failure for post-mortem debugging.
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:
           name: fuzzing-artifacts-${{ matrix.fuzz_target }}-${{ github.sha }}
@@ -102,18 +110,20 @@ jobs:
 
   coverage:
     name: Code Coverage
+    permissions:
+      contents: read
     if: github.event_name != 'release'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-        with: { submodules: recursive }
-      - uses: Swatinem/rust-cache@v2
-      - uses: taiki-e/install-action@v2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with: {persist-credentials: false, submodules: recursive}
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - uses: taiki-e/install-action@56545b37b57562edd73171cb6c62cc509db4c34e # v2.81.7
         with: { tool: 'just,cargo-llvm-cov' }
       - name: Generate code coverage
         run: just ci-coverage
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: target/llvm-cov/codecov.info
@@ -121,6 +131,7 @@ jobs:
   # This job checks if any of the previous jobs failed or were canceled.
   # This approach also allows some jobs to be skipped if they are not needed.
   ci-passed:
+    permissions: {}
     needs: [ test, test-nightly, test-msrv, fuzz ]
     if: always()
     runs-on: ubuntu-latest
@@ -134,11 +145,13 @@ jobs:
     # Some dependencies of the `ci-passed` job might be skipped, but we still want to run if the `ci-passed` job succeeded.
     if: always() && startsWith(github.ref, 'refs/tags/') && needs.ci-passed.result == 'success'
     name: Publish to crates.io
+    permissions:
+      contents: read
     needs: [ ci-passed ]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-        with: { submodules: recursive }
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with: {persist-credentials: false, submodules: recursive}
       - name: Publish to crates.io
         run: cargo publish
         env:
