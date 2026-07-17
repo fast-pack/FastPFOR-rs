@@ -1,11 +1,5 @@
 #![no_main]
 
-//! Differential fuzz of the 64-bit FastPFOR codec.
-//!
-//! For any `u64` input, the Rust and C++ codecs must produce identical compressed bytes.
-//! Every decoder must reproduce the original input.
-//! Each side must also decode the other's output.
-
 use fastpfor::cpp::{CppFastPFor128, CppFastPFor256};
 use fastpfor::{BlockCodec64, FastPFor128, FastPFor256};
 use libfuzzer_sys::fuzz_target;
