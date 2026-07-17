@@ -11,7 +11,9 @@
 #![allow(dead_code, missing_docs, clippy::unwrap_used)]
 
 #[allow(unused_imports)]
-use fastpfor::{AnyLenCodec, BlockCodec, BlockCodec64, FastPForError, FastPForResult, slice_to_blocks};
+use fastpfor::{
+    AnyLenCodec, BlockCodec, BlockCodec64, FastPForError, FastPForResult, slice_to_blocks,
+};
 #[cfg(feature = "rust")]
 use fastpfor::{
     FastPFor128, FastPFor256, FastPForBlock128, FastPForBlock256, JustCopy, VariableByte,
