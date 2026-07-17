@@ -14,28 +14,15 @@ use bytemuck::{cast_slice, cast_slice_mut};
 
 use crate::codec::default_max_decoded_len;
 use crate::helpers::AsUsize;
-use crate::rust::integer_compression::fastpfor_engine::FastPForEngine;
+use crate::rust::integer_compression::fastpfor::FastPFor;
 use crate::{BlockCodec64, FastPForError, FastPForResult};
-
-/// Default page size in number of integers.
-const DEFAULT_PAGE_SIZE: u32 = 65536;
 
 /// 64-bit `FastPFOR` codec: `FastPFOR`-packed blocks plus a variable-byte tail.
 ///
-/// `N` is the block size (128 or 256 values).
-/// This is the internal `u64` engine behind [`FastPFor128`](crate::FastPFor128) and [`FastPFor256`](crate::FastPFor256).
-#[derive(Debug)]
-pub struct FastPForWide<const N: usize> {
-    engine: FastPForEngine<N, u64>,
-}
-
-impl<const N: usize> Default for FastPForWide<N> {
-    fn default() -> Self {
-        Self {
-            engine: FastPForEngine::new(DEFAULT_PAGE_SIZE),
-        }
-    }
-}
+/// `N` is the block size (128 or 256 values). This is [`FastPFor`] specialized to the
+/// `u64` element type, and is the internal `u64` codec behind
+/// [`FastPFor128`](crate::FastPFor128) and [`FastPFor256`](crate::FastPFor256).
+pub type FastPForWide<const N: usize> = FastPFor<N, { u64::BITS as usize + 1 }, u64>;
 
 /// Variable-byte encoding of the `u64` tail.
 ///
@@ -117,7 +104,7 @@ impl<const N: usize> BlockCodec64 for FastPForWide<N> {
 
             let mut in_off = Cursor::new(0u32);
             let mut out_off = Cursor::new(0u32);
-            self.engine.compress_blocks(
+            self.compress_blocks(
                 &input[..rounded],
                 n_values,
                 &mut in_off,
@@ -151,7 +138,7 @@ impl<const N: usize> BlockCodec64 for FastPForWide<N> {
             out.resize(start + n_blocks * N, 0);
             let mut in_off = Cursor::new(0u32);
             let mut out_off = Cursor::new(0u32);
-            self.engine.decode_headless_blocks(
+            self.decode_headless_blocks(
                 rest,
                 block_n_values,
                 &mut in_off,
