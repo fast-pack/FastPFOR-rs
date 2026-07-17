@@ -8,12 +8,12 @@
 
 // This is an internal dev-only module; doc-comments on every field would add
 // noise without benefit.
-#![allow(dead_code, missing_docs)]
+#![allow(dead_code, missing_docs, clippy::unwrap_used)]
 
 #[cfg(feature = "cpp")]
 use fastpfor::BlockCodec64;
 #[allow(unused_imports)]
-use fastpfor::{AnyLenCodec, BlockCodec, FastPForResult, slice_to_blocks};
+use fastpfor::{AnyLenCodec, BlockCodec, FastPForError, FastPForResult, slice_to_blocks};
 #[cfg(feature = "rust")]
 use fastpfor::{
     FastPFor128, FastPFor256, FastPForBlock128, FastPForBlock256, JustCopy, VariableByte,
@@ -81,11 +81,12 @@ pub fn decompress<C: AnyLenCodec>(
 
 pub fn block_compress<C: BlockCodec>(data: &[u32]) -> FastPForResult<Vec<u32>> {
     let (blocks, remainder) = slice_to_blocks::<C>(data);
-    assert_eq!(
-        remainder.len(),
-        0,
-        "data length must be a multiple of block size"
-    );
+    if !remainder.is_empty() {
+        return Err(FastPForError::InputMustBeMultipleOfBlockSize {
+            input_len: data.len(),
+            block_size: C::size(),
+        });
+    }
     let mut out = Vec::new();
     C::default().encode_blocks(blocks, &mut out)?;
     Ok(out)

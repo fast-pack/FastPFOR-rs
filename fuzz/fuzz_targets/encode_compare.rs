@@ -50,7 +50,7 @@ fuzz_target!(|data: FuzzInput<PairSelector>| {
         pair.name,
     );
 
-    decoded.truncate(0);
+    decoded.clear();
     cpp_codec
         .decode(&cpp_out, &mut decoded, None)
         .expect("C++ decode of self-compressed data must not fail");
