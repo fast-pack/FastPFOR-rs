@@ -4,12 +4,12 @@
 //! Each implements [`AnyLenCodec`] for `u32` and [`BlockCodec64`] for `u64`.
 //! Aligned blocks are coded with `FastPFOR` and the sub-block remainder with variable-byte coding.
 
+use crate::FastPForResult;
 use crate::codec::{AnyLenCodec, BlockCodec64};
 use crate::rust::VariableByte;
 use crate::rust::composite::CompositeCodec;
 use crate::rust::integer_compression::fastpfor::{FastPForBlock128, FastPForBlock256};
 use crate::rust::integer_compression::fastpfor64::FastPForWide;
-use crate::FastPForResult;
 
 macro_rules! define_fastpfor {
     ($(#[$meta:meta])* $name:ident, $block:ty, $n:literal) => {
