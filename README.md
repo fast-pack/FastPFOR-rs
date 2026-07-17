@@ -60,14 +60,14 @@ assert_eq!(decoded, input);
 
 ### 64-bit integers (`u64`)
 
-`FastPForWide128` / `FastPForWide256` compress `u64` values via the `BlockCodec64`
-trait. The wire format is byte-compatible with the C++ `CppFastPFor128` /
-`CppFastPFor256` `encode64` / `decode64` paths.
+The same `FastPFor128` / `FastPFor256` codecs also compress `u64` values via the
+`BlockCodec64` trait (`encode64` / `decode64`). The wire format is byte-compatible
+with the C++ `CppFastPFor128` / `CppFastPFor256` 64-bit paths.
 
 ```rust
-use fastpfor::{BlockCodec64, FastPForWide256};
+use fastpfor::{BlockCodec64, FastPFor256};
 
-let mut codec = FastPForWide256::default();
+let mut codec = FastPFor256::default();
 let input: Vec<u64> = (0..600).map(|i| i * 1_000_000_000).collect();
 
 let mut encoded = Vec::new();

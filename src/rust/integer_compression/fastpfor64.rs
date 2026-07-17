@@ -1,12 +1,12 @@
-//! 64-bit ([`u64`]) `FastPFOR` codec.
+//! 64-bit ([`u64`]) `FastPFOR` engine.
 //!
 //! This is the widened counterpart of the 32-bit [`FastPFor`](super::fastpfor::FastPFor).
 //! Values, exceptions, and the exception bitmap are 64 bits wide instead of 32.
 //! The output is byte-compatible with the C++ `CppFastPFor128` / `CppFastPFor256` 64-bit paths.
 //!
-//! `FastPFOR` only handles complete blocks.
-//! A [`VariableByte`] tail encodes the sub-block remainder.
-//! [`FastPForWide`] bundles both and implements [`BlockCodec64`].
+//! [`FastPForWide`] is the 64-bit half of the public [`FastPFor128`](crate::FastPFor128) /
+//! [`FastPFor256`](crate::FastPFor256) codecs and is not exported on its own.
+//! It handles complete blocks, then a [`VariableByte`] tail encodes the sub-block remainder.
 
 use std::cmp::min;
 use std::io::Cursor;
@@ -29,20 +29,14 @@ const DEFAULT_PAGE_SIZE: u32 = 65536;
 /// Number of frequency/exception buckets: one per possible bit width `0..=64`.
 const WIDTHS: usize = 65;
 
-/// [`FastPForWide`] with 128-value blocks.
-pub type FastPForWide128 = FastPForWide<128>;
-
-/// [`FastPForWide`] with 256-value blocks.
-pub type FastPForWide256 = FastPForWide<256>;
-
 fn bits64(value: u64) -> usize {
     64 - value.leading_zeros().as_usize()
 }
 
-/// 64-bit `FastPFOR` codec: `FastPFOR`-packed blocks plus a variable-byte tail.
+/// 64-bit `FastPFOR` engine: `FastPFOR`-packed blocks plus a variable-byte tail.
 ///
 /// `N` is the block size (128 or 256 values).
-/// Use [`FastPForWide128`] or [`FastPForWide256`], or call [`encode64`](BlockCodec64::encode64) / [`decode64`](BlockCodec64::decode64).
+/// This is the internal `u64` engine behind [`FastPFor128`](crate::FastPFor128) and [`FastPFor256`](crate::FastPFor256).
 #[derive(Debug)]
 pub struct FastPForWide<const N: usize> {
     exception_buffers: [Vec<u64>; WIDTHS],

@@ -40,6 +40,7 @@ use crate::helpers::AsUsize;
 /// codec.decode(&encoded, &mut decoded, None).unwrap();
 /// assert_eq!(decoded, data);
 /// ```
+#[derive(Debug)]
 pub struct CompositeCodec<Blocks: BlockCodec, Tail: AnyLenCodec> {
     block: Blocks,
     tail: Tail,

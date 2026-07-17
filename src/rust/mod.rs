@@ -1,19 +1,14 @@
 mod composite;
 mod cursor;
+mod fastpfor_codec;
 mod integer_compression;
 
 pub use composite::CompositeCodec;
+/// Any-length `FastPFOR` codecs supporting both `u32` and `u64`.
+pub use fastpfor_codec::{FastPFor128, FastPFor256};
 /// Type-safe block codec with block size encoded in the type.
 pub use integer_compression::fastpfor::{FastPFor, FastPForBlock128, FastPForBlock256};
-/// 64-bit ([`u64`]) `FastPFOR` codec implementing [`BlockCodec64`](crate::BlockCodec64).
-pub use integer_compression::fastpfor64::{FastPForWide, FastPForWide128, FastPForWide256};
 /// Pass-through codec — implements [`AnyLenCodec`](crate::codec::AnyLenCodec).
 pub use integer_compression::just_copy::JustCopy;
 /// Variable-byte codec — implements [`AnyLenCodec`](crate::codec::AnyLenCodec).
 pub use integer_compression::variable_byte::VariableByte;
-
-/// `FastPForBlock256` blocks + `VariableByte` remainder — the most common composite.
-pub type FastPFor256 = CompositeCodec<FastPForBlock256, VariableByte>;
-
-/// `FastPForBlock128` blocks + `VariableByte` remainder.
-pub type FastPFor128 = CompositeCodec<FastPForBlock128, VariableByte>;
