@@ -58,7 +58,10 @@ pub trait FastPForInt: Copy + 'static {
     fn read_bitmap(input: &[u32], pos: u32) -> FastPForResult<u64>;
 }
 
-#[allow(clippy::use_self, reason = "u32 literals here are stream words, not the Self element type")]
+#[allow(
+    clippy::use_self,
+    reason = "u32 literals here are stream words, not the Self element type"
+)]
 impl FastPForInt for u32 {
     const WIDTH: u8 = 32;
     const BITMAP_WORDS: u32 = 1;
@@ -94,7 +97,10 @@ impl FastPForInt for u32 {
     }
 }
 
-#[allow(clippy::use_self, reason = "u32 literals here are stream words, not the Self element type")]
+#[allow(
+    clippy::use_self,
+    reason = "u32 literals here are stream words, not the Self element type"
+)]
 impl FastPForInt for u64 {
     const WIDTH: u8 = 64;
     const BITMAP_WORDS: u32 = 2;
