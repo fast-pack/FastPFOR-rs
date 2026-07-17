@@ -2,10 +2,9 @@
 
 //! Differential fuzz of the 64-bit FastPFOR codec.
 //!
-//! For arbitrary `u64` input, the pure-Rust `FastPForWide` and the C++
-//! `CppFastPFor128` / `CppFastPFor256` must produce bit-identical compressed
-//! output, and every decoder must reproduce the original input — including
-//! decoding the other implementation's bytes.
+//! For any `u64` input, `FastPForWide` and the C++ codec must produce identical compressed bytes.
+//! Every decoder must reproduce the original input.
+//! Each side must also decode the other's output.
 
 use fastpfor::cpp::{CppFastPFor128, CppFastPFor256};
 use fastpfor::{BlockCodec64, FastPForWide128, FastPForWide256};

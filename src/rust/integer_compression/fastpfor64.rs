@@ -1,13 +1,12 @@
 //! 64-bit ([`u64`]) `FastPFOR` codec.
 //!
-//! This is the widened counterpart of the 32-bit [`FastPFor`](super::fastpfor::FastPFor)
-//! codec: the algorithm and wire format are identical except that values, exceptions,
-//! and the exception bitmap are 64 bits wide. It is byte-compatible with the C++
-//! `CppFastPFor128` / `CppFastPFor256` `encode64` / `decode64` paths.
+//! This is the widened counterpart of the 32-bit [`FastPFor`](super::fastpfor::FastPFor).
+//! Values, exceptions, and the exception bitmap are 64 bits wide instead of 32.
+//! The output is byte-compatible with the C++ `CppFastPFor128` / `CppFastPFor256` 64-bit paths.
 //!
-//! Like the 32-bit codec, `FastPFOR` only handles complete blocks, so a
-//! [`VariableByte`] tail encodes the sub-block remainder. [`FastPForWide`]
-//! bundles both and implements [`BlockCodec64`].
+//! `FastPFOR` only handles complete blocks.
+//! A [`VariableByte`] tail encodes the sub-block remainder.
+//! [`FastPForWide`] bundles both and implements [`BlockCodec64`].
 
 use std::cmp::min;
 use std::io::Cursor;
@@ -42,8 +41,8 @@ fn bits64(value: u64) -> usize {
 
 /// 64-bit `FastPFOR` codec: `FastPFOR`-packed blocks plus a variable-byte tail.
 ///
-/// `N` is the block size (128 or 256 values). Use [`FastPForWide128`] or
-/// [`FastPForWide256`], or call [`BlockCodec64::encode64`] / [`decode64`](BlockCodec64::decode64).
+/// `N` is the block size (128 or 256 values).
+/// Use [`FastPForWide128`] or [`FastPForWide256`], or call [`encode64`](BlockCodec64::encode64) / [`decode64`](BlockCodec64::decode64).
 #[derive(Debug)]
 pub struct FastPForWide<const N: usize> {
     exception_buffers: [Vec<u64>; WIDTHS],
@@ -428,11 +427,12 @@ impl<const N: usize> FastPForWide<N> {
     }
 }
 
-/// Variable-byte (LEB128 with high-bit terminator) encoding of the `u64` tail.
+/// Variable-byte encoding of the `u64` tail.
 ///
-/// Matches the C++ `VariableByte::encodeToByteArray` layout: every byte but the
-/// last carries 7 payload bits with the high bit clear; the final byte has its
-/// high bit set. Output is padded with zero bytes to a whole number of `u32` words.
+/// Each value is emitted little-endian in 7-bit groups.
+/// Every byte but the last has its high bit clear.
+/// The final byte sets its high bit as a terminator.
+/// The stream is zero-padded to a whole number of `u32` words.
 fn vbyte_encode64(input: &[u64], out: &mut Vec<u32>) {
     if input.is_empty() {
         return;
@@ -459,8 +459,8 @@ fn vbyte_encode64(input: &[u64], out: &mut Vec<u32>) {
     out.truncate(start + byte_pos / 4);
 }
 
-/// Inverse of [`vbyte_encode64`]. Trailing zero padding decodes to no value
-/// because a padding byte never has the high-bit terminator.
+/// Inverse of [`vbyte_encode64`].
+/// Trailing zero padding decodes to no value, since a padding byte never sets the terminator bit.
 fn vbyte_decode64(input: &[u32], out: &mut Vec<u64>) -> FastPForResult<()> {
     if input.is_empty() {
         return Ok(());

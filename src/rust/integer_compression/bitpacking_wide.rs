@@ -1,9 +1,9 @@
 //! Generic scalar bit-packing for 64-bit values.
 //!
-//! Packs and unpacks groups of 32 values at any bit width `0..=64` using the same
-//! little-endian bitstream layout as the hand-unrolled 32-bit kernels in
-//! [`bitpacking`](super::bitpacking): value `j` occupies bits `[j*bit, (j+1)*bit)`
-//! of the concatenated stream. Each call moves exactly `bit` `u32` words.
+//! Packs and unpacks groups of 32 values at any bit width `0..=64`.
+//! The layout is a little-endian bitstream, matching the hand-unrolled 32-bit kernels in [`bitpacking`](super::bitpacking).
+//! Value `j` occupies bits `[j*bit, (j+1)*bit)` of the concatenated stream.
+//! Each call moves exactly `bit` `u32` words.
 
 const fn low_mask(bit: u8) -> u64 {
     if bit >= 64 {
@@ -61,8 +61,6 @@ mod tests {
     use super::*;
     use crate::rust::integer_compression::{bitpacking, bitunpacking};
 
-    /// The wide packer must produce byte-identical output to the proven u32 kernels
-    /// for every width `1..=32`, validating its bit ordering without needing C++.
     #[test]
     fn wide_matches_u32_kernels() {
         let values32: [u32; 32] = std::array::from_fn(|i| (i as u32).wrapping_mul(2_654_435_761));

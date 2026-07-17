@@ -93,13 +93,11 @@ pub trait BlockCodec: Default {
 
 /// Codec that supports compressing 64-bit integers into a 32-bit word stream.
 ///
-/// Implemented by the pure-Rust [`FastPForWide`](crate::FastPForWide) codecs and,
-/// with the `cpp` feature, by `CppFastPFor128`, `CppFastPFor256`, and `CppVarInt`.
-/// For simple use, call `encode64` / `decode64` directly on the struct — no trait
-/// import required.
+/// Implemented by the pure-Rust [`FastPForWide`](crate::FastPForWide) codecs.
+/// With the `cpp` feature, `CppFastPFor128`, `CppFastPFor256`, and `CppVarInt` also implement it.
+/// For simple use, call `encode64` / `decode64` directly on the struct.
 ///
-/// Import `BlockCodec64` only when writing generic code over multiple codecs
-/// that support 64-bit compression.
+/// Import `BlockCodec64` only when writing generic code over several 64-bit codecs.
 pub trait BlockCodec64 {
     /// Compress 64-bit integers into a 32-bit word stream.
     fn encode64(&mut self, input: &[u64], out: &mut Vec<u32>) -> FastPForResult<()>;
