@@ -5,6 +5,8 @@ mod integer_compression;
 pub use composite::CompositeCodec;
 /// Type-safe block codec with block size encoded in the type.
 pub use integer_compression::fastpfor::{FastPFor, FastPForBlock128, FastPForBlock256};
+/// 64-bit ([`u64`]) `FastPFOR` codec implementing [`BlockCodec64`](crate::BlockCodec64).
+pub use integer_compression::fastpfor64::{FastPForWide, FastPForWide128, FastPForWide256};
 /// Pass-through codec — implements [`AnyLenCodec`](crate::codec::AnyLenCodec).
 pub use integer_compression::just_copy::JustCopy;
 /// Variable-byte codec — implements [`AnyLenCodec`](crate::codec::AnyLenCodec).

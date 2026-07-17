@@ -58,6 +58,27 @@ codec.decode_blocks(&encoded, Some(u32::try_from(blocks.len() * 256).expect("blo
 assert_eq!(decoded, input);
 ```
 
+### 64-bit integers (`u64`)
+
+`FastPForWide128` / `FastPForWide256` compress `u64` values via the `BlockCodec64`
+trait. The wire format is byte-compatible with the C++ `CppFastPFor128` /
+`CppFastPFor256` `encode64` / `decode64` paths.
+
+```rust
+use fastpfor::{BlockCodec64, FastPForWide256};
+
+let mut codec = FastPForWide256::default();
+let input: Vec<u64> = (0..600).map(|i| i * 1_000_000_000).collect();
+
+let mut encoded = Vec::new();
+codec.encode64(&input, &mut encoded).unwrap();
+
+let mut decoded = Vec::new();
+codec.decode64(&encoded, &mut decoded).unwrap();
+
+assert_eq!(decoded, input);
+```
+
 ### C++ Wrapper (`cpp` feature)
 
 Enable the `cpp` feature in `Cargo.toml`:

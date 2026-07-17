@@ -10,10 +10,8 @@
 // noise without benefit.
 #![allow(dead_code, missing_docs)]
 
-#[cfg(feature = "cpp")]
-use fastpfor::BlockCodec64;
 #[allow(unused_imports)]
-use fastpfor::{AnyLenCodec, BlockCodec, FastPForResult, slice_to_blocks};
+use fastpfor::{AnyLenCodec, BlockCodec, BlockCodec64, FastPForResult, slice_to_blocks};
 #[cfg(feature = "rust")]
 use fastpfor::{
     FastPFor128, FastPFor256, FastPForBlock128, FastPForBlock256, JustCopy, VariableByte,
@@ -48,7 +46,6 @@ pub fn roundtrip_full<E: AnyLenCodec, D: AnyLenCodec>(data: &[u32], expected_len
     assert_eq!(decompressed, data);
 }
 
-#[cfg(feature = "cpp")]
 pub fn roundtrip64<C: BlockCodec64 + Default>(data: &[u64]) {
     let mut codec = C::default();
     let mut compressed = Vec::new();
@@ -100,14 +97,12 @@ pub fn block_decompress<C: BlockCodec>(
     Ok(out)
 }
 
-#[cfg(feature = "cpp")]
 pub fn compress64<C: BlockCodec64 + Default>(data: &[u64]) -> FastPForResult<Vec<u32>> {
     let mut compressed = Vec::new();
     C::default().encode64(data, &mut compressed)?;
     Ok(compressed)
 }
 
-#[cfg(feature = "cpp")]
 pub fn decompress64<C: BlockCodec64 + Default>(compressed: &[u32]) -> FastPForResult<Vec<u64>> {
     let mut out = Vec::new();
     C::default().decode64(compressed, &mut out)?;
