@@ -4,7 +4,6 @@ on:
   push:
     branches: [ main ]
   pull_request:
-    branches: [ main ]
   workflow_dispatch:
 
 defaults:
@@ -14,8 +13,7 @@ defaults:
 jobs:
   test:
     name: Test ${{ matrix.os }} (${{ matrix.simd_mode }})
-    permissions:
-      contents: read
+    permissions: { contents: read }
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -52,8 +50,7 @@ jobs:
 
   test-msrv:
     name: Test MSRV
-    permissions:
-      contents: read
+    permissions: { contents: read }
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -69,16 +66,14 @@ jobs:
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
           toolchain: ${{ steps.msrv.outputs.value }}
-      - run: just ci_mode=0 ci-test-msrv  # Ignore warnings in MSRV
+      - run: just ci-test-msrv
 
   fuzz:
     name: Fuzz
-    permissions:
-      contents: read
+    permissions: { contents: read }
     runs-on: ubuntu-latest
-    env:
-      # The number of seconds to run the fuzz target.
-      FUZZ_TIME: 60
+    # The number of seconds to run the fuzz target.
+    env: { FUZZ_TIME: 60 }
     strategy:
       matrix:
         include:
@@ -109,8 +104,7 @@ jobs:
 
   coverage:
     name: Code Coverage
-    permissions:
-      contents: read
+    permissions: { contents: read }
     if: github.event_name != 'release'
     runs-on: ubuntu-latest
     steps:
@@ -119,13 +113,12 @@ jobs:
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
       - uses: taiki-e/install-action@b8cecb83565409bcc297b2df6e77f030b2a468d5 # v2.82.0
         with: { tool: 'just,cargo-llvm-cov' }
-      - name: Generate code coverage
-        run: just ci-coverage
+      - run: just ci-coverage
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: target/llvm-cov/codecov.info
+          files: target/llvm-cov/lcov.info
 
   # This job checks if any of the previous jobs failed or were canceled.
   # This approach also allows some jobs to be skipped if they are not needed.
@@ -142,16 +135,17 @@ jobs:
 
   release:
     # Some dependencies of the `ci-passed` job might be skipped, but we still want to run if the `ci-passed` job succeeded.
-    if: always() && startsWith(github.ref, 'refs/tags/') && needs.ci-passed.result == 'success'
+    if: |
+      always()
+      && startsWith(github.ref, 'refs/tags/')
+      && needs.ci-passed.result == 'success'
     name: Publish to crates.io
-    permissions:
-      contents: read
+    permissions: { contents: read }
     needs: [ ci-passed ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with: { persist-credentials: false, submodules: recursive }
-      - name: Publish to crates.io
-        run: cargo publish
+      - run: cargo publish
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

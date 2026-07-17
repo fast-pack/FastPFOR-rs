@@ -10,6 +10,10 @@ use crate::helpers::AsUsize;
 /// Block-based C++ codecs (`FastPFor`, `PFor`, etc.) store the original data length
 /// in their own wire format. Byte-oriented codecs (`VariableByte`) rely on the
 /// caller passing the encoded stream length to decode, which we have via `input.len()`.
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Panic is used to prevent undefined behavior if C++ codec misbehaves"
+)]
 pub fn encode32_to_vec_ffi(
     codec: &UniquePtr<ffi::IntegerCODEC>,
     input: &[u32],
@@ -19,7 +23,6 @@ pub fn encode32_to_vec_ffi(
     let start = out.len();
     out.resize(start + capacity, 0);
     let n = ffi::codec_encode32(codec, input, &mut out[start..])?;
-    // SAFETY: It is better to panic than to have UB
     assert!(
         n <= capacity,
         "C++ codec encoded more than the allocated capacity"
@@ -28,6 +31,10 @@ pub fn encode32_to_vec_ffi(
     Ok(())
 }
 
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Panic is used to prevent undefined behavior if C++ codec misbehaves"
+)]
 pub fn decode32_anylen_ffi(
     codec: &UniquePtr<ffi::IntegerCODEC>,
     input: &[u32],

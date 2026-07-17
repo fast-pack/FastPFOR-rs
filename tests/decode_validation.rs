@@ -6,6 +6,7 @@
 //! `decode_blocks`) are exercised here via `decompress` and `AnyLenCodec::decode`.
 
 #![cfg(feature = "rust")]
+#![allow(clippy::unwrap_used)]
 
 #[path = "../src/test_utils.rs"]
 mod test_utils;

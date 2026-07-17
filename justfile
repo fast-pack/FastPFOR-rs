@@ -5,13 +5,14 @@ main_crate := 'fastpfor'
 just := quote(just_executable())
 # cargo-binstall needs a workaround due to caching when used in CI
 binstall_args := if env('CI', '') != '' {'--no-confirm --no-track --disable-telemetry'} else {''}
+# location of the coverage output, used by CI
+coverage_lcov := 'target/llvm-cov/lcov.info'
 
-# if running in CI, treat warnings as errors by setting RUSTFLAGS and RUSTDOCFLAGS to '-D warnings' unless they are already set
+# if running in CI, treat warnings as errors by setting CARGO_BUILD_WARNINGS to 'deny' unless it is already set
 # Use `CI=true just ci-test` to run the same tests as in GitHub CI.
-# Use `just env-info` to see the current values of RUSTFLAGS and RUSTDOCFLAGS
+# Use `just env-info` to see the current value of CARGO_BUILD_WARNINGS
 ci_mode := if env('CI', '') != '' {'1'} else {''}
-export RUSTFLAGS := env('RUSTFLAGS', if ci_mode == '1' {'-D warnings'} else {''})
-export RUSTDOCFLAGS := env('RUSTDOCFLAGS', if ci_mode == '1' {'-D warnings'} else {''})
+export CARGO_BUILD_WARNINGS := env('CARGO_BUILD_WARNINGS', if ci_mode == '1' {'deny'} else {'warn'})
 export RUST_BACKTRACE := env('RUST_BACKTRACE', if ci_mode == '1' {'1'} else {'0'})
 
 mod bench 'benches/justfile'
@@ -35,18 +36,24 @@ check:
     cargo check --workspace --all-targets --no-default-features --features rust
     cargo check --workspace --all-targets --manifest-path fuzz/Cargo.toml
 
-# Generate code coverage report to upload to codecov.io
+# Generate LCOV coverage report for CI to upload to codecov.io
 ci-coverage: env-info && \
-            (coverage '--codecov --output-path target/llvm-cov/codecov.info')
-    # ATTENTION: the full file path above is used in the CI workflow
-    mkdir -p target/llvm-cov
+        (_coverage '--lcov' '--output-path' quote(coverage_lcov))
+    rm -rf {{quote(parent_directory(coverage_lcov))}}
+    mkdir -p {{quote(parent_directory(coverage_lcov))}}
 
 # Run all tests as expected by CI
-ci-test: env-info test-fmt check build clippy test test-doc fuzz::ci-test
-    {{ if ci_mode == '1' { just + ' assert-git-is-clean' } else { '' } }}
+ci-test: env-info test-fmt check build clippy test test-doc fuzz::ci-test && assert-git-is-clean
 
-# Run minimal subset of tests to ensure compatibility with MSRV
-ci-test-msrv: env-info test
+# Compile default features with minimal dependencies on the configured MSRV
+ci-test-msrv:
+    {{just}} ci_mode=0 env-info _check-msrv-default
+    {{just}} test
+    {{just}} assert-git-is-clean
+
+# Set toolchain and run ci-test-msrv
+ci-test-msrv-with-toolchain:
+    RUSTUP_TOOLCHAIN="$({{just}} get-msrv)" {{just}} ci-test-msrv
 
 # Clean all build artifacts
 clean:
@@ -59,10 +66,14 @@ clippy *args:
     cargo clippy --workspace --all-targets --features _all_compatible {{args}}
     cargo clippy --workspace --all-targets --manifest-path fuzz/Cargo.toml {{args}}
 
-# Generate code coverage report. Will install `cargo llvm-cov` if missing.
-coverage *args='--open':  (cargo-install 'cargo-llvm-cov')
+# Generate and open the HTML coverage report
+coverage:  (_coverage '--open')
+
+# Clean, collect, and aggregate coverage using the requested report arguments
+_coverage *report_args:  (cargo-install 'cargo-llvm-cov')
     cargo llvm-cov clean --workspace
-    cargo llvm-cov --workspace --all-targets --features _all_compatible --include-build-script {{args}}
+    cargo llvm-cov --no-report --workspace --all-targets --features _all_compatible
+    cargo llvm-cov report --include-build-script {{report_args}}
 
 # Build and open code documentation
 docs *args='--features _all_compatible --open':
@@ -76,8 +87,7 @@ env-info:
     rustc --version
     cargo --version
     rustup --version
-    @echo "RUSTFLAGS='$RUSTFLAGS'"
-    @echo "RUSTDOCFLAGS='$RUSTDOCFLAGS'"
+    @echo "CARGO_BUILD_WARNINGS='$CARGO_BUILD_WARNINGS'"
     @echo "RUST_BACKTRACE='$RUST_BACKTRACE'"
 
 # Reformat all code `cargo fmt`. If nightly is available, use it for better results
@@ -102,14 +112,25 @@ fmt-toml *args:  (cargo-install 'cargo-sort')
 
 # Get a package field from the metadata
 get-crate-field field package=main_crate:  (assert-cmd 'jq')
-    cargo metadata --format-version 1 | jq -e -r '.packages | map(select(.name == "{{package}}")) | first | .{{field}} // error("Field \"{{field}}\" is missing in Cargo.toml for package {{package}}")'
+    @cargo metadata --no-deps --format-version 1 | jq -e -r '.packages | map(select(.name == "{{package}}")) | first | .{{field}} // error("Field \"{{field}}\" is missing in Cargo.toml for package {{package}}")'
 
 # Get the minimum supported Rust version (MSRV) for the crate
 get-msrv package=main_crate:  (get-crate-field 'rust_version' package)
 
-# Find the minimum supported Rust version (MSRV) using cargo-msrv extension, and update Cargo.toml
+# Find the minimum supported Rust version (MSRV), update Cargo.toml, and test minimal dependencies
 msrv:  (cargo-install 'cargo-msrv')
-    cargo msrv find --write-msrv --features _all_compatible --ignore-lockfile -- {{just}} ci-test-msrv
+    cargo msrv find --write-msrv --features _all_compatible --ignore-lockfile -- {{just}} _check-msrv-default
+
+# Compile the crate's default features using a dynamically generated minimal Cargo.lock
+_check-msrv-default:  (cargo-install 'cargo-minimal-versions') (cargo-install 'cargo-hack')
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # cargo-msrv probes with rustup, but nested cargo subcommands may otherwise
+    # fall back to the default Cargo and emit flags unsupported by the candidate rustc.
+    toolchain="$(rustc --version | cut -d' ' -f2)"
+    export RUSTUP_TOOLCHAIN="$toolchain"
+    export CARGO="$(rustup which --toolchain "$toolchain" cargo)"
+    cargo minimal-versions check --direct --package {{main_crate}}
 
 # Run cargo-release
 release *args='':  (cargo-install 'release-plz')
@@ -119,10 +140,10 @@ release *args='':  (cargo-install 'release-plz')
 semver *args:  (cargo-install 'cargo-semver-checks')
     cargo semver-checks --features _all_compatible {{args}}
 
-# Run all unit and integration tests
+# Run all tests
 test:
     cargo test --workspace --all-targets --features _all_compatible
-    cargo test --workspace --doc --features _all_compatible
+    cargo test --doc --workspace --features _all_compatible
 
 # Test with a specific SIMD mode (portable, native)
 test-simd mode='portable':
@@ -163,15 +184,25 @@ assert-cmd command:
         exit 1 ;\
     fi
 
-# Make sure the git repo has no uncommitted changes
+# Make sure the git repo has no uncommitted changes. Fails if CI envvar is set.
 [private]
 assert-git-is-clean:
-    @if [ -n "$(git status --untracked-files --porcelain)" ]; then \
-      >&2 echo "ERROR: git repo is no longer clean. Make sure compilation and tests artifacts are in the .gitignore, and no repo files are modified." ;\
-      >&2 echo "######### git status ##########" ;\
-      git status ;\
-      git --no-pager diff ;\
-      exit 1 ;\
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "$(git status --porcelain --untracked-files=all)" ]; then
+        >&2 echo "::error::git repo is not clean. Make sure compilation and tests artifacts are in the .gitignore, and no repo files are modified."
+        if [[ "{{ci_mode}}" == "1" ]]; then
+            >&2 echo "::group::git status"
+            git status
+            >&2 echo "::endgroup::"
+            >&2 echo "::group::git diff (tracked changes)"
+            git add . --intent-to-add
+            git --no-pager diff
+            >&2 echo "::endgroup::"
+            exit 1
+        else
+            >&2 echo "git repo is not clean, but not failing because CI mode is not enabled."
+        fi
     fi
 
 # Check if a certain Cargo command is installed, and install it if needed
@@ -179,6 +210,7 @@ assert-git-is-clean:
 cargo-install $COMMAND $INSTALL_CMD='' *args='':
     #!/usr/bin/env bash
     set -euo pipefail
+    unset CARGO_BUILD_WARNINGS
     if ! command -v $COMMAND > /dev/null; then
         echo "$COMMAND could not be found. Installing..."
         if ! command -v cargo-binstall > /dev/null; then
@@ -187,7 +219,7 @@ cargo-install $COMMAND $INSTALL_CMD='' *args='':
             { set +x; } 2>/dev/null
         else
             set -x
-            cargo binstall ${INSTALL_CMD:-$COMMAND} {{binstall_args}} --locked {{args}}
+            cargo binstall ${INSTALL_CMD:-$COMMAND} {{binstall_args}} --locked
             { set +x; } 2>/dev/null
         fi
     fi
