@@ -12,12 +12,17 @@ struct Input {
 
 fn check(rust: &mut impl BlockCodec64, cpp: &mut impl BlockCodec64, data: &[u64], name: &str) {
     let mut rust_enc = Vec::new();
-    rust.encode64(data, &mut rust_enc).expect("Rust encode64 failed");
+    rust.encode64(data, &mut rust_enc)
+        .expect("Rust encode64 failed");
 
     let mut cpp_enc = Vec::new();
-    cpp.encode64(data, &mut cpp_enc).expect("C++ encode64 failed");
+    cpp.encode64(data, &mut cpp_enc)
+        .expect("C++ encode64 failed");
 
-    assert_eq!(rust_enc, cpp_enc, "{name}: Rust and C++ encode64 bytes differ");
+    assert_eq!(
+        rust_enc, cpp_enc,
+        "{name}: Rust and C++ encode64 bytes differ"
+    );
 
     let mut rust_dec = Vec::new();
     rust.decode64(&rust_enc, &mut rust_dec)
