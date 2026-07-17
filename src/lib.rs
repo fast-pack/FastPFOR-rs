@@ -18,8 +18,7 @@ pub mod cpp;
 pub(crate) mod rust;
 
 mod codec;
-pub use codec::BlockCodec64;
-pub use codec::{AnyLenCodec, BlockCodec, slice_to_blocks};
+pub use codec::{AnyLenCodec, BlockCodec, BlockCodec64, slice_to_blocks};
 
 pub(crate) mod helpers;
 

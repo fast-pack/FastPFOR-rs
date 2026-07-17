@@ -1,4 +1,3 @@
-use std::array;
 use std::cmp::min;
 use std::io::Cursor;
 
@@ -29,17 +28,21 @@ const OVERHEAD_OF_EACH_EXCEPT: u32 = 8;
 const DEFAULT_PAGE_SIZE: u32 = 65536;
 
 /// Type alias for [`FastPFor`] with 128-element `u32` blocks.
-pub type FastPForBlock128 = FastPFor<128, { u32::BITS as usize + 1 }, u32>;
+pub type FastPForBlock128 = FastPFor<128, u32>;
 
 /// Type alias for [`FastPFor`] with 256-element `u32` blocks.
-pub type FastPForBlock256 = FastPFor<256, { u32::BITS as usize + 1 }, u32>;
+pub type FastPForBlock256 = FastPFor<256, u32>;
 
 /// Fast Patched Frame-of-Reference ([FastPFOR](https://github.com/lemire/FastPFor)) codec.
 ///
 /// `N` is the block size (128 or 256 values per block) and `T` the element type
-/// ([`u32`] or [`u64`]). This struct implements [`BlockCodec`] with `Block = [u32; N]`
-/// for the `u32` element type, giving compile-time guarantees that only correctly-sized
-/// blocks are accepted.
+/// ([`u32`] or [`u64`], defaulting to `u32`). This struct implements [`BlockCodec`] with
+/// `Block = [u32; N]` for the `u32` element type, giving compile-time guarantees that only
+/// correctly-sized blocks are accepted.
+///
+/// The per-block scratch buffers are sized exactly for `T` (`T::WIDTH + 1` buckets) via the
+/// sealed [`FastPForInt`] trait, so the bucket count is neither wasted nor part of this
+/// type's signature.
 ///
 /// Use [`FastPForBlock128`] or [`FastPForBlock256`] as convenient `u32` type aliases.
 ///
@@ -54,22 +57,18 @@ pub type FastPForBlock256 = FastPFor<256, { u32::BITS as usize + 1 }, u32>;
 /// codec.encode(&data, &mut out).unwrap();
 /// ```
 #[derive(Debug)]
-pub struct FastPFor<
-    const N: usize,
-    const WIDTHS: usize = { u32::BITS as usize + 1 },
-    T: FastPForInt = u32,
-> {
+pub struct FastPFor<const N: usize, T: FastPForInt = u32> {
     /// Exception values indexed by bit width difference
-    exception_buffers: [Vec<T>; WIDTHS],
+    exception_buffers: T::ExceptionBuffers,
     /// Metadata buffer for encoding/decoding
     bytes_container: BytesMut,
     /// Maximum integers per page
     page_size: u32,
     /// Position trackers for exception arrays
-    data_pointers: [usize; WIDTHS],
+    data_pointers: T::DataPointers,
     /// Frequency count for each bit width:
     /// `freqs[i]` = count of values needing exactly i bits
-    freqs: [u32; WIDTHS],
+    freqs: T::Freqs,
     /// Optimal number of bits chosen for the current block
     optimal_bits: u8,
     /// Number of exceptions that don't fit in the optimal bit width
@@ -78,14 +77,14 @@ pub struct FastPFor<
     max_bits: u8,
 }
 
-impl<const N: usize, const WIDTHS: usize, T: FastPForInt> Default for FastPFor<N, WIDTHS, T> {
+impl<const N: usize, T: FastPForInt> Default for FastPFor<N, T> {
     fn default() -> Self {
         Self::new(DEFAULT_PAGE_SIZE)
             .expect("DEFAULT_PAGE_SIZE is a multiple of all valid block sizes")
     }
 }
 
-impl<const N: usize, const WIDTHS: usize, T: FastPForInt> FastPFor<N, WIDTHS, T> {
+impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
     /// Creates a new `FastPForBlock` with a codec with the given page size.
     ///
     /// Returns an error if `page_size` is not a multiple of the block size.
@@ -102,9 +101,9 @@ impl<const N: usize, const WIDTHS: usize, T: FastPForInt> FastPFor<N, WIDTHS, T>
                 (3 * page_size / N as u32 + page_size) as usize,
             ),
             page_size,
-            exception_buffers: array::from_fn(|_| Vec::new()),
-            data_pointers: [0; WIDTHS],
-            freqs: [0; WIDTHS],
+            exception_buffers: T::new_exception_buffers(),
+            data_pointers: T::new_data_pointers(),
+            freqs: T::new_freqs(),
             optimal_bits: 0,
             exception_count: 0,
             max_bits: 0,
@@ -168,7 +167,7 @@ impl<const N: usize, const WIDTHS: usize, T: FastPForInt> FastPFor<N, WIDTHS, T>
         let mut tmp_output_offset = output_offset.position() as u32;
 
         // Data pointers to 0
-        self.data_pointers.fill(0);
+        self.data_pointers.as_mut().fill(0);
         self.bytes_container.clear();
 
         let mut tmp_input_offset = input_offset.position() as u32;
@@ -264,7 +263,7 @@ impl<const N: usize, const WIDTHS: usize, T: FastPForInt> FastPFor<N, WIDTHS, T>
     ///
     /// Analyzes frequency distribution to balance regular value bits against exception overhead.
     fn best_bit_from_data(&mut self, input: &[T], pos: u32) {
-        self.freqs.fill(0);
+        self.freqs.as_mut().fill(0);
         let k_end = min(pos + N as u32, input.len() as u32);
         for k in pos..k_end {
             self.freqs[usize::from(input[k as usize].significant_bits())] += 1;
@@ -419,7 +418,7 @@ impl<const N: usize, const WIDTHS: usize, T: FastPForInt> FastPFor<N, WIDTHS, T>
             }
         }
 
-        self.data_pointers.fill(0);
+        self.data_pointers.as_mut().fill(0);
         let mut tmp_output_offset = output_offset.position() as u32;
         let mut tmp_input_offset = input_offset.position() as u32;
 

@@ -84,7 +84,7 @@ assert_eq!(decoded, input);
 Enable the `cpp` feature in `Cargo.toml`:
 
 ```toml
-fastpfor = { version = "0.1", features = ["cpp"] }
+fastpfor = { version = "0.9", features = ["cpp"] }
 ```
 
 All C++ codecs implement the same `AnyLenCodec` trait (`encode` / `decode`), so

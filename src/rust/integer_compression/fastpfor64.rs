@@ -22,7 +22,7 @@ use crate::{BlockCodec64, FastPForError, FastPForResult};
 /// `N` is the block size (128 or 256 values). This is [`FastPFor`] specialized to the
 /// `u64` element type, and is the internal `u64` codec behind
 /// [`FastPFor128`](crate::FastPFor128) and [`FastPFor256`](crate::FastPFor256).
-pub type FastPForWide<const N: usize> = FastPFor<N, { u64::BITS as usize + 1 }, u64>;
+pub type FastPForWide<const N: usize> = FastPFor<N, u64>;
 
 /// Variable-byte encoding of the `u64` tail.
 ///
