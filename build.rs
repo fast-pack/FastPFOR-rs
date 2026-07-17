@@ -61,7 +61,7 @@ fn build_fastpfor() {
         .define("FASTPFOR_SIMD_MODE", simd_mode)
         .build();
     let lib_path = cmake_out.join("lib");
-    let lib_path = lib_path.to_str().unwrap();
+    let lib_path = lib_path.to_str().expect("path is not valid utf-8");
 
     // Compile the bridge
     println!("cargo:rerun-if-changed=src/cpp/fastpfor_bridge.h");

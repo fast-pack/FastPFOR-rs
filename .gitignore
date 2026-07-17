@@ -1,13 +1,27 @@
+**/*.bak
 **/*.rs.bk
+*.iml
 *.pdb
+*.proptest-regressions
+*.pyc
+.DS_Store
+.envrc
 .idea/
+.pytest_cache/
+.venv/
 .vscode/
-Cargo.lock
-codecov*
+__pycache__/
+codecov
+codecov.SHA256SUM*
 debug/
+flamegraph*.svg
+perf.data*
+proptest-regressions/
+rustc-ice-*.txt
 target/
 temp/
 tmp/
 venv/
 
-!codecov.yml
+# This is a library, so the lock file is not committed.
+Cargo.lock
