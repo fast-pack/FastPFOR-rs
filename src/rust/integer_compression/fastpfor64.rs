@@ -662,12 +662,18 @@ mod tests {
 
         #[test]
         fn parity_128() {
-            assert_parity(&mut FastPForWide::<128>::default(), &mut CppFastPFor128::default());
+            assert_parity(
+                &mut FastPForWide::<128>::default(),
+                &mut CppFastPFor128::default(),
+            );
         }
 
         #[test]
         fn parity_256() {
-            assert_parity(&mut FastPForWide::<256>::default(), &mut CppFastPFor256::default());
+            assert_parity(
+                &mut FastPForWide::<256>::default(),
+                &mut CppFastPFor256::default(),
+            );
         }
     }
 }

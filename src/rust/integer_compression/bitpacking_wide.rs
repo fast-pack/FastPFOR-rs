@@ -6,7 +6,11 @@
 //! of the concatenated stream. Each call moves exactly `bit` `u32` words.
 
 const fn low_mask(bit: u8) -> u64 {
-    if bit >= 64 { u64::MAX } else { (1u64 << bit) - 1 }
+    if bit >= 64 {
+        u64::MAX
+    } else {
+        (1u64 << bit) - 1
+    }
 }
 
 /// Packs 32 values from `input[inpos..]` into `output[outpos..]` at `bit` bits each.
@@ -64,7 +68,11 @@ mod tests {
         let values32: [u32; 32] = std::array::from_fn(|i| (i as u32).wrapping_mul(2_654_435_761));
 
         for bit in 1..=32u8 {
-            let mask = if bit == 32 { u32::MAX } else { (1u32 << bit) - 1 };
+            let mask = if bit == 32 {
+                u32::MAX
+            } else {
+                (1u32 << bit) - 1
+            };
             let masked32: [u32; 32] = std::array::from_fn(|i| values32[i] & mask);
             let masked64: [u64; 32] = std::array::from_fn(|i| u64::from(masked32[i]));
 
@@ -82,7 +90,11 @@ mod tests {
             unpack_wide(&out_wide, 0, &mut back_wide, 0, bit);
 
             for i in 0..32 {
-                assert_eq!(u64::from(back_ref[i]), back_wide[i], "unpack mismatch at bit={bit}");
+                assert_eq!(
+                    u64::from(back_ref[i]),
+                    back_wide[i],
+                    "unpack mismatch at bit={bit}"
+                );
             }
         }
     }
