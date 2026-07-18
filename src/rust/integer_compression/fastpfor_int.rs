@@ -1,17 +1,4 @@
 //! Element-width abstraction shared by the 32- and 64-bit `FastPFOR` codecs.
-//!
-//! The block-splitting, best-bit search, exception handling, and metadata layout are
-//! identical for `u32` and `u64`; only the element width differs.
-//! [`FastPForInt`] abstracts the width-specific pieces so a single [`FastPFor`](super::fastpfor::FastPFor)
-//! implements the algorithm once. Ordinary arithmetic uses the standard operator traits
-//! (`>>`, `<<`, `&`, `|=`) that the trait requires as bounds; only the genuinely
-//! width-specific pieces (bit-packing kernels and the exception bitmap layout) are methods.
-//! `u32` keeps its hand-unrolled bit-packing kernels; `u64` uses the generic wide packer.
-//!
-//! The trait is **sealed**: only [`u32`] and [`u64`] implement it, so callers cannot plug in
-//! an unsupported element type. Each implementor also fixes the exact size of the per-block
-//! scratch buffers (`WIDTH + 1` buckets) as associated types, so no space is wasted and the
-//! bucket count never leaks into the public [`FastPFor`](super::fastpfor::FastPFor) signature.
 
 use std::array;
 use std::fmt::Debug;
