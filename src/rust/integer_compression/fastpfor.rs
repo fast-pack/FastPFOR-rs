@@ -181,10 +181,13 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
                     self.exception_buffers[index].resize(new_cap, T::zero());
                 }
                 for k in 0..N as u32 {
-                    if input[(k + tmp_input_offset) as usize] >> usize::from(self.optimal_bits) != T::zero() {
+                    if input[(k + tmp_input_offset) as usize] >> usize::from(self.optimal_bits)
+                        != T::zero()
+                    {
                         self.bytes_container.put_u8(k as u8);
-                        self.exception_buffers[index][self.data_pointers[index]] =
-                            input[(k + tmp_input_offset) as usize] >> usize::from(self.optimal_bits);
+                        self.exception_buffers[index][self.data_pointers[index]] = input
+                            [(k + tmp_input_offset) as usize]
+                            >> usize::from(self.optimal_bits);
                         self.data_pointers[index] += 1;
                     }
                 }
