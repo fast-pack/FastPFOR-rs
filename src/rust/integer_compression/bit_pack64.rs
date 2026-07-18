@@ -1,7 +1,7 @@
 //! Generic scalar bit-packing for 64-bit values.
 //!
 //! Packs and unpacks groups of 32 values at any bit width `0..=64`.
-//! The layout is a little-endian bitstream, matching the hand-unrolled 32-bit kernels in [`bitpacking`](super::bitpacking).
+//! The layout is a little-endian bitstream, matching the hand-unrolled 32-bit kernels in [`bitpacking`](super::bit_pack32).
 //! Value `j` occupies bits `[j*bit, (j+1)*bit)` of the concatenated stream.
 //! Each call moves exactly `bit` `u32` words.
 
@@ -59,7 +59,7 @@ pub fn unpack_wide(input: &[u32], inpos: usize, output: &mut [u64], outpos: usiz
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::rust::integer_compression::{bitpacking, bitunpacking};
+    use crate::rust::integer_compression::{bit_pack32, bit_unpack32};
 
     #[test]
     fn wide_matches_u32_kernels() {
@@ -75,7 +75,7 @@ mod tests {
             let masked64: [u64; 32] = std::array::from_fn(|i| u64::from(masked32[i]));
 
             let mut out_ref = vec![0u32; bit as usize];
-            bitpacking::fast_pack(&masked32, 0, &mut out_ref, 0, bit);
+            bit_pack32::fast_pack(&masked32, 0, &mut out_ref, 0, bit);
 
             let mut out_wide = vec![0u32; bit as usize];
             pack_wide(&masked64, 0, &mut out_wide, 0, bit);
@@ -83,7 +83,7 @@ mod tests {
             assert_eq!(out_ref, out_wide, "pack mismatch at bit={bit}");
 
             let mut back_ref = vec![0u32; 32];
-            bitunpacking::fast_unpack(&out_ref, 0, &mut back_ref, 0, bit);
+            bit_unpack32::fast_unpack(&out_ref, 0, &mut back_ref, 0, bit);
             let mut back_wide = vec![0u64; 32];
             unpack_wide(&out_wide, 0, &mut back_wide, 0, bit);
 

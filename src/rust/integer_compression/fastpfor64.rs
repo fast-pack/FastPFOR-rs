@@ -4,8 +4,8 @@
 //! Values, exceptions, and the exception bitmap are 64 bits wide instead of 32.
 //! The output is byte-compatible with the C++ `CppFastPFor128` / `CppFastPFor256` 64-bit paths.
 //!
-//! [`FastPForWide`] is the 64-bit half of the public [`FastPFor128`](crate::FastPFor128) /
-//! [`FastPFor256`](crate::FastPFor256) codecs and is not exported on its own.
+//! [`FastPForBlockWide128`]/[`FastPForBlockWide256`] are the 64-bit half of the public [`FastPFor128`](crate::FastPFor128) /
+//! [`FastPFor256`](crate::FastPFor256) codecs.
 //! It handles complete blocks, then a [`VariableByte`] tail encodes the sub-block remainder.
 
 use std::io::Cursor;
@@ -17,12 +17,11 @@ use crate::helpers::AsUsize;
 use crate::rust::integer_compression::fastpfor::FastPFor;
 use crate::{BlockCodec64, FastPForError, FastPForResult};
 
-/// 64-bit `FastPFOR` codec: `FastPFOR`-packed blocks plus a variable-byte tail.
-///
-/// `N` is the block size (128 or 256 values). This is [`FastPFor`] specialized to the
-/// `u64` element type, and is the internal `u64` codec behind
-/// [`FastPFor128`](crate::FastPFor128) and [`FastPFor256`](crate::FastPFor256).
-pub type FastPForWide<const N: usize> = FastPFor<N, u64>;
+/// Type alias for [`FastPFor`] with 128-element `u64` blocks.
+pub type FastPForBlockWide128 = FastPFor<128, u64>;
+
+/// Type alias for [`FastPFor`] with 256-element `u64` blocks.
+pub type FastPForBlockWide256 = FastPFor<256, u64>;
 
 /// Variable-byte encoding of the `u64` tail.
 ///
@@ -89,7 +88,7 @@ fn vbyte_decode64(input: &[u32], out: &mut Vec<u64>) -> FastPForResult<()> {
     Ok(())
 }
 
-impl<const N: usize> BlockCodec64 for FastPForWide<N> {
+impl<const N: usize> BlockCodec64 for FastPFor<N, u64> {
     fn encode64(&mut self, input: &[u64], out: &mut Vec<u32>) -> FastPForResult<()> {
         let rounded = (input.len() / N) * N;
         let n_values = rounded as u32;
@@ -158,7 +157,7 @@ mod tests {
     use super::*;
 
     fn roundtrip<const N: usize>(input: &[u64]) {
-        let mut codec = FastPForWide::<N>::default();
+        let mut codec = FastPFor::<N, u64>::default();
         let mut encoded = Vec::new();
         codec.encode64(input, &mut encoded).unwrap();
         let mut decoded = Vec::new();
@@ -239,7 +238,7 @@ mod tests {
             ]
         }
 
-        fn assert_parity<const N: usize>(rust: &mut FastPForWide<N>, cpp: &mut impl BlockCodec64) {
+        fn assert_parity<const N: usize>(rust: &mut FastPFor<N, u64>, cpp: &mut impl BlockCodec64) {
             for data in cases() {
                 let mut rust_enc = Vec::new();
                 rust.encode64(&data, &mut rust_enc).unwrap();
@@ -260,7 +259,7 @@ mod tests {
         #[test]
         fn parity_128() {
             assert_parity(
-                &mut FastPForWide::<128>::default(),
+                &mut FastPFor::<128, u64>::default(),
                 &mut CppFastPFor128::default(),
             );
         }
@@ -268,7 +267,7 @@ mod tests {
         #[test]
         fn parity_256() {
             assert_parity(
-                &mut FastPForWide::<256>::default(),
+                &mut FastPFor::<256, u64>::default(),
                 &mut CppFastPFor256::default(),
             );
         }

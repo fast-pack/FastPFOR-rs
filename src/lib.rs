@@ -29,7 +29,7 @@ pub use bytemuck::Pod;
 #[cfg(feature = "rust")]
 pub use rust::{
     CompositeCodec, FastPFor, FastPFor128, FastPFor256, FastPForBlock128, FastPForBlock256,
-    JustCopy, VariableByte,
+    FastPForBlockWide128, FastPForBlockWide256, JustCopy, VariableByte,
 };
 
 // `src/test_utils.rs` uses `fastpfor::...`; alias this crate for unit tests only.

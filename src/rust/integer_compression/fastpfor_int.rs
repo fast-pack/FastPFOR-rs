@@ -18,7 +18,7 @@ use std::fmt::Debug;
 use std::ops::{BitAnd, BitOrAssign, Index, IndexMut, Shl, Shr};
 
 use crate::helpers::GetWithErr;
-use crate::rust::integer_compression::{bitpacking, bitpacking_wide, bitunpacking};
+use crate::rust::integer_compression::{bit_pack32, bit_pack64, bit_unpack32};
 use crate::{FastPForError, FastPForResult};
 
 mod sealed {
@@ -114,11 +114,11 @@ impl FastPForInt for u32 {
     // code on `main` does). See the packing-kernel benchmarks.
     #[inline(always)]
     fn fast_pack(src: &[Self], inpos: usize, out: &mut [u32], outpos: usize, bit: u8) {
-        bitpacking::fast_pack(src, inpos, out, outpos, bit);
+        bit_pack32::fast_pack(src, inpos, out, outpos, bit);
     }
     #[inline(always)]
     fn fast_unpack(src: &[u32], inpos: usize, out: &mut [Self], outpos: usize, bit: u8) {
-        bitunpacking::fast_unpack(src, inpos, out, outpos, bit);
+        bit_unpack32::fast_unpack(src, inpos, out, outpos, bit);
     }
     #[inline]
     fn write_bitmap(bitmap: Self, out: &mut [u32]) {
@@ -159,11 +159,11 @@ impl FastPForInt for u64 {
     // `inline(always)`: forward directly to the wide kernel (see the `u32` impl for rationale).
     #[inline(always)]
     fn fast_pack(src: &[Self], inpos: usize, out: &mut [u32], outpos: usize, bit: u8) {
-        bitpacking_wide::pack_wide(src, inpos, out, outpos, bit);
+        bit_pack64::pack_wide(src, inpos, out, outpos, bit);
     }
     #[inline(always)]
     fn fast_unpack(src: &[u32], inpos: usize, out: &mut [Self], outpos: usize, bit: u8) {
-        bitpacking_wide::unpack_wide(src, inpos, out, outpos, bit);
+        bit_pack64::unpack_wide(src, inpos, out, outpos, bit);
     }
     #[inline]
     fn write_bitmap(bitmap: Self, out: &mut [u32]) {

@@ -1,7 +1,8 @@
-pub mod bitpacking;
-pub mod bitpacking_wide;
-pub mod bitunpacking;
+pub mod bit_pack32;
+pub mod bit_pack64;
+pub mod bit_unpack32;
 pub mod fastpfor;
+pub mod fastpfor32;
 pub mod fastpfor64;
 pub mod fastpfor_int;
 pub mod just_copy;

@@ -8,8 +8,8 @@ use crate::FastPForResult;
 use crate::codec::{AnyLenCodec, BlockCodec64};
 use crate::rust::VariableByte;
 use crate::rust::composite::CompositeCodec;
-use crate::rust::integer_compression::fastpfor::{FastPForBlock128, FastPForBlock256};
-use crate::rust::integer_compression::fastpfor64::FastPForWide;
+use crate::rust::integer_compression::fastpfor::FastPFor;
+use crate::rust::integer_compression::fastpfor32::{FastPForBlock128, FastPForBlock256};
 
 macro_rules! define_fastpfor {
     ($(#[$meta:meta])* $name:ident, $block:ty, $n:literal) => {
@@ -17,7 +17,7 @@ macro_rules! define_fastpfor {
         #[derive(Debug, Default)]
         pub struct $name {
             narrow: CompositeCodec<$block, VariableByte>,
-            wide: FastPForWide<$n>,
+            wide: FastPFor<$n, u64>,
         }
 
         impl AnyLenCodec for $name {

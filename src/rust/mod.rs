@@ -7,7 +7,9 @@ pub use composite::CompositeCodec;
 /// Any-length `FastPFOR` codecs supporting both `u32` and `u64`.
 pub use fastpfor_codec::{FastPFor128, FastPFor256};
 /// Type-safe block codec with block size encoded in the type.
-pub use integer_compression::fastpfor::{FastPFor, FastPForBlock128, FastPForBlock256};
+pub use integer_compression::fastpfor::FastPFor;
+pub use integer_compression::fastpfor32::{FastPForBlock128, FastPForBlock256};
+pub use integer_compression::fastpfor64::{FastPForBlockWide128, FastPForBlockWide256};
 /// Pass-through codec — implements [`AnyLenCodec`](crate::codec::AnyLenCodec).
 pub use integer_compression::just_copy::JustCopy;
 /// Variable-byte codec — implements [`AnyLenCodec`](crate::codec::AnyLenCodec).
