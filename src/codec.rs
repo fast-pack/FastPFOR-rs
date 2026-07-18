@@ -28,6 +28,7 @@ pub(crate) fn default_max_decoded_len(compressed_words: usize) -> usize {
 /// #[derive(Default)]
 /// struct MyCodec;
 /// impl BlockCodec for MyCodec {
+///     type Elem = u32;
 ///     type Block = [u32; 256];
 ///     fn encode_blocks(&mut self, blocks: &[[u32; 256]], out: &mut Vec<u32>)
 ///         -> FastPForResult<()> { todo!() }
@@ -36,21 +37,25 @@ pub(crate) fn default_max_decoded_len(compressed_words: usize) -> usize {
 /// }
 /// ```
 pub trait BlockCodec: Default {
-    /// The fixed-size block type.  Must be plain-old-data (`Pod`).
-    /// In practice this will be `[u32; 128]` or `[u32; 256]`.
+    /// The unpacked element type: [`u32`] or [`u64`].
+    /// The compressed stream is always `Vec<u32>`; only decoded values use this width.
+    type Elem: Pod;
+
+    /// The fixed-size block type, which must be plain-old-data (`Pod`).
+    /// In practice `[u32; 128]`, `[u32; 256]`, `[u64; 128]`, or `[u64; 256]`.
     type Block: Pod;
 
-    /// Number of `u32` elements in one block.
+    /// Number of [`Elem`](BlockCodec::Elem) values in one block.
     ///
-    /// Equal to `size_of::<Self::Block>() / 4`. Use this when computing
-    /// element counts from block counts, e.g. `n_blocks * codec.elements_per_block()`.
+    /// Equal to `size_of::<Self::Block>() / size_of::<Self::Elem>()`.
+    /// Use this when computing element counts from block counts.
     #[inline]
     #[must_use]
     fn size() -> usize
     where
         Self: Sized,
     {
-        size_of::<Self::Block>() / size_of::<u32>()
+        size_of::<Self::Block>() / size_of::<Self::Elem>()
     }
 
     /// Compress a slice of complete, fixed-size blocks.
@@ -76,7 +81,7 @@ pub trait BlockCodec: Default {
         &mut self,
         input: &[u32],
         expected_len: Option<u32>,
-        out: &mut Vec<u32>,
+        out: &mut Vec<Self::Elem>,
     ) -> FastPForResult<usize>;
 
     /// Maximum decompressed element count for a given compressed input length.
@@ -93,10 +98,12 @@ pub trait BlockCodec: Default {
 
 /// Codec that supports compressing 64-bit integers into a 32-bit word stream.
 ///
-/// Implemented by the pure-Rust [`FastPFor128`](crate::FastPFor128) and [`FastPFor256`](crate::FastPFor256) codecs.
+/// Implemented by the pure-Rust [`FastPForWide128`](crate::FastPForWide128) and
+/// [`FastPForWide256`](crate::FastPForWide256) codecs.
 /// With the `cpp` feature, `CppFastPFor128`, `CppFastPFor256`, and `CppVarInt` also implement it.
-/// For simple use, call `encode64` / `decode64` directly on the struct.
 ///
+/// This is a shared interface for cross-codec comparison; for native Rust use,
+/// [`FastPForWide128`](crate::FastPForWide128) also implements [`AnyLenCodec`] with `Elem = u64`.
 /// Import `BlockCodec64` only when writing generic code over several 64-bit codecs.
 pub trait BlockCodec64 {
     /// Compress 64-bit integers into a 32-bit word stream.
@@ -112,8 +119,12 @@ pub trait BlockCodec64 {
 /// trait directly.  Block-oriented codecs are wrapped in `CompositeCodec`
 /// to produce an `AnyLenCodec`.
 pub trait AnyLenCodec: Default {
-    /// Compress an arbitrary-length slice of `u32` values.
-    fn encode(&mut self, input: &[u32], out: &mut Vec<u32>) -> FastPForResult<()>;
+    /// The unpacked element type: [`u32`] or [`u64`].
+    /// The compressed stream is always `Vec<u32>`; only decoded values use this width.
+    type Elem;
+
+    /// Compress an arbitrary-length slice of [`Elem`](AnyLenCodec::Elem) values.
+    fn encode(&mut self, input: &[Self::Elem], out: &mut Vec<u32>) -> FastPForResult<()>;
 
     /// Maximum decompressed element count for a given compressed input length.
     /// Reject `expected_len` values exceeding this to avoid allocation from bad data.
@@ -138,7 +149,7 @@ pub trait AnyLenCodec: Default {
     fn decode(
         &mut self,
         input: &[u32],
-        out: &mut Vec<u32>,
+        out: &mut Vec<Self::Elem>,
         expected_len: Option<u32>,
     ) -> FastPForResult<()>;
 }
@@ -162,9 +173,11 @@ pub trait AnyLenCodec: Default {
 /// assert_eq!(remainder.len(), 88);
 /// ```
 #[must_use]
-pub fn slice_to_blocks<Blocks: BlockCodec + Sized>(input: &[u32]) -> (&[Blocks::Block], &[u32]) {
-    let block_u32s = Blocks::size();
-    let aligned_down = (input.len() / block_u32s) * block_u32s;
+pub fn slice_to_blocks<Blocks: BlockCodec + Sized>(
+    input: &[Blocks::Elem],
+) -> (&[Blocks::Block], &[Blocks::Elem]) {
+    let block_elems = Blocks::size();
+    let aligned_down = (input.len() / block_elems) * block_elems;
     let (aligned, remainder) = input.split_at(aligned_down);
     let blocks: &[Blocks::Block] = cast_slice(aligned); // must not panic
     (blocks, remainder)

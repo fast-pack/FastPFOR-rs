@@ -41,26 +41,32 @@ use crate::helpers::AsUsize;
 /// assert_eq!(decoded, data);
 /// ```
 #[derive(Debug)]
-pub struct CompositeCodec<Blocks: BlockCodec, Tail: AnyLenCodec> {
+pub struct CompositeCodec<Blocks: BlockCodec, Tail: AnyLenCodec<Elem = Blocks::Elem>> {
     block: Blocks,
     tail: Tail,
 }
 
-impl<Blocks: BlockCodec, Tail: AnyLenCodec> Default for CompositeCodec<Blocks, Tail> {
+impl<Blocks: BlockCodec, Tail: AnyLenCodec<Elem = Blocks::Elem>> Default
+    for CompositeCodec<Blocks, Tail>
+{
     fn default() -> Self {
         Self::new(Blocks::default(), Tail::default())
     }
 }
 
-impl<Blocks: BlockCodec, Tail: AnyLenCodec> CompositeCodec<Blocks, Tail> {
+impl<Blocks: BlockCodec, Tail: AnyLenCodec<Elem = Blocks::Elem>> CompositeCodec<Blocks, Tail> {
     /// Creates a new `CompositeCodec` from a block codec and a tail codec.
     pub fn new(block: Blocks, tail: Tail) -> Self {
         Self { block, tail }
     }
 }
 
-impl<Blocks: BlockCodec, Tail: AnyLenCodec> AnyLenCodec for CompositeCodec<Blocks, Tail> {
-    fn encode(&mut self, input: &[u32], out: &mut Vec<u32>) -> FastPForResult<()> {
+impl<Blocks: BlockCodec, Tail: AnyLenCodec<Elem = Blocks::Elem>> AnyLenCodec
+    for CompositeCodec<Blocks, Tail>
+{
+    type Elem = Blocks::Elem;
+
+    fn encode(&mut self, input: &[Self::Elem], out: &mut Vec<u32>) -> FastPForResult<()> {
         let (blocks, remainder) = slice_to_blocks::<Blocks>(input);
         // C++ CompositeCodec: concatenate block + tail. Block codec writes length header (0 when empty).
         self.block.encode_blocks(blocks, out)?;
@@ -71,7 +77,7 @@ impl<Blocks: BlockCodec, Tail: AnyLenCodec> AnyLenCodec for CompositeCodec<Block
     fn decode(
         &mut self,
         input: &[u32],
-        out: &mut Vec<u32>,
+        out: &mut Vec<Self::Elem>,
         expected_len: Option<u32>,
     ) -> FastPForResult<()> {
         let start_len = out.len();

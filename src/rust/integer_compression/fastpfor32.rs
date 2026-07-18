@@ -4,6 +4,7 @@ use bytemuck::cast_slice;
 
 use crate::helpers::AsUsize;
 use crate::rust::integer_compression::fastpfor::sealed;
+use crate::rust::integer_compression::fastpfor_int::FastPForInt;
 use crate::{BlockCodec, FastPFor, FastPForError, FastPForResult};
 
 /// Type alias for [`FastPFor`] with 128-element `u32` blocks.
@@ -12,11 +13,12 @@ pub type FastPForBlock128 = FastPFor<128, u32>;
 /// Type alias for [`FastPFor`] with 256-element `u32` blocks.
 pub type FastPForBlock256 = FastPFor<256, u32>;
 
-impl<const N: usize> BlockCodec for FastPFor<N, u32>
+impl<const N: usize, T: FastPForInt> BlockCodec for FastPFor<N, T>
 where
-    [u32; N]: sealed::BlockSize,
+    [T; N]: sealed::BlockSize,
 {
-    type Block = [u32; N];
+    type Elem = T;
+    type Block = [T; N];
 
     fn encode_blocks(&mut self, blocks: &[Self::Block], out: &mut Vec<u32>) -> FastPForResult<()> {
         let n_values = (blocks.len() * N) as u32;
@@ -24,9 +26,9 @@ where
             out.push(n_values);
             return Ok(());
         }
-        let flat: &[u32] = cast_slice(blocks);
+        let flat: &[T] = cast_slice(blocks);
 
-        let capacity = flat.len() * 2 + 1024;
+        let capacity = flat.len() * 3 + 1024;
         let start = out.len();
         // Reserve slot for the length header, then space for compressed data.
         out.resize(start + 1 + capacity, 0);
@@ -53,7 +55,7 @@ where
         &mut self,
         input: &[u32],
         expected_len: Option<u32>,
-        out: &mut Vec<u32>,
+        out: &mut Vec<Self::Elem>,
     ) -> FastPForResult<usize> {
         let Some((&block_n_values, rest)) = input.split_first() else {
             return Err(FastPForError::NotEnoughData);
@@ -79,7 +81,7 @@ where
             return Ok(1);
         }
         let start = out.len();
-        out.resize(start + n_blocks * N, 0);
+        out.resize(start + n_blocks * N, T::ZERO);
 
         let mut in_off = Cursor::new(0u32);
         let mut out_off = Cursor::new(0u32);

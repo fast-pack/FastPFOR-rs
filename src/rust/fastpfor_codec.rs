@@ -1,86 +1,114 @@
-//! Public any-length `FastPFOR` codecs supporting both 32- and 64-bit integers.
+//! Public any-length `FastPFOR` codecs.
 //!
-//! [`FastPFor128`] and [`FastPFor256`] are the primary entry points.
-//! Each implements [`AnyLenCodec`] for `u32` and [`BlockCodec64`] for `u64`.
-//! Aligned blocks are coded with `FastPFOR` and the sub-block remainder with variable-byte coding.
+//! [`FastPFor128`]/[`FastPFor256`] compress `u32`; [`FastPForWide128`]/[`FastPForWide256`] compress `u64`.
+//! Each is one [`CompositeCodec`]: the width-generic block engine plus a variable-byte tail for the remainder.
 
 use crate::FastPForResult;
 use crate::codec::{AnyLenCodec, BlockCodec64};
 use crate::rust::VariableByte;
 use crate::rust::composite::CompositeCodec;
-use crate::rust::integer_compression::fastpfor::FastPFor;
-use crate::rust::integer_compression::fastpfor32::{FastPForBlock128, FastPForBlock256};
+use crate::rust::integer_compression::fastpfor::{FastPFor, sealed};
+use crate::rust::integer_compression::fastpfor_int::FastPForInt;
 
-macro_rules! define_fastpfor {
-    ($(#[$meta:meta])* $name:ident, $block:ty, $n:literal) => {
-        $(#[$meta])*
-        #[derive(Debug, Default)]
-        pub struct $name {
-            narrow: CompositeCodec<$block, VariableByte>,
-            wide: FastPFor<$n, u64>,
-        }
-
-        impl AnyLenCodec for $name {
-            fn encode(&mut self, input: &[u32], out: &mut Vec<u32>) -> FastPForResult<()> {
-                self.narrow.encode(input, out)
-            }
-
-            fn decode(
-                &mut self,
-                input: &[u32],
-                out: &mut Vec<u32>,
-                expected_len: Option<u32>,
-            ) -> FastPForResult<()> {
-                self.narrow.decode(input, out, expected_len)
-            }
-        }
-
-        impl BlockCodec64 for $name {
-            fn encode64(&mut self, input: &[u64], out: &mut Vec<u32>) -> FastPForResult<()> {
-                self.wide.encode64(input, out)
-            }
-
-            fn decode64(&mut self, input: &[u32], out: &mut Vec<u64>) -> FastPForResult<()> {
-                self.wide.decode64(input, out)
-            }
-        }
-    };
+/// Any-length `FastPFOR` codec over `N`-value blocks of width `T` ([`u32`] or [`u64`]).
+///
+/// A single [`CompositeCodec`] pairing the width-generic block engine with a [`VariableByte`] tail.
+/// Instantiate through the [`FastPFor128`]/[`FastPForWide128`] aliases.
+#[derive(Debug)]
+pub struct FastPForCodec<const N: usize, T: FastPForInt>
+where
+    [T; N]: sealed::BlockSize,
+    VariableByte<T>: AnyLenCodec<Elem = T>,
+{
+    inner: CompositeCodec<FastPFor<N, T>, VariableByte<T>>,
 }
 
-define_fastpfor! {
-    /// Any-length `FastPFOR` codec with 128-value blocks.
-    ///
-    /// Compresses `u32` via [`AnyLenCodec`] and `u64` via [`BlockCodec64`].
-    FastPFor128, FastPForBlock128, 128
+// Hand-written (not derived) so `default()` needs no `T: Default` bound;
+// the tail's `AnyLenCodec: Default` supertrait already guarantees it.
+impl<const N: usize, T: FastPForInt> Default for FastPForCodec<N, T>
+where
+    [T; N]: sealed::BlockSize,
+    VariableByte<T>: AnyLenCodec<Elem = T>,
+{
+    fn default() -> Self {
+        Self {
+            inner: CompositeCodec::default(),
+        }
+    }
 }
 
-define_fastpfor! {
-    /// Any-length `FastPFOR` codec with 256-value blocks.
-    ///
-    /// Compresses `u32` via [`AnyLenCodec`] and `u64` via [`BlockCodec64`].
-    FastPFor256, FastPForBlock256, 256
+impl<const N: usize, T: FastPForInt> AnyLenCodec for FastPForCodec<N, T>
+where
+    [T; N]: sealed::BlockSize,
+    VariableByte<T>: AnyLenCodec<Elem = T>,
+{
+    type Elem = T;
+
+    fn encode(&mut self, input: &[T], out: &mut Vec<u32>) -> FastPForResult<()> {
+        self.inner.encode(input, out)
+    }
+
+    fn decode(
+        &mut self,
+        input: &[u32],
+        out: &mut Vec<T>,
+        expected_len: Option<u32>,
+    ) -> FastPForResult<()> {
+        self.inner.decode(input, out, expected_len)
+    }
 }
+
+/// Compresses 64-bit integers through the shared [`BlockCodec64`] interface.
+///
+/// Lets the `u64` codecs be compared against the C++ codecs, which expose `u64` the same way.
+impl<const N: usize> BlockCodec64 for FastPForCodec<N, u64>
+where
+    [u64; N]: sealed::BlockSize,
+{
+    fn encode64(&mut self, input: &[u64], out: &mut Vec<u32>) -> FastPForResult<()> {
+        self.inner.encode(input, out)
+    }
+
+    fn decode64(&mut self, input: &[u32], out: &mut Vec<u64>) -> FastPForResult<()> {
+        self.inner.decode(input, out, None)
+    }
+}
+
+/// Any-length `u32` `FastPFOR` codec with 128-value blocks.
+pub type FastPFor128 = FastPForCodec<128, u32>;
+
+/// Any-length `u32` `FastPFOR` codec with 256-value blocks.
+pub type FastPFor256 = FastPForCodec<256, u32>;
+
+/// Any-length `u64` `FastPFOR` codec with 128-value blocks.
+pub type FastPForWide128 = FastPForCodec<128, u64>;
+
+/// Any-length `u64` `FastPFOR` codec with 256-value blocks.
+pub type FastPForWide256 = FastPForCodec<256, u64>;
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn one_codec_handles_both_widths() {
+    fn narrow_codec_roundtrips_u32() {
         let mut codec = FastPFor256::default();
+        let data: Vec<u32> = (0..600).collect();
+        let mut enc = Vec::new();
+        codec.encode(&data, &mut enc).unwrap();
+        let mut dec = Vec::new();
+        codec.decode(&enc, &mut dec, None).unwrap();
+        assert_eq!(dec, data);
+    }
 
-        let data32: Vec<u32> = (0..600).collect();
-        let mut enc32 = Vec::new();
-        codec.encode(&data32, &mut enc32).unwrap();
-        let mut dec32 = Vec::new();
-        codec.decode(&enc32, &mut dec32, None).unwrap();
-        assert_eq!(dec32, data32);
-
-        let data64: Vec<u64> = (0..600).map(|i| i * 1_000_000_000).collect();
-        let mut enc64 = Vec::new();
-        codec.encode64(&data64, &mut enc64).unwrap();
-        let mut dec64 = Vec::new();
-        codec.decode64(&enc64, &mut dec64).unwrap();
-        assert_eq!(dec64, data64);
+    #[test]
+    fn wide_codec_roundtrips_u64() {
+        let mut codec = FastPForWide256::default();
+        let data: Vec<u64> = (0..600).map(|i| i * 1_000_000_000).collect();
+        let mut enc = Vec::new();
+        codec.encode(&data, &mut enc).unwrap();
+        let mut dec = Vec::new();
+        codec.decode(&enc, &mut dec, None).unwrap();
+        assert_eq!(dec, data);
     }
 }

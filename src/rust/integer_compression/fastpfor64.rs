@@ -1,21 +1,13 @@
-//! 64-bit ([`u64`]) `FastPFOR` codec.
+//! 64-bit ([`u64`]) `FastPFOR` block-codec aliases.
 //!
-//! This is the widened counterpart of the 32-bit [`FastPFor`](super::fastpfor::FastPFor).
-//! Values, exceptions, and the exception bitmap are 64 bits wide instead of 32.
-//! The output is byte-compatible with the C++ `CppFastPFor128` / `CppFastPFor256` 64-bit paths.
-//!
-//! [`FastPForBlockWide128`]/[`FastPForBlockWide256`] are the 64-bit half of the public [`FastPFor128`](crate::FastPFor128) /
-//! [`FastPFor256`](crate::FastPFor256) codecs.
-//! It handles complete blocks, then a [`VariableByte`] tail encodes the sub-block remainder.
+//! [`FastPForBlockWide128`]/[`FastPForBlockWide256`] are [`FastPFor`] specialised to `u64` blocks.
+//! They implement the block-only [`BlockCodec`](crate::BlockCodec); the width-generic engine and
+//! exception bitmap are 64 bits wide instead of 32.
+//! The public any-length `u64` codecs [`FastPForWide128`](crate::FastPForWide128) /
+//! [`FastPForWide256`](crate::FastPForWide256) pair these with a [`VariableByte`](crate::VariableByte) tail.
+//! The block wire format is byte-compatible with the C++ `CppFastPFor128` / `CppFastPFor256` 64-bit paths.
 
-use std::io::Cursor;
-
-use bytemuck::{cast_slice, cast_slice_mut};
-
-use crate::codec::default_max_decoded_len;
-use crate::helpers::AsUsize;
 use crate::rust::integer_compression::fastpfor::FastPFor;
-use crate::{BlockCodec64, FastPForError, FastPForResult};
 
 /// Type alias for [`FastPFor`] with 128-element `u64` blocks.
 pub type FastPForBlockWide128 = FastPFor<128, u64>;
@@ -23,141 +15,17 @@ pub type FastPForBlockWide128 = FastPFor<128, u64>;
 /// Type alias for [`FastPFor`] with 256-element `u64` blocks.
 pub type FastPForBlockWide256 = FastPFor<256, u64>;
 
-/// Variable-byte encoding of the `u64` tail.
-///
-/// Each value is emitted little-endian in 7-bit groups.
-/// Every byte but the last has its high bit clear.
-/// The final byte sets its high bit as a terminator.
-/// The stream is zero-padded to a whole number of `u32` words.
-fn vbyte_encode64(input: &[u64], out: &mut Vec<u32>) {
-    if input.is_empty() {
-        return;
-    }
-    let start = out.len();
-    let capacity = input.len() * 3 + 4;
-    out.resize(start + capacity, 0);
-    let bytes: &mut [u8] = cast_slice_mut(&mut out[start..]);
-    let mut byte_pos = 0;
-    for &value in input {
-        let mut v = value;
-        while v >= 0x80 {
-            bytes[byte_pos] = (v as u8) & 0x7F;
-            byte_pos += 1;
-            v >>= 7;
-        }
-        bytes[byte_pos] = (v as u8) | 0x80;
-        byte_pos += 1;
-    }
-    while byte_pos % 4 != 0 {
-        bytes[byte_pos] = 0;
-        byte_pos += 1;
-    }
-    out.truncate(start + byte_pos / 4);
-}
-
-/// Inverse of [`vbyte_encode64`].
-/// Trailing zero padding decodes to no value, since a padding byte never sets the terminator bit.
-fn vbyte_decode64(input: &[u32], out: &mut Vec<u64>) -> FastPForResult<()> {
-    if input.is_empty() {
-        return Ok(());
-    }
-    let bytes: &[u8] = cast_slice(input);
-    let byte_len = bytes.len();
-    let mut byte_pos = 0;
-    while byte_pos < byte_len {
-        let mut v: u64 = 0;
-        let mut shift = 0u32;
-        loop {
-            if byte_pos >= byte_len {
-                return Ok(());
-            }
-            let c = bytes[byte_pos];
-            byte_pos += 1;
-            if shift >= 64 {
-                return Err(FastPForError::NotEnoughData);
-            }
-            if c >= 0x80 {
-                v |= u64::from(c & 0x7F) << shift;
-                out.push(v);
-                break;
-            }
-            v |= u64::from(c) << shift;
-            shift += 7;
-        }
-    }
-    Ok(())
-}
-
-impl<const N: usize> BlockCodec64 for FastPFor<N, u64> {
-    fn encode64(&mut self, input: &[u64], out: &mut Vec<u32>) -> FastPForResult<()> {
-        let rounded = (input.len() / N) * N;
-        let n_values = rounded as u32;
-
-        let start = out.len();
-        if rounded == 0 {
-            out.push(0);
-        } else {
-            let capacity = rounded * 3 + 1024;
-            out.resize(start + 1 + capacity, 0);
-            out[start] = n_values;
-
-            let mut in_off = Cursor::new(0u32);
-            let mut out_off = Cursor::new(0u32);
-            self.compress_blocks(
-                &input[..rounded],
-                n_values,
-                &mut in_off,
-                &mut out[start + 1..],
-                &mut out_off,
-            );
-            let written = 1 + out_off.position() as usize;
-            out.truncate(start + written);
-        }
-
-        vbyte_encode64(&input[rounded..], out);
-        Ok(())
-    }
-
-    fn decode64(&mut self, input: &[u32], out: &mut Vec<u64>) -> FastPForResult<()> {
-        let Some((&block_n_values, rest)) = input.split_first() else {
-            return Ok(());
-        };
-        if block_n_values % N as u32 != 0 {
-            return Err(FastPForError::NotEnoughData);
-        }
-        if block_n_values.as_usize() > default_max_decoded_len(input.len()) {
-            return Err(FastPForError::NotEnoughData);
-        }
-        let n_blocks = block_n_values.as_usize() / N;
-
-        let consumed = if n_blocks == 0 {
-            1
-        } else {
-            let start = out.len();
-            out.resize(start + n_blocks * N, 0);
-            let mut in_off = Cursor::new(0u32);
-            let mut out_off = Cursor::new(0u32);
-            self.decode_headless_blocks(
-                rest,
-                block_n_values,
-                &mut in_off,
-                &mut out[start..],
-                &mut out_off,
-            )?;
-            1 + in_off.position() as usize
-        };
-
-        let tail_input = input.get(consumed..).ok_or(FastPForError::NotEnoughData)?;
-        vbyte_decode64(tail_input, out)
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::codec::BlockCodec64;
+    use crate::rust::fastpfor_codec::FastPForCodec;
+    use crate::rust::integer_compression::fastpfor::sealed;
 
-    fn roundtrip<const N: usize>(input: &[u64]) {
-        let mut codec = FastPFor::<N, u64>::default();
+    fn roundtrip<const N: usize>(input: &[u64])
+    where
+        [u64; N]: sealed::BlockSize,
+    {
+        let mut codec = FastPForCodec::<N, u64>::default();
         let mut encoded = Vec::new();
         codec.encode64(input, &mut encoded).unwrap();
         let mut decoded = Vec::new();
@@ -218,7 +86,6 @@ mod tests {
     #[cfg(feature = "cpp")]
     mod cpp_parity {
         use super::*;
-        use crate::BlockCodec64;
         use crate::cpp::{CppFastPFor128, CppFastPFor256};
 
         fn cases() -> Vec<Vec<u64>> {
@@ -238,7 +105,12 @@ mod tests {
             ]
         }
 
-        fn assert_parity<const N: usize>(rust: &mut FastPFor<N, u64>, cpp: &mut impl BlockCodec64) {
+        fn assert_parity<const N: usize>(
+            rust: &mut FastPForCodec<N, u64>,
+            cpp: &mut impl BlockCodec64,
+        ) where
+            [u64; N]: sealed::BlockSize,
+        {
             for data in cases() {
                 let mut rust_enc = Vec::new();
                 rust.encode64(&data, &mut rust_enc).unwrap();
@@ -259,7 +131,7 @@ mod tests {
         #[test]
         fn parity_128() {
             assert_parity(
-                &mut FastPFor::<128, u64>::default(),
+                &mut FastPForCodec::<128, u64>::default(),
                 &mut CppFastPFor128::default(),
             );
         }
@@ -267,7 +139,7 @@ mod tests {
         #[test]
         fn parity_256() {
             assert_parity(
-                &mut FastPFor::<256, u64>::default(),
+                &mut FastPForCodec::<256, u64>::default(),
                 &mut CppFastPFor256::default(),
             );
         }

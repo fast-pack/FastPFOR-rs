@@ -60,21 +60,22 @@ assert_eq!(decoded, input);
 
 ### 64-bit integers (`u64`)
 
-The same `FastPFor128` / `FastPFor256` codecs also compress `u64` values via the
-`BlockCodec64` trait (`encode64` / `decode64`). The wire format is byte-compatible
-with the C++ `CppFastPFor128` / `CppFastPFor256` 64-bit paths.
+The `FastPForWide128` / `FastPForWide256` codecs compress `u64` values.
+They implement `AnyLenCodec` (with `Elem = u64`) for native use, and `BlockCodec64`
+(`encode64` / `decode64`) for comparison against the C++ codecs.
+The wire format is byte-compatible with the C++ `CppFastPFor128` / `CppFastPFor256` 64-bit paths.
 
 ```rust
-use fastpfor::{BlockCodec64, FastPFor256};
+use fastpfor::{AnyLenCodec, FastPForWide256};
 
-let mut codec = FastPFor256::default();
+let mut codec = FastPForWide256::default();
 let input: Vec<u64> = (0..600).map(|i| i * 1_000_000_000).collect();
 
 let mut encoded = Vec::new();
-codec.encode64(&input, &mut encoded).unwrap();
+codec.encode(&input, &mut encoded).unwrap();
 
 let mut decoded = Vec::new();
-codec.decode64(&encoded, &mut decoded).unwrap();
+codec.decode(&encoded, &mut decoded, None).unwrap();
 
 assert_eq!(decoded, input);
 ```
@@ -111,16 +112,18 @@ The `FASTPFOR_SIMD_MODE` environment variable (`portable` or `native`) can overr
 
 ### Rust (`rust` feature)
 
-Rust block codecs require block-aligned input. `CompositeCodec` chains a block codec with a tail codec (e.g. `VariableByte`) to handle arbitrary-length input. `FastPFor256` and `FastPFor128` are type aliases for such composites.
+Rust block codecs require block-aligned input. `CompositeCodec` chains a block codec with a tail codec (e.g. `VariableByte`) to handle arbitrary-length input. `FastPFor256`/`FastPFor128` (for `u32`) and `FastPForWide256`/`FastPForWide128` (for `u64`) are type aliases for such composites.
 
-| Codec              | Description                                                  |
-|--------------------|--------------------------------------------------------------|
-| `FastPFor256`      | `CompositeCodec` of `FastPForBlock256` + `VariableByte`      |
-| `FastPFor128`      | `CompositeCodec` of `FastPForBlock128` + `VariableByte`      |
-| `VariableByte`     | Variable-byte encoding, MSB is opposite to protobuf's varint |
-| `JustCopy`         | No compression; useful as a baseline                         |
-| `FastPForBlock256` | `FastPFor` with 256-element blocks; block-aligned input only |
-| `FastPForBlock128` | `FastPFor` with 128-element blocks; block-aligned input only |
+| Codec              | Description                                                     |
+|--------------------|-----------------------------------------------------------------|
+| `FastPFor256`      | `CompositeCodec` of `FastPForBlock256` + `VariableByte` (`u32`)  |
+| `FastPFor128`      | `CompositeCodec` of `FastPForBlock128` + `VariableByte` (`u32`)  |
+| `FastPForWide256`  | `CompositeCodec` of `FastPForBlockWide256` + `VariableByte` (`u64`) |
+| `FastPForWide128`  | `CompositeCodec` of `FastPForBlockWide128` + `VariableByte` (`u64`) |
+| `VariableByte`     | Variable-byte encoding, MSB is opposite to protobuf's varint    |
+| `JustCopy`         | No compression; useful as a baseline                            |
+| `FastPForBlock256` | `FastPFor` with 256-element `u32` blocks; block-aligned input only |
+| `FastPForBlock128` | `FastPFor` with 128-element `u32` blocks; block-aligned input only |
 
 ### C++ (`cpp` feature)
 

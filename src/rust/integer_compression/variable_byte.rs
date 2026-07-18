@@ -1,4 +1,5 @@
 use std::io::Cursor;
+use std::marker::PhantomData;
 
 use bytemuck::{cast_slice, cast_slice_mut};
 
@@ -7,12 +8,27 @@ use crate::helpers::AsUsize;
 use crate::rust::cursor::IncrementCursor;
 use crate::{FastPForError, FastPForResult};
 
-/// Variable-byte encoding codec for integer compression.
-#[derive(Debug, Default)]
-pub struct VariableByte;
+/// Variable-byte encoding codec, generic over element width `T` ([`u32`] or [`u64`]).
+#[derive(Debug)]
+pub struct VariableByte<T = u32>(PhantomData<T>);
+
+// Hand-written (not derived) so no `T: Default` bound leaks onto every user of the codec.
+impl<T> Default for VariableByte<T> {
+    fn default() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<T> VariableByte<T> {
+    /// Creates a new instance.
+    #[must_use]
+    pub fn new() -> Self {
+        Self(PhantomData)
+    }
+}
 
 // Helper functions with const generics for extracting 7-bit chunks
-impl VariableByte {
+impl VariableByte<u32> {
     /// Extract 7 bits from position i (with masking)
     const fn extract_7bits<const I: u32>(val: u32) -> u8 {
         ((val >> (7 * I)) & ((1 << 7) - 1)) as u8
@@ -21,15 +37,6 @@ impl VariableByte {
     /// Extract 7 bits from position i (without masking, for last byte)
     const fn extract_7bits_maskless<const I: u32>(val: u32) -> u8 {
         (val >> (7 * I)) as u8
-    }
-}
-
-// Implemented for consistency with other codecs
-impl VariableByte {
-    /// Creates a new instance
-    #[must_use]
-    pub fn new() -> Self {
-        Self
     }
 
     /// Compress `input_length` u32 values from `input[input_offset..]` into
@@ -301,7 +308,9 @@ impl VariableByte {
     }
 }
 
-impl AnyLenCodec for VariableByte {
+impl AnyLenCodec for VariableByte<u32> {
+    type Elem = u32;
+
     fn encode(&mut self, input: &[u32], out: &mut Vec<u32>) -> FastPForResult<()> {
         let capacity = input.len() * 2 + 4;
         let start = out.len();
@@ -347,6 +356,73 @@ impl AnyLenCodec for VariableByte {
         out.truncate(start + written);
         if let Some(n) = expected_len {
             written.is_decoded_mismatch(n)?;
+        }
+        Ok(())
+    }
+}
+
+impl AnyLenCodec for VariableByte<u64> {
+    type Elem = u64;
+
+    fn encode(&mut self, input: &[u64], out: &mut Vec<u32>) -> FastPForResult<()> {
+        if input.is_empty() {
+            return Ok(());
+        }
+        let start = out.len();
+        let capacity = input.len() * 3 + 4;
+        out.resize(start + capacity, 0);
+        let bytes: &mut [u8] = cast_slice_mut(&mut out[start..]);
+        let mut byte_pos = 0;
+        for &value in input {
+            let mut v = value;
+            while v >= 0x80 {
+                bytes[byte_pos] = (v as u8) & 0x7F;
+                byte_pos += 1;
+                v >>= 7;
+            }
+            bytes[byte_pos] = (v as u8) | 0x80;
+            byte_pos += 1;
+        }
+        while byte_pos % 4 != 0 {
+            bytes[byte_pos] = 0;
+            byte_pos += 1;
+        }
+        out.truncate(start + byte_pos / 4);
+        Ok(())
+    }
+
+    fn decode(
+        &mut self,
+        input: &[u32],
+        out: &mut Vec<u64>,
+        _expected_len: Option<u32>,
+    ) -> FastPForResult<()> {
+        if input.is_empty() {
+            return Ok(());
+        }
+        let bytes: &[u8] = cast_slice(input);
+        let byte_len = bytes.len();
+        let mut byte_pos = 0;
+        while byte_pos < byte_len {
+            let mut v: u64 = 0;
+            let mut shift = 0u32;
+            loop {
+                if byte_pos >= byte_len {
+                    return Ok(());
+                }
+                let c = bytes[byte_pos];
+                byte_pos += 1;
+                if shift >= 64 {
+                    return Err(FastPForError::NotEnoughData);
+                }
+                if c >= 0x80 {
+                    v |= u64::from(c & 0x7F) << shift;
+                    out.push(v);
+                    break;
+                }
+                v |= u64::from(c) << shift;
+                shift += 7;
+            }
         }
         Ok(())
     }

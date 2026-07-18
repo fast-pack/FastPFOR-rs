@@ -39,6 +39,7 @@ pub trait FastPForInt:
     Copy
     + 'static
     + Eq
+    + bytemuck::Pod
     + sealed::Sealed
     + Shr<u8, Output = Self>
     + Shl<u8, Output = Self>
