@@ -108,11 +108,15 @@ impl FastPForInt for u32 {
     fn significant_bits(self) -> u8 {
         Self::WIDTH - self.leading_zeros() as u8
     }
-    #[inline]
+    // `inline(always)`: this is a thin forwarder; without it the wrapper accumulates the whole
+    // inlined kernel and then exceeds the inline threshold, so `decode_page`/`encode_page` would
+    // emit a real call per 32-value group instead of inlining the kernel (as the concrete `u32`
+    // code on `main` does). See the packing-kernel benchmarks.
+    #[inline(always)]
     fn fast_pack(src: &[Self], inpos: usize, out: &mut [u32], outpos: usize, bit: u8) {
         bitpacking::fast_pack(src, inpos, out, outpos, bit);
     }
-    #[inline]
+    #[inline(always)]
     fn fast_unpack(src: &[u32], inpos: usize, out: &mut [Self], outpos: usize, bit: u8) {
         bitunpacking::fast_unpack(src, inpos, out, outpos, bit);
     }
@@ -152,11 +156,12 @@ impl FastPForInt for u64 {
     fn significant_bits(self) -> u8 {
         Self::WIDTH - self.leading_zeros() as u8
     }
-    #[inline]
+    // `inline(always)`: forward directly to the wide kernel (see the `u32` impl for rationale).
+    #[inline(always)]
     fn fast_pack(src: &[Self], inpos: usize, out: &mut [u32], outpos: usize, bit: u8) {
         bitpacking_wide::pack_wide(src, inpos, out, outpos, bit);
     }
-    #[inline]
+    #[inline(always)]
     fn fast_unpack(src: &[u32], inpos: usize, out: &mut [Self], outpos: usize, bit: u8) {
         bitpacking_wide::unpack_wide(src, inpos, out, outpos, bit);
     }
