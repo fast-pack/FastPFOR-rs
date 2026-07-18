@@ -186,13 +186,10 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
                     self.exception_buffers[index].resize(new_cap, T::ZERO);
                 }
                 for k in 0..N as u32 {
-                    if !input[(k + tmp_input_offset) as usize]
-                        .shr(self.optimal_bits)
-                        .is_zero()
-                    {
+                    if input[(k + tmp_input_offset) as usize] >> self.optimal_bits != T::ZERO {
                         self.bytes_container.put_u8(k as u8);
                         self.exception_buffers[index][self.data_pointers[index]] =
-                            input[(k + tmp_input_offset) as usize].shr(self.optimal_bits);
+                            input[(k + tmp_input_offset) as usize] >> self.optimal_bits;
                         self.data_pointers[index] += 1;
                     }
                 }
@@ -228,7 +225,7 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
         let mut bitmap = T::ZERO;
         for k in 2..=usize::from(T::WIDTH) {
             if self.data_pointers[k] != 0 {
-                T::or_shl_assign(&mut bitmap, T::one_shl((k - 1) as u8), 0);
+                bitmap |= T::ONE << (k - 1) as u8;
             }
         }
         T::write_bitmap(bitmap, &mut output[tmp_output_offset as usize..]);
@@ -353,7 +350,7 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
             .ok_or(FastPForError::NotEnoughData)?;
 
         for k in 2..=u32::from(T::WIDTH) {
-            if bitmap.nth_bit_set((k - 1) as u8) {
+            if bitmap & (T::ONE << (k - 1) as u8) != T::ZERO {
                 let size = input.get_val(inexcept)?;
                 inexcept = inexcept
                     .checked_add(1)
@@ -470,7 +467,7 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
                         if out_idx >= output.len() {
                             return Err(FastPForError::OutputBufferTooSmall);
                         }
-                        T::or_shl_assign(&mut output[out_idx], T::one_shl(bits), 0);
+                        output[out_idx] |= T::ONE << bits;
                     }
                 } else {
                     for _ in 0..num_exceptions {
@@ -485,7 +482,7 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
                         }
                         let ptr = self.data_pointers[index];
                         let except_value = self.exception_buffers[index].get_val(ptr)?;
-                        T::or_shl_assign(&mut output[out_idx], except_value, bits);
+                        output[out_idx] |= except_value << bits;
                         self.data_pointers[index] += 1;
                     }
                 }

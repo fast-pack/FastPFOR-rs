@@ -3,7 +3,9 @@
 //! The block-splitting, best-bit search, exception handling, and metadata layout are
 //! identical for `u32` and `u64`; only the element width differs.
 //! [`FastPForInt`] abstracts the width-specific pieces so a single [`FastPFor`](super::fastpfor::FastPFor)
-//! implements the algorithm once.
+//! implements the algorithm once. Ordinary arithmetic uses the standard operator traits
+//! (`>>`, `<<`, `&`, `|=`) that the trait requires as bounds; only the genuinely
+//! width-specific pieces (bit-packing kernels and the exception bitmap layout) are methods.
 //! `u32` keeps its hand-unrolled bit-packing kernels; `u64` uses the generic wide packer.
 //!
 //! The trait is **sealed**: only [`u32`] and [`u64`] implement it, so callers cannot plug in
@@ -13,7 +15,7 @@
 
 use std::array;
 use std::fmt::Debug;
-use std::ops::{Index, IndexMut};
+use std::ops::{BitAnd, BitOrAssign, Index, IndexMut, Shl, Shr};
 
 use crate::helpers::GetWithErr;
 use crate::rust::integer_compression::{bitpacking, bitpacking_wide, bitunpacking};
@@ -27,18 +29,30 @@ mod sealed {
 
 /// Element type of a `FastPFOR` stream: [`u32`] or [`u64`].
 ///
-/// Implementors supply the width-specific operations the engine needs, plus the concrete
-/// scratch-buffer array types (one bucket per possible bit width, i.e. `WIDTH + 1`).
-/// The exception bitmap spans [`BITMAP_WORDS`](Self::BITMAP_WORDS) output words.
+/// The operator bounds (`Shr`/`Shl` by `u8`, `BitAnd`, `BitOrAssign`) let the codec use plain
+/// `>>`, `<<`, `&`, and `|=` on values; only the width-specific pieces are methods. Implementors
+/// also supply the concrete scratch-buffer array types (one bucket per possible bit width,
+/// i.e. `WIDTH + 1`). The exception bitmap spans [`BITMAP_WORDS`](Self::BITMAP_WORDS) output words.
 ///
 /// This trait is sealed and cannot be implemented outside this crate.
-pub trait FastPForInt: Copy + 'static + sealed::Sealed {
+pub trait FastPForInt:
+    Copy
+    + 'static
+    + Eq
+    + sealed::Sealed
+    + Shr<u8, Output = Self>
+    + Shl<u8, Output = Self>
+    + BitAnd<Output = Self>
+    + BitOrAssign
+{
     /// Bit width of the element: 32 or 64.
-    const WIDTH: u8;
+    const WIDTH: u8 = (size_of::<Self>() * 8) as u8;
     /// Output words occupied by the exception bitmap: 1 for `u32`, 2 for `u64`.
-    const BITMAP_WORDS: u32;
+    const BITMAP_WORDS: u32 = Self::WIDTH as u32 / u32::BITS;
     /// The zero value.
     const ZERO: Self;
+    /// The one value.
+    const ONE: Self;
 
     /// Exception values grouped by bit-width bucket: `[Vec<Self>; WIDTH + 1]`.
     type ExceptionBuffers: Index<usize, Output = Vec<Self>> + IndexMut<usize> + Debug;
@@ -56,16 +70,6 @@ pub trait FastPForInt: Copy + 'static + sealed::Sealed {
 
     /// Number of significant bits, i.e. `WIDTH - leading_zeros` (0 for a zero value).
     fn significant_bits(self) -> u8;
-    /// Logical right shift by `n`, where `n < WIDTH`.
-    fn shr(self, n: u8) -> Self;
-    /// Whether the value is zero.
-    fn is_zero(self) -> bool;
-    /// `*dst |= val << shift`, where `shift < WIDTH`.
-    fn or_shl_assign(dst: &mut Self, val: Self, shift: u8);
-    /// `1 << shift`, where `shift < WIDTH`.
-    fn one_shl(shift: u8) -> Self;
-    /// Whether bit `n` is set, where `n < WIDTH`.
-    fn nth_bit_set(self, n: u8) -> bool;
 
     /// Pack 32 values at `bit` bits each into `out`.
     fn fast_pack(src: &[Self], inpos: usize, out: &mut [u32], outpos: usize, bit: u8);
@@ -80,12 +84,11 @@ pub trait FastPForInt: Copy + 'static + sealed::Sealed {
 
 #[allow(
     clippy::use_self,
-    reason = "u32 literals here are stream words, not the Self element type"
+    reason = "u32 here is the stream word type, not the Self element type"
 )]
 impl FastPForInt for u32 {
-    const WIDTH: u8 = 32;
-    const BITMAP_WORDS: u32 = 1;
     const ZERO: Self = 0;
+    const ONE: Self = 1;
 
     type ExceptionBuffers = [Vec<Self>; u32::BITS as usize + 1];
     type Freqs = [u32; u32::BITS as usize + 1];
@@ -103,27 +106,7 @@ impl FastPForInt for u32 {
 
     #[inline]
     fn significant_bits(self) -> u8 {
-        (32 - self.leading_zeros()) as u8
-    }
-    #[inline]
-    fn shr(self, n: u8) -> Self {
-        self >> n
-    }
-    #[inline]
-    fn is_zero(self) -> bool {
-        self == 0
-    }
-    #[inline]
-    fn or_shl_assign(dst: &mut Self, val: Self, shift: u8) {
-        *dst |= val << shift;
-    }
-    #[inline]
-    fn one_shl(shift: u8) -> Self {
-        1 << shift
-    }
-    #[inline]
-    fn nth_bit_set(self, n: u8) -> bool {
-        (self >> n) & 1 != 0
+        Self::WIDTH - self.leading_zeros() as u8
     }
     #[inline]
     fn fast_pack(src: &[Self], inpos: usize, out: &mut [u32], outpos: usize, bit: u8) {
@@ -145,12 +128,11 @@ impl FastPForInt for u32 {
 
 #[allow(
     clippy::use_self,
-    reason = "u32 literals here are stream words, not the Self element type"
+    reason = "u32 here is the stream word type, not the Self element type"
 )]
 impl FastPForInt for u64 {
-    const WIDTH: u8 = 64;
-    const BITMAP_WORDS: u32 = 2;
     const ZERO: Self = 0;
+    const ONE: Self = 1;
 
     type ExceptionBuffers = [Vec<Self>; u64::BITS as usize + 1];
     type Freqs = [u32; u64::BITS as usize + 1];
@@ -168,27 +150,7 @@ impl FastPForInt for u64 {
 
     #[inline]
     fn significant_bits(self) -> u8 {
-        (64 - self.leading_zeros()) as u8
-    }
-    #[inline]
-    fn shr(self, n: u8) -> Self {
-        self >> n
-    }
-    #[inline]
-    fn is_zero(self) -> bool {
-        self == 0
-    }
-    #[inline]
-    fn or_shl_assign(dst: &mut Self, val: Self, shift: u8) {
-        *dst |= val << shift;
-    }
-    #[inline]
-    fn one_shl(shift: u8) -> Self {
-        1 << shift
-    }
-    #[inline]
-    fn nth_bit_set(self, n: u8) -> bool {
-        (self >> n) & 1 != 0
+        Self::WIDTH - self.leading_zeros() as u8
     }
     #[inline]
     fn fast_pack(src: &[Self], inpos: usize, out: &mut [u32], outpos: usize, bit: u8) {
