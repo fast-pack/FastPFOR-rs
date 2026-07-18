@@ -178,13 +178,13 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
                 if needed > self.exception_buffers[index].len() {
                     // Grow to the next multiple of 32 above 2×needed, to amortize resizes.
                     let new_cap = needed.saturating_mul(2).next_multiple_of(32);
-                    self.exception_buffers[index].resize(new_cap, T::ZERO);
+                    self.exception_buffers[index].resize(new_cap, T::zero());
                 }
                 for k in 0..N as u32 {
-                    if input[(k + tmp_input_offset) as usize] >> self.optimal_bits != T::ZERO {
+                    if input[(k + tmp_input_offset) as usize] >> usize::from(self.optimal_bits) != T::zero() {
                         self.bytes_container.put_u8(k as u8);
                         self.exception_buffers[index][self.data_pointers[index]] =
-                            input[(k + tmp_input_offset) as usize] >> self.optimal_bits;
+                            input[(k + tmp_input_offset) as usize] >> usize::from(self.optimal_bits);
                         self.data_pointers[index] += 1;
                     }
                 }
@@ -217,10 +217,10 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
             .copy_from_slice(&meta_u32s[..how_many_ints]);
         tmp_output_offset += how_many_ints as u32;
         // Exception bitmap: one bit per bit-width bucket, written as `T::BITMAP_WORDS` words.
-        let mut bitmap = T::ZERO;
+        let mut bitmap = T::zero();
         for k in 2..=usize::from(T::WIDTH) {
             if self.data_pointers[k] != 0 {
-                bitmap |= T::ONE << (k - 1) as u8;
+                bitmap |= T::one() << (k - 1);
             }
         }
         T::write_bitmap(bitmap, &mut output[tmp_output_offset as usize..]);
@@ -345,7 +345,7 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
             .ok_or(FastPForError::NotEnoughData)?;
 
         for k in 2..=u32::from(T::WIDTH) {
-            if bitmap & (T::ONE << (k - 1) as u8) != T::ZERO {
+            if bitmap & (T::one() << (k - 1) as usize) != T::zero() {
                 let size = input.get_val(inexcept)?;
                 inexcept = inexcept
                     .checked_add(1)
@@ -358,7 +358,7 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
                 // to the next group of 32 for the bitunpacking calls.
                 let rounded_up = size.next_multiple_of(32) as usize;
                 if self.exception_buffers[k as usize].len() < rounded_up {
-                    self.exception_buffers[k as usize].resize(rounded_up, T::ZERO);
+                    self.exception_buffers[k as usize].resize(rounded_up, T::zero());
                 }
                 let mut j: u32 = 0;
                 // Process full groups directly from input
@@ -462,7 +462,7 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
                         if out_idx >= output.len() {
                             return Err(FastPForError::OutputBufferTooSmall);
                         }
-                        output[out_idx] |= T::ONE << bits;
+                        output[out_idx] |= T::one() << usize::from(bits);
                     }
                 } else {
                     for _ in 0..num_exceptions {
@@ -477,7 +477,7 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
                         }
                         let ptr = self.data_pointers[index];
                         let except_value = self.exception_buffers[index].get_val(ptr)?;
-                        output[out_idx] |= except_value << bits;
+                        output[out_idx] |= except_value << usize::from(bits);
                         self.data_pointers[index] += 1;
                     }
                 }

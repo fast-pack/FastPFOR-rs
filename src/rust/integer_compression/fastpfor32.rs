@@ -81,7 +81,7 @@ where
             return Ok(1);
         }
         let start = out.len();
-        out.resize(start + n_blocks * N, T::ZERO);
+        out.resize(start + n_blocks * N, T::zero());
 
         let mut in_off = Cursor::new(0u32);
         let mut out_off = Cursor::new(0u32);

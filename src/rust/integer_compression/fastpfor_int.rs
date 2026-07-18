@@ -15,7 +15,9 @@
 
 use std::array;
 use std::fmt::Debug;
-use std::ops::{BitAnd, BitOrAssign, Index, IndexMut, Shl, Shr};
+use std::ops::{BitOrAssign, Index, IndexMut};
+
+use num_traits::PrimInt;
 
 use crate::helpers::GetWithErr;
 use crate::rust::integer_compression::{bit_pack32, bit_pack64, bit_unpack32};
@@ -27,33 +29,12 @@ mod sealed {
     impl Sealed for u64 {}
 }
 
-/// Element type of a `FastPFOR` stream: [`u32`] or [`u64`].
-///
-/// The operator bounds (`Shr`/`Shl` by `u8`, `BitAnd`, `BitOrAssign`) let the codec use plain
-/// `>>`, `<<`, `&`, and `|=` on values; only the width-specific pieces are methods. Implementors
-/// also supply the concrete scratch-buffer array types (one bucket per possible bit width,
-/// i.e. `WIDTH + 1`). The exception bitmap spans [`BITMAP_WORDS`](Self::BITMAP_WORDS) output words.
-///
-/// This trait is sealed and cannot be implemented outside this crate.
-pub trait FastPForInt:
-    Copy
-    + 'static
-    + Eq
-    + bytemuck::Pod
-    + sealed::Sealed
-    + Shr<u8, Output = Self>
-    + Shl<u8, Output = Self>
-    + BitAnd<Output = Self>
-    + BitOrAssign
-{
+/// Sealed element type of a `FastPFOR` stream: [`u32`] or [`u64`].
+pub trait FastPForInt: PrimInt + 'static + bytemuck::Pod + sealed::Sealed + BitOrAssign {
     /// Bit width of the element: 32 or 64.
     const WIDTH: u8 = (size_of::<Self>() * 8) as u8;
     /// Output words occupied by the exception bitmap: 1 for `u32`, 2 for `u64`.
     const BITMAP_WORDS: u32 = Self::WIDTH as u32 / u32::BITS;
-    /// The zero value.
-    const ZERO: Self;
-    /// The one value.
-    const ONE: Self;
 
     /// Exception values grouped by bit-width bucket: `[Vec<Self>; WIDTH + 1]`.
     type ExceptionBuffers: Index<usize, Output = Vec<Self>> + IndexMut<usize> + Debug;
@@ -70,7 +51,10 @@ pub trait FastPForInt:
     fn new_data_pointers() -> Self::DataPointers;
 
     /// Number of significant bits, i.e. `WIDTH - leading_zeros` (0 for a zero value).
-    fn significant_bits(self) -> u8;
+    #[inline]
+    fn significant_bits(self) -> u8 {
+        Self::WIDTH - self.leading_zeros() as u8
+    }
 
     /// Pack 32 values at `bit` bits each into `out`.
     fn fast_pack(src: &[Self], inpos: usize, out: &mut [u32], outpos: usize, bit: u8);
@@ -88,9 +72,6 @@ pub trait FastPForInt:
     reason = "u32 here is the stream word type, not the Self element type"
 )]
 impl FastPForInt for u32 {
-    const ZERO: Self = 0;
-    const ONE: Self = 1;
-
     type ExceptionBuffers = [Vec<Self>; u32::BITS as usize + 1];
     type Freqs = [u32; u32::BITS as usize + 1];
     type DataPointers = [usize; u32::BITS as usize + 1];
@@ -105,10 +86,6 @@ impl FastPForInt for u32 {
         [0; u32::BITS as usize + 1]
     }
 
-    #[inline]
-    fn significant_bits(self) -> u8 {
-        Self::WIDTH - self.leading_zeros() as u8
-    }
     // `inline(always)`: this is a thin forwarder; without it the wrapper accumulates the whole
     // inlined kernel and then exceeds the inline threshold, so `decode_page`/`encode_page` would
     // emit a real call per 32-value group instead of inlining the kernel (as the concrete `u32`
@@ -138,9 +115,6 @@ impl FastPForInt for u32 {
     reason = "u32 here is the stream word type, not the Self element type"
 )]
 impl FastPForInt for u64 {
-    const ZERO: Self = 0;
-    const ONE: Self = 1;
-
     type ExceptionBuffers = [Vec<Self>; u64::BITS as usize + 1];
     type Freqs = [u32; u64::BITS as usize + 1];
     type DataPointers = [usize; u64::BITS as usize + 1];
@@ -155,10 +129,6 @@ impl FastPForInt for u64 {
         [0; u64::BITS as usize + 1]
     }
 
-    #[inline]
-    fn significant_bits(self) -> u8 {
-        Self::WIDTH - self.leading_zeros() as u8
-    }
     // `inline(always)`: forward directly to the wide kernel (see the `u32` impl for rationale).
     #[inline(always)]
     #[allow(clippy::inline_always, reason = "thin forwarder; see comment above")]
