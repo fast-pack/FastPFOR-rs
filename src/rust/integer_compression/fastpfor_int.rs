@@ -64,6 +64,8 @@ pub trait FastPForInt: Copy + 'static + sealed::Sealed {
     fn or_shl_assign(dst: &mut Self, val: Self, shift: u8);
     /// `1 << shift`, where `shift < WIDTH`.
     fn one_shl(shift: u8) -> Self;
+    /// Whether bit `n` is set, where `n < WIDTH`.
+    fn nth_bit_set(self, n: u8) -> bool;
 
     /// Pack 32 values at `bit` bits each into `out`.
     fn fast_pack(src: &[Self], inpos: usize, out: &mut [u32], outpos: usize, bit: u8);
@@ -71,9 +73,9 @@ pub trait FastPForInt: Copy + 'static + sealed::Sealed {
     fn fast_unpack(src: &[u32], inpos: usize, out: &mut [Self], outpos: usize, bit: u8);
 
     /// Write the exception bitmap as [`BITMAP_WORDS`](Self::BITMAP_WORDS) words at `out`.
-    fn write_bitmap(bitmap: u64, out: &mut [u32]);
+    fn write_bitmap(bitmap: Self, out: &mut [u32]);
     /// Read the exception bitmap from [`BITMAP_WORDS`](Self::BITMAP_WORDS) words at `pos`.
-    fn read_bitmap(input: &[u32], pos: u32) -> FastPForResult<u64>;
+    fn read_bitmap(input: &[u32], pos: u32) -> FastPForResult<Self>;
 }
 
 #[allow(
@@ -120,6 +122,10 @@ impl FastPForInt for u32 {
         1 << shift
     }
     #[inline]
+    fn nth_bit_set(self, n: u8) -> bool {
+        (self >> n) & 1 != 0
+    }
+    #[inline]
     fn fast_pack(src: &[Self], inpos: usize, out: &mut [u32], outpos: usize, bit: u8) {
         bitpacking::fast_pack(src, inpos, out, outpos, bit);
     }
@@ -128,13 +134,12 @@ impl FastPForInt for u32 {
         bitunpacking::fast_unpack(src, inpos, out, outpos, bit);
     }
     #[inline]
-    fn write_bitmap(bitmap: u64, out: &mut [u32]) {
-        out[0] = bitmap as u32;
+    fn write_bitmap(bitmap: Self, out: &mut [u32]) {
+        out[0] = bitmap;
     }
     #[inline]
-    fn read_bitmap(input: &[u32], pos: u32) -> FastPForResult<u64> {
-        let word: u32 = input.get_val(pos)?;
-        Ok(u64::from(word))
+    fn read_bitmap(input: &[u32], pos: u32) -> FastPForResult<Self> {
+        input.get_val(pos)
     }
 }
 
@@ -182,6 +187,10 @@ impl FastPForInt for u64 {
         1 << shift
     }
     #[inline]
+    fn nth_bit_set(self, n: u8) -> bool {
+        (self >> n) & 1 != 0
+    }
+    #[inline]
     fn fast_pack(src: &[Self], inpos: usize, out: &mut [u32], outpos: usize, bit: u8) {
         bitpacking_wide::pack_wide(src, inpos, out, outpos, bit);
     }
@@ -190,12 +199,12 @@ impl FastPForInt for u64 {
         bitpacking_wide::unpack_wide(src, inpos, out, outpos, bit);
     }
     #[inline]
-    fn write_bitmap(bitmap: u64, out: &mut [u32]) {
+    fn write_bitmap(bitmap: Self, out: &mut [u32]) {
         out[0] = bitmap as u32;
         out[1] = (bitmap >> 32) as u32;
     }
     #[inline]
-    fn read_bitmap(input: &[u32], pos: u32) -> FastPForResult<u64> {
+    fn read_bitmap(input: &[u32], pos: u32) -> FastPForResult<Self> {
         let lo: u32 = input.get_val(pos)?;
         let hi_pos = pos.checked_add(1).ok_or(FastPForError::NotEnoughData)?;
         let hi: u32 = input.get_val(hi_pos)?;

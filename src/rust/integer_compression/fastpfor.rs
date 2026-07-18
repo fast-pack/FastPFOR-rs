@@ -225,10 +225,10 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
             .copy_from_slice(&meta_u32s[..how_many_ints]);
         tmp_output_offset += how_many_ints as u32;
         // Exception bitmap: one bit per bit-width bucket, written as `T::BITMAP_WORDS` words.
-        let mut bitmap: u64 = 0;
+        let mut bitmap = T::ZERO;
         for k in 2..=usize::from(T::WIDTH) {
             if self.data_pointers[k] != 0 {
-                bitmap |= 1u64 << (k - 1);
+                T::or_shl_assign(&mut bitmap, T::one_shl((k - 1) as u8), 0);
             }
         }
         T::write_bitmap(bitmap, &mut output[tmp_output_offset as usize..]);
@@ -353,7 +353,7 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
             .ok_or(FastPForError::NotEnoughData)?;
 
         for k in 2..=u32::from(T::WIDTH) {
-            if (bitmap & (1u64 << (k - 1))) != 0 {
+            if bitmap.nth_bit_set((k - 1) as u8) {
                 let size = input.get_val(inexcept)?;
                 inexcept = inexcept
                     .checked_add(1)
