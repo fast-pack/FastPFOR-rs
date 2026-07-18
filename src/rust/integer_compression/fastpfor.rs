@@ -30,15 +30,16 @@ const DEFAULT_PAGE_SIZE: u32 = 65536;
 /// Fast Patched Frame-of-Reference ([FastPFOR](https://github.com/lemire/FastPFor)) codec.
 ///
 /// `N` is the block size (128 or 256 values per block) and `T` the element type
-/// ([`u32`] or [`u64`], defaulting to `u32`). This struct implements [`BlockCodec`] with
-/// `Block = [u32; N]` for the `u32` element type, giving compile-time guarantees that only
+/// ([`u32`] or [`u64`], defaulting to `u32`). This struct implements [`BlockCodec`](crate::BlockCodec)
+/// with `Block = [u32; N]` for the `u32` element type, giving compile-time guarantees that only
 /// correctly-sized blocks are accepted.
 ///
 /// The per-block scratch buffers are sized exactly for `T` (`T::WIDTH + 1` buckets) via the
-/// sealed [`FastPForInt`] trait, so the bucket count is neither wasted nor part of this
+/// sealed `FastPForInt` trait, so the bucket count is neither wasted nor part of this
 /// type's signature.
 ///
-/// Use [`FastPForBlock128`] or [`FastPForBlock256`] as convenient `u32` type aliases.
+/// Use [`FastPForBlock128`](crate::FastPForBlock128) or [`FastPForBlock256`](crate::FastPForBlock256)
+/// as convenient `u32` type aliases.
 ///
 /// To compress arbitrary-length data (including a sub-block remainder),
 /// wrap this in a [`CompositeCodec`](crate::CompositeCodec):
