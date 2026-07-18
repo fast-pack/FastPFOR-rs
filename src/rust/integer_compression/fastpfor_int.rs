@@ -113,10 +113,12 @@ impl FastPForInt for u32 {
     // emit a real call per 32-value group instead of inlining the kernel (as the concrete `u32`
     // code on `main` does). See the packing-kernel benchmarks.
     #[inline(always)]
+    #[allow(clippy::inline_always, reason = "thin forwarder; see comment above")]
     fn fast_pack(src: &[Self], inpos: usize, out: &mut [u32], outpos: usize, bit: u8) {
         bit_pack32::fast_pack(src, inpos, out, outpos, bit);
     }
     #[inline(always)]
+    #[allow(clippy::inline_always, reason = "thin forwarder; see comment above")]
     fn fast_unpack(src: &[u32], inpos: usize, out: &mut [Self], outpos: usize, bit: u8) {
         bit_unpack32::fast_unpack(src, inpos, out, outpos, bit);
     }
@@ -158,10 +160,12 @@ impl FastPForInt for u64 {
     }
     // `inline(always)`: forward directly to the wide kernel (see the `u32` impl for rationale).
     #[inline(always)]
+    #[allow(clippy::inline_always, reason = "thin forwarder; see comment above")]
     fn fast_pack(src: &[Self], inpos: usize, out: &mut [u32], outpos: usize, bit: u8) {
         bit_pack64::pack_wide(src, inpos, out, outpos, bit);
     }
     #[inline(always)]
+    #[allow(clippy::inline_always, reason = "thin forwarder; see comment above")]
     fn fast_unpack(src: &[u32], inpos: usize, out: &mut [Self], outpos: usize, bit: u8) {
         bit_pack64::unpack_wide(src, inpos, out, outpos, bit);
     }
