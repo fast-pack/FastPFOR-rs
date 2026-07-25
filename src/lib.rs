@@ -18,9 +18,7 @@ pub mod cpp;
 pub(crate) mod rust;
 
 mod codec;
-#[cfg(feature = "cpp")]
-pub use codec::BlockCodec64;
-pub use codec::{AnyLenCodec, BlockCodec, slice_to_blocks};
+pub use codec::{AnyLenCodec, BlockCodec, BlockCodec64, slice_to_blocks};
 
 pub(crate) mod helpers;
 
@@ -31,7 +29,8 @@ pub use bytemuck::Pod;
 #[cfg(feature = "rust")]
 pub use rust::{
     CompositeCodec, FastPFor, FastPFor128, FastPFor256, FastPForBlock128, FastPForBlock256,
-    JustCopy, VariableByte,
+    FastPForBlockWide128, FastPForBlockWide256, FastPForWide128, FastPForWide256, JustCopy,
+    VariableByte,
 };
 
 // `src/test_utils.rs` uses `fastpfor::...`; alias this crate for unit tests only.

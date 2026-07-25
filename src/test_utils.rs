@@ -10,10 +10,10 @@
 // noise without benefit.
 #![allow(dead_code, missing_docs, clippy::unwrap_used)]
 
-#[cfg(feature = "cpp")]
-use fastpfor::BlockCodec64;
 #[allow(unused_imports)]
-use fastpfor::{AnyLenCodec, BlockCodec, FastPForError, FastPForResult, slice_to_blocks};
+use fastpfor::{
+    AnyLenCodec, BlockCodec, BlockCodec64, FastPForError, FastPForResult, slice_to_blocks,
+};
 #[cfg(feature = "rust")]
 use fastpfor::{
     FastPFor128, FastPFor256, FastPForBlock128, FastPForBlock256, JustCopy, VariableByte,
@@ -25,17 +25,20 @@ pub const RNG_SEED: u64 = 456;
 // Generic codec helpers
 // ---------------------------------------------------------------------------
 
-pub fn roundtrip<C: AnyLenCodec>(data: &[u32]) {
+pub fn roundtrip<C: AnyLenCodec<Elem = u32>>(data: &[u32]) {
     roundtrip_expected::<C>(data, Some(data.len().try_into().unwrap()));
 }
 
 /// Encode `data` with a caller-owned codec, decode with `expected_len: None`, assert round-trip.
-pub fn roundtrip_expected<E: AnyLenCodec>(data: &[u32], expected_len: Option<u32>) {
+pub fn roundtrip_expected<E: AnyLenCodec<Elem = u32>>(data: &[u32], expected_len: Option<u32>) {
     roundtrip_full::<E, E>(data, expected_len);
 }
 
 /// Encode `data` with a caller-owned codec, decode with `expected_len: None`, assert round-trip.
-pub fn roundtrip_full<E: AnyLenCodec, D: AnyLenCodec>(data: &[u32], expected_len: Option<u32>) {
+pub fn roundtrip_full<E: AnyLenCodec<Elem = u32>, D: AnyLenCodec<Elem = u32>>(
+    data: &[u32],
+    expected_len: Option<u32>,
+) {
     let mut encoder = E::default();
     let mut compressed = Vec::new();
     encoder.encode(data, &mut compressed).unwrap();
@@ -58,19 +61,19 @@ pub fn roundtrip64<C: BlockCodec64 + Default>(data: &[u64]) {
     assert_eq!(decoded, data);
 }
 
-pub fn block_roundtrip<C: BlockCodec>(data: &[u32]) {
+pub fn block_roundtrip<C: BlockCodec<Elem = u32>>(data: &[u32]) {
     let compressed = block_compress::<C>(data).unwrap();
     let decompressed = block_decompress::<C>(&compressed, Some(data.len() as u32)).unwrap();
     assert_eq!(decompressed, data);
 }
 
-pub fn compress<C: AnyLenCodec>(data: &[u32]) -> FastPForResult<Vec<u32>> {
+pub fn compress<C: AnyLenCodec<Elem = u32>>(data: &[u32]) -> FastPForResult<Vec<u32>> {
     let mut compressed = Vec::new();
     C::default().encode(data, &mut compressed)?;
     Ok(compressed)
 }
 
-pub fn decompress<C: AnyLenCodec>(
+pub fn decompress<C: AnyLenCodec<Elem = u32>>(
     compressed: &[u32],
     expected_len: Option<u32>,
 ) -> FastPForResult<Vec<u32>> {
@@ -79,7 +82,7 @@ pub fn decompress<C: AnyLenCodec>(
     Ok(decompressed)
 }
 
-pub fn block_compress<C: BlockCodec>(data: &[u32]) -> FastPForResult<Vec<u32>> {
+pub fn block_compress<C: BlockCodec<Elem = u32>>(data: &[u32]) -> FastPForResult<Vec<u32>> {
     let (blocks, remainder) = slice_to_blocks::<C>(data);
     if !remainder.is_empty() {
         return Err(FastPForError::InputMustBeMultipleOfBlockSize {
@@ -92,7 +95,7 @@ pub fn block_compress<C: BlockCodec>(data: &[u32]) -> FastPForResult<Vec<u32>> {
     Ok(out)
 }
 
-pub fn block_decompress<C: BlockCodec>(
+pub fn block_decompress<C: BlockCodec<Elem = u32>>(
     compressed: &[u32],
     expected_len: Option<u32>,
 ) -> FastPForResult<Vec<u32>> {
@@ -142,8 +145,8 @@ pub fn block_roundtrip_all(data: &[u32]) {
 #[cfg(feature = "rust")]
 pub fn roundtrip_composite<B, T>(data: &[u32])
 where
-    B: BlockCodec,
-    T: AnyLenCodec,
+    B: BlockCodec<Elem = u32>,
+    T: AnyLenCodec<Elem = u32>,
 {
     roundtrip::<fastpfor::CompositeCodec<B, T>>(data);
 }
@@ -315,7 +318,7 @@ mod rust_bench {
         _codec: PhantomData<C>,
     }
 
-    impl<C: BlockCodec> CompressFixture<C> {
+    impl<C: BlockCodec<Elem = u32>> CompressFixture<C> {
         fn new(name: &'static str, generator: DataGeneratorFn, block_count: usize) -> Self {
             let original = generator(block_count * C::size());
             Self {
@@ -328,7 +331,7 @@ mod rust_bench {
         }
     }
 
-    impl<C: BlockCodec> BlockSizeFixture<C> {
+    impl<C: BlockCodec<Elem = u32>> BlockSizeFixture<C> {
         pub fn new(block_count: usize) -> Self {
             let original = generate_uniform_data_small_value_distribution(block_count * C::size());
             Self {
@@ -340,7 +343,7 @@ mod rust_bench {
         }
     }
 
-    pub fn compress_fixtures<C: BlockCodec>(
+    pub fn compress_fixtures<C: BlockCodec<Elem = u32>>(
         block_counts: &[usize],
     ) -> Vec<(usize, CompressFixture<C>)> {
         block_counts
@@ -353,7 +356,9 @@ mod rust_bench {
             .collect()
     }
 
-    pub fn ratio_fixtures<C: BlockCodec>(block_count: usize) -> Vec<CompressFixture<C>> {
+    pub fn ratio_fixtures<C: BlockCodec<Elem = u32>>(
+        block_count: usize,
+    ) -> Vec<CompressFixture<C>> {
         ALL_PATTERNS
             .iter()
             .map(|&(name, generator)| CompressFixture::<C>::new(name, generator, block_count))
