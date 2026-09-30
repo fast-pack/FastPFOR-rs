@@ -94,10 +94,8 @@ where
             &mut out_off,
         )?;
 
-        let written = out_off.position() as usize;
-        if written != n_blocks * N {
-            out.truncate(start + written);
-        }
+        // `decode_headless_blocks` only returns `Ok` once it has filled every block.
+        debug_assert_eq!(out_off.position() as usize, n_blocks * N);
         // +1 for the header word (block_n_values) that precedes `rest`.
         Ok(1 + in_off.position() as usize)
     }
@@ -233,5 +231,35 @@ mod tests {
         let input = vec![0u32];
         let out = block_decompress::<FastPForBlock256>(&input, None).unwrap();
         assert!(out.is_empty());
+    }
+
+    /// A header that disagrees with `expected_len` is rejected before decoding.
+    #[test]
+    fn decode_blocks_expected_len_mismatch_errors() {
+        let data = vec![7u32; 256];
+        let compressed = block_compress::<FastPForBlock128>(&data).unwrap();
+        let result = block_decompress::<FastPForBlock128>(&compressed, Some(128));
+        assert!(
+            matches!(
+                result,
+                Err(FastPForError::DecodedCountMismatch {
+                    actual: 256,
+                    expected: 128
+                })
+            ),
+            "expected DecodedCountMismatch, got {result:?}"
+        );
+    }
+
+    /// Without `expected_len`, a header claiming more values than the input could hold is rejected.
+    #[test]
+    fn decode_blocks_header_exceeds_max_len_errors() {
+        // One input word allows at most 1024 values; claim 2048.
+        let input = vec![2048u32];
+        let result = block_decompress::<FastPForBlock128>(&input, None);
+        assert!(
+            matches!(result, Err(FastPForError::NotEnoughData)),
+            "expected NotEnoughData, got {result:?}"
+        );
     }
 }

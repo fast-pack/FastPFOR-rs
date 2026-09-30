@@ -739,4 +739,26 @@ mod tests {
         let encoded = compress::<VariableByte>(&[1u32, 2, 3]).unwrap();
         decompress::<VariableByte>(&encoded, Some(10)).unwrap_err();
     }
+
+    #[test]
+    fn test_u64_roundtrip() {
+        let data = vec![0u64, 1, 127, 128, u64::from(u32::MAX) + 1, u64::MAX];
+        let mut codec = VariableByte::<u64>::new();
+        let mut encoded = Vec::new();
+        codec.encode(&data, &mut encoded).unwrap();
+        let mut decoded = Vec::new();
+        codec.decode(&encoded, &mut decoded, None).unwrap();
+        assert_eq!(decoded, data);
+    }
+
+    #[test]
+    fn test_u64_decode_overlong_value_errors() {
+        // 12 continuation bytes (high bit clear) shift past 64 bits without terminating.
+        let mut decoded = Vec::new();
+        let result = VariableByte::<u64>::new().decode(&[0u32; 3], &mut decoded, None);
+        assert!(
+            matches!(result, Err(FastPForError::NotEnoughData)),
+            "expected NotEnoughData, got {result:?}"
+        );
+    }
 }
