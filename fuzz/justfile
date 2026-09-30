@@ -49,6 +49,9 @@ compare-fastpfor-128 *args: (run 'compare_fastpfor_128' args)
 # Run encode_compare (Rust vs C++ bit-identical encode)
 full-compare *args: (run 'encode_compare' args)
 
+# Run simd_compat (SIMD vs scalar byte-compatibility, both directions)
+simd-compat *args: (run 'simd_compat' args)
+
 # Run a single pass of every fuzz target (CI smoke test; stops after 1 iteration each).
 ci-test:
     #!/usr/bin/env bash

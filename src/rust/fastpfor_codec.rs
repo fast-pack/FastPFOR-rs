@@ -9,23 +9,25 @@ use crate::rust::VariableByte;
 use crate::rust::composite::CompositeCodec;
 use crate::rust::integer_compression::fastpfor::{FastPFor, sealed};
 use crate::rust::integer_compression::fastpfor_int::FastPForInt;
+use crate::rust::kernels::{Kernels, Scalar, Simd};
 
 /// Any-length `FastPFOR` codec over `N`-value blocks of width `T` ([`u32`] or [`u64`]).
 ///
 /// A single [`CompositeCodec`] pairing the width-generic block engine with a [`VariableByte`] tail.
-/// Instantiate through the [`FastPFor128`]/[`FastPForWide128`] aliases.
+/// `K` selects the bit-packing [`Kernels`]; all choices produce byte-identical output.
+/// Instantiate through the [`FastPFor128`]/[`FastPForWide128`]/[`FastPForSimd128`] aliases.
 #[derive(Debug)]
-pub struct FastPForCodec<const N: usize, T: FastPForInt>
+pub struct FastPForCodec<const N: usize, T: FastPForInt, K: Kernels = Scalar>
 where
     [T; N]: sealed::BlockSize,
     VariableByte<T>: AnyLenCodec<Elem = T>,
 {
-    inner: CompositeCodec<FastPFor<N, T>, VariableByte<T>>,
+    inner: CompositeCodec<FastPFor<N, T, K>, VariableByte<T>>,
 }
 
 // Hand-written (not derived) so `default()` needs no `T: Default` bound;
 // the tail's `AnyLenCodec: Default` supertrait already guarantees it.
-impl<const N: usize, T: FastPForInt> Default for FastPForCodec<N, T>
+impl<const N: usize, T: FastPForInt, K: Kernels> Default for FastPForCodec<N, T, K>
 where
     [T; N]: sealed::BlockSize,
     VariableByte<T>: AnyLenCodec<Elem = T>,
@@ -37,7 +39,7 @@ where
     }
 }
 
-impl<const N: usize, T: FastPForInt> AnyLenCodec for FastPForCodec<N, T>
+impl<const N: usize, T: FastPForInt, K: Kernels> AnyLenCodec for FastPForCodec<N, T, K>
 where
     [T; N]: sealed::BlockSize,
     VariableByte<T>: AnyLenCodec<Elem = T>,
@@ -61,7 +63,7 @@ where
 /// Compresses 64-bit integers through the shared [`BlockCodec64`] interface.
 ///
 /// Lets the `u64` codecs be compared against the C++ codecs, which expose `u64` the same way.
-impl<const N: usize> BlockCodec64 for FastPForCodec<N, u64>
+impl<const N: usize, K: Kernels> BlockCodec64 for FastPForCodec<N, u64, K>
 where
     [u64; N]: sealed::BlockSize,
 {
@@ -85,6 +87,18 @@ pub type FastPForWide128 = FastPForCodec<128, u64>;
 
 /// Any-length `u64` `FastPFOR` codec with 256-value blocks.
 pub type FastPForWide256 = FastPForCodec<256, u64>;
+
+/// [`FastPFor128`] using [`Simd`] kernels; byte-compatible with it.
+pub type FastPForSimd128 = FastPForCodec<128, u32, Simd>;
+
+/// [`FastPFor256`] using [`Simd`] kernels; byte-compatible with it.
+pub type FastPForSimd256 = FastPForCodec<256, u32, Simd>;
+
+/// [`FastPForWide128`] using [`Simd`] kernels; byte-compatible with it.
+pub type FastPForSimdWide128 = FastPForCodec<128, u64, Simd>;
+
+/// [`FastPForWide256`] using [`Simd`] kernels; byte-compatible with it.
+pub type FastPForSimdWide256 = FastPForCodec<256, u64, Simd>;
 
 #[cfg(test)]
 mod tests {

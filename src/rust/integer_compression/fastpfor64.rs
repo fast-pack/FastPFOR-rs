@@ -8,12 +8,19 @@
 //! The block wire format is byte-compatible with the C++ `CppFastPFor128` / `CppFastPFor256` 64-bit paths.
 
 use crate::rust::integer_compression::fastpfor::FastPFor;
+use crate::rust::kernels::Simd;
 
 /// Type alias for [`FastPFor`] with 128-element `u64` blocks.
 pub type FastPForBlockWide128 = FastPFor<128, u64>;
 
 /// Type alias for [`FastPFor`] with 256-element `u64` blocks.
 pub type FastPForBlockWide256 = FastPFor<256, u64>;
+
+/// [`FastPForBlockWide128`] using [`Simd`] kernels; byte-compatible with it.
+pub type FastPForSimdBlockWide128 = FastPFor<128, u64, Simd>;
+
+/// [`FastPForBlockWide256`] using [`Simd`] kernels; byte-compatible with it.
+pub type FastPForSimdBlockWide256 = FastPFor<256, u64, Simd>;
 
 #[cfg(test)]
 mod tests {

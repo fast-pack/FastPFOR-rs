@@ -84,6 +84,7 @@ jobs:
           - fuzz_target: fastpfor_u64
           - fuzz_target: compare_fastpfor_128
           - fuzz_target: encode_compare
+          - fuzz_target: simd_compat
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false, submodules: recursive }

@@ -1,5 +1,6 @@
 use std::cmp::min;
 use std::io::Cursor;
+use std::marker::PhantomData;
 
 use bytemuck::cast_slice;
 use bytes::{Buf as _, BufMut as _, BytesMut};
@@ -7,6 +8,7 @@ use bytes::{Buf as _, BufMut as _, BytesMut};
 use crate::helpers::{GetWithErr, greatest_multiple};
 use crate::rust::cursor::IncrementCursor;
 use crate::rust::integer_compression::fastpfor_int::FastPForInt;
+use crate::rust::kernels::{Kernels, Scalar};
 use crate::{FastPForError, FastPForResult};
 
 pub(crate) mod sealed {
@@ -27,10 +29,17 @@ const OVERHEAD_OF_EACH_EXCEPT: u32 = 8;
 /// Default page size in number of integers.
 const DEFAULT_PAGE_SIZE: u32 = 65536;
 
+pub(crate) trait PackFn<T>: Fn(&[T], usize, &mut [u32], usize, u8) + Copy {}
+impl<T, F: Fn(&[T], usize, &mut [u32], usize, u8) + Copy> PackFn<T> for F {}
+
+pub(crate) trait UnpackFn<T>: Fn(&[u32], usize, &mut [T], usize, u8) + Copy {}
+impl<T, F: Fn(&[u32], usize, &mut [T], usize, u8) + Copy> UnpackFn<T> for F {}
+
 /// Fast Patched Frame-of-Reference ([FastPFOR](https://github.com/lemire/FastPFor)) codec.
 ///
 /// `N` is the block size (128 or 256 values per block) and `T` the element type
-/// ([`u32`] or [`u64`], defaulting to `u32`). This struct implements [`BlockCodec`](crate::BlockCodec)
+/// ([`u32`] or [`u64`]). `K` selects the bit-packing [`Kernels`]: [`Scalar`] (the default) or
+/// [`Simd`](crate::Simd). Both produce byte-identical output. This struct implements [`BlockCodec`](crate::BlockCodec)
 /// with `Block = [u32; N]` for the `u32` element type, giving compile-time guarantees that only
 /// correctly-sized blocks are accepted.
 ///
@@ -52,7 +61,7 @@ const DEFAULT_PAGE_SIZE: u32 = 65536;
 /// codec.encode(&data, &mut out).unwrap();
 /// ```
 #[derive(Debug)]
-pub struct FastPFor<const N: usize, T: FastPForInt> {
+pub struct FastPFor<const N: usize, T: FastPForInt, K: Kernels = Scalar> {
     /// Exception values indexed by bit width difference
     exception_buffers: T::ExceptionBuffers,
     /// Metadata buffer for encoding/decoding
@@ -70,16 +79,17 @@ pub struct FastPFor<const N: usize, T: FastPForInt> {
     exception_count: u8,
     /// Maximum bit width required for any value in the block
     max_bits: u8,
+    kernels: PhantomData<K>,
 }
 
-impl<const N: usize, T: FastPForInt> Default for FastPFor<N, T> {
+impl<const N: usize, T: FastPForInt, K: Kernels> Default for FastPFor<N, T, K> {
     fn default() -> Self {
         Self::new(DEFAULT_PAGE_SIZE)
             .expect("DEFAULT_PAGE_SIZE is a multiple of all valid block sizes")
     }
 }
 
-impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
+impl<const N: usize, T: FastPForInt, K: Kernels> FastPFor<N, T, K> {
     /// Creates a new `FastPForBlock` with a codec with the given page size.
     ///
     /// Returns an error if `page_size` is not a multiple of the block size.
@@ -102,6 +112,7 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
             optimal_bits: 0,
             exception_count: 0,
             max_bits: 0,
+            kernels: PhantomData,
         })
     }
 
@@ -117,7 +128,7 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
         let final_inpos = input_offset.position() as u32 + inlength;
         while input_offset.position() as u32 != final_inpos {
             let this_size = min(self.page_size, final_inpos - input_offset.position() as u32);
-            self.encode_page(input, this_size, input_offset, output, output_offset);
+            K::encode_page(self, input, this_size, input_offset, output, output_offset);
         }
     }
 
@@ -133,7 +144,7 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
         let final_out = output_offset.position() as u32 + mynvalue;
         while output_offset.position() as u32 != final_out {
             let this_size = min(self.page_size, final_out - output_offset.position() as u32);
-            self.decode_page(input, input_offset, output, output_offset, this_size)?;
+            K::decode_page(self, input, input_offset, output, output_offset, this_size)?;
         }
         Ok(())
     }
@@ -149,13 +160,19 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
     /// * `this_size` - Must be multiple of `block_size`
     /// * `input_offset` - Advanced by `this_size`
     /// * `output_offset` - Advanced by compressed size
-    fn encode_page(
+    #[expect(
+        clippy::inline_always,
+        reason = "the kernel must inline into the page, including inside #[target_feature] callers"
+    )]
+    #[inline(always)]
+    pub(crate) fn encode_page_with(
         &mut self,
         input: &[T],
         this_size: u32,
         input_offset: &mut Cursor<u32>,
         output: &mut [u32],
         output_offset: &mut Cursor<u32>,
+        pack: impl PackFn<T>,
     ) {
         let header_pos = output_offset.position() as usize;
         output_offset.increment();
@@ -193,7 +210,7 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
                 }
             }
             for k in (0..N as u32).step_by(32) {
-                T::fast_pack(
+                pack(
                     input,
                     (tmp_input_offset + k) as usize,
                     output,
@@ -239,7 +256,7 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
                 self.exception_buffers[k][used..used.next_multiple_of(32)].fill(T::zero());
                 let mut j = 0;
                 while j < self.data_pointers[k] {
-                    T::fast_pack(
+                    pack(
                         &self.exception_buffers[k],
                         j,
                         output,
@@ -309,13 +326,19 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
     /// * `input_offset` - Advanced by bytes read
     /// * `output_offset` - Advanced by `this_size`
     #[expect(clippy::too_many_lines)]
-    fn decode_page(
+    #[expect(
+        clippy::inline_always,
+        reason = "the kernel must inline into the page, including inside #[target_feature] callers"
+    )]
+    #[inline(always)]
+    pub(crate) fn decode_page_with(
         &mut self,
         input: &[u32],
         input_offset: &mut Cursor<u32>,
         output: &mut [T],
         output_offset: &mut Cursor<u32>,
         this_size: u32,
+        unpack: impl UnpackFn<T>,
     ) -> FastPForResult<()> {
         let n = u32::try_from(input.len())
             .map_err(|_| FastPForError::InvalidInputLength(input.len()))?;
@@ -372,7 +395,7 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
                 while j.checked_add(32).is_some_and(|j32| j32 <= size)
                     && inexcept.checked_add(k).is_some_and(|ie| ie <= n)
                 {
-                    T::fast_unpack(
+                    unpack(
                         input,
                         inexcept as usize,
                         &mut self.exception_buffers[k as usize],
@@ -402,7 +425,7 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
                         .ok_or(FastPForError::NotEnoughData)?;
                     tail_buf[..copy_len].copy_from_slice(src);
                     let tail_inpos = 0;
-                    T::fast_unpack(
+                    unpack(
                         &tail_buf,
                         tail_inpos,
                         &mut self.exception_buffers[k as usize],
@@ -445,7 +468,7 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
                 if out_end > output.len() {
                     return Err(FastPForError::OutputBufferTooSmall);
                 }
-                T::fast_unpack(input, in_start, output, out_start, bits);
+                unpack(input, in_start, output, out_start, bits);
                 tmp_input_offset += u32::from(bits);
             }
             if num_exceptions > 0 {

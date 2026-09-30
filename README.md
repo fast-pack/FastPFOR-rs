@@ -12,7 +12,7 @@ Fast integer compression for Rust — both a pure-Rust implementation and a wrap
 Supports 32-bit (and for some codecs 64-bit) integers.
 Based on the [Decoding billions of integers per second through vectorization, 2012](https://arxiv.org/abs/1209.2137) paper.
 
-The Rust **decoder** is about 29% faster than the C++ version. The Rust implementation contains no `unsafe` code, and when built without the `cpp` feature this crate has `#![forbid(unsafe_code)]`.
+The Rust **decoder** is about 29% faster than the C++ version. The Rust implementation is safe code: its only `unsafe` is the call into the AVX2 kernels of the opt-in `Simd` codecs, made after runtime CPU feature detection. When built without the `cpp` feature this crate has `#![deny(unsafe_code)]`.
 
 ## Usage
 
@@ -80,6 +80,36 @@ codec.decode(&encoded, &mut decoded, None).unwrap();
 assert_eq!(decoded, input);
 ```
 
+### SIMD kernels
+
+The `FastPForSimd*` codecs (`FastPForSimd128`, `FastPForSimd256`, `FastPForSimdWide128`, `FastPForSimdWide256`,
+and the matching `FastPForSimdBlock*` block codecs) are drop-in replacements for the codecs above.
+They produce **byte-identical** output and decode each other's streams, so encoders and decoders can be mixed freely.
+
+- `x86_64`: AVX2 kernels, selected at runtime; CPUs without AVX2 use the scalar kernels.
+- `aarch64`: NEON kernels. `u64` values wider than 32 bits use the scalar kernels.
+- Other targets: the scalar kernels.
+
+```rust
+use fastpfor::{AnyLenCodec, FastPFor256, FastPForSimd256};
+
+let input: Vec<u32> = (0..1000).collect();
+
+let mut encoded = Vec::new();
+FastPForSimd256::default().encode(&input, &mut encoded).unwrap();
+
+let mut scalar_encoded = Vec::new();
+FastPFor256::default().encode(&input, &mut scalar_encoded).unwrap();
+assert_eq!(encoded, scalar_encoded);
+
+let mut decoded = Vec::new();
+FastPFor256::default().decode(&encoded, &mut decoded, None).unwrap();
+assert_eq!(decoded, input);
+```
+
+Note that the C++ `CppSimdFastPFor*` codecs use a different, interleaved bit layout and are **not**
+compatible with either the Rust codecs or the C++ `CppFastPFor*` codecs.
+
 ### C++ Wrapper (`cpp` feature)
 
 Enable the `cpp` feature in `Cargo.toml`:
@@ -99,7 +129,7 @@ Create one instance per thread or synchronize access externally.
 
 | Feature        | Default | Description                                                                                  |
 |----------------|---------|----------------------------------------------------------------------------------------------|
-| `rust`         | **yes** | Pure-Rust implementation — no `unsafe`, no build dependencies                                |
+| `rust`         | **yes** | Pure-Rust implementation — safe code, no build dependencies                                  |
 | `cpp`          | no      | C++ wrapper via CXX — requires a C++14 compiler with SIMD support                            |
 | `cpp_portable` | no      | Enables `cpp`, compiles C++ with SSE4.2 baseline (runs on any x86-64 from ~2008+)            |
 | `cpp_native`   | no      | Enables `cpp`, compiles C++ with `-march=native` for maximum throughput on the build machine |
@@ -124,6 +154,7 @@ Rust block codecs require block-aligned input. `CompositeCodec` chains a block c
 | `JustCopy`         | No compression; useful as a baseline                            |
 | `FastPForBlock256` | `FastPFor` with 256-element `u32` blocks; block-aligned input only |
 | `FastPForBlock128` | `FastPFor` with 128-element `u32` blocks; block-aligned input only |
+| `FastPForSimd*`    | Same as the codec without `Simd`, using SIMD kernels; byte-identical output |
 
 ### C++ (`cpp` feature)
 

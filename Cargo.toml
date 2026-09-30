@@ -30,7 +30,7 @@ cpp_portable = ["cpp"]
 # Optimize FastPFOR for the current CPU.
 cpp_native = ["cpp"]
 cpp = ["dep:cmake", "dep:cxx", "dep:cxx-build"]
-rust = ["dep:bytes", "dep:num-traits"]
+rust = ["dep:bytes", "dep:num-traits", "dep:wide"]
 
 [dependencies]
 bytemuck = { version = "1.25.0", features = ["min_const_generics"] }
@@ -38,6 +38,9 @@ bytes = { version = "1.11", optional = true }
 cxx = { version = "1.0.194", optional = true }
 num-traits = { version = "0.2", optional = true }
 thiserror = "2.0.18"
+
+[target.'cfg(target_arch = "aarch64")'.dependencies]
+wide = { version = "0.7.33", optional = true, default-features = false }
 
 [build-dependencies]
 cmake = { version = "0.1.57", optional = true }
