@@ -753,7 +753,6 @@ mod tests {
 
     #[test]
     fn test_u64_decode_overlong_value_errors() {
-        // 12 continuation bytes (high bit clear) shift past 64 bits without terminating.
         let mut decoded = Vec::new();
         let result = VariableByte::<u64>::new().decode(&[0u32; 3], &mut decoded, None);
         assert!(

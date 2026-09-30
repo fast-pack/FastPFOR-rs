@@ -233,7 +233,6 @@ mod tests {
         assert!(out.is_empty());
     }
 
-    /// A header that disagrees with `expected_len` is rejected before decoding.
     #[test]
     fn decode_blocks_expected_len_mismatch_errors() {
         let data = vec![7u32; 256];
@@ -251,10 +250,8 @@ mod tests {
         );
     }
 
-    /// Without `expected_len`, a header claiming more values than the input could hold is rejected.
     #[test]
     fn decode_blocks_header_exceeds_max_len_errors() {
-        // One input word allows at most 1024 values; claim 2048.
         let input = vec![2048u32];
         let result = block_decompress::<FastPForBlock128>(&input, None);
         assert!(
