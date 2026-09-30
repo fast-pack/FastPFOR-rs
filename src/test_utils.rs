@@ -180,7 +180,7 @@ pub fn get_test_cases(n: usize) -> Vec<Vec<u32>> {
         (0..n)
             .map(|i| {
                 let ui = i as u32;
-                if ui % 2 == 0 { 1 << 30 } else { 3 }
+                if ui.is_multiple_of(2) { 1 << 30 } else { 3 }
             })
             .collect::<Vec<u32>>(),
         // Random u32 values
