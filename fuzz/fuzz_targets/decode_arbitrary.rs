@@ -51,7 +51,7 @@ fuzz_target!(|data: FuzzInput| {
         .as_chunks::<4>()
         .0
         .iter()
-        .map(|c| u32::from_le_bytes(*c))
+        .map(|&c| u32::from_le_bytes(c))
         .take(MAX_COMPRESSED_WORDS)
         .collect();
 
