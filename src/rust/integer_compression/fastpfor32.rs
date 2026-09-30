@@ -237,16 +237,10 @@ mod tests {
     fn decode_blocks_expected_len_mismatch_errors() {
         let data = vec![7u32; 256];
         let compressed = block_compress::<FastPForBlock128>(&data).unwrap();
-        let result = block_decompress::<FastPForBlock128>(&compressed, Some(128));
-        assert!(
-            matches!(
-                result,
-                Err(FastPForError::DecodedCountMismatch {
-                    actual: 256,
-                    expected: 128
-                })
-            ),
-            "expected DecodedCountMismatch, got {result:?}"
+        let err = block_decompress::<FastPForBlock128>(&compressed, Some(128)).unwrap_err();
+        assert_eq!(
+            format!("{err:?}"),
+            "DecodedCountMismatch { actual: 256, expected: 128 }"
         );
     }
 
