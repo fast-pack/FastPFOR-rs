@@ -103,3 +103,23 @@ fn test_rust_anylen_128_roundtrip() {
         }
     }
 }
+
+#[test]
+fn test_rust_and_cpp_match_across_pages_with_exceptions() {
+    let mut input: Vec<u32> = (0..65536u32 + 1024)
+        .map(|i| match i % 7 {
+            0 => 0xF000_0000 | i,
+            3 => 0x0010_0000 | i,
+            _ => i % 5,
+        })
+        .collect();
+    input[65536 + 9] = u32::MAX;
+    assert_eq!(
+        compress::<CppFastPFor128>(&input).unwrap(),
+        compress::<FastPFor128>(&input).unwrap()
+    );
+    assert_eq!(
+        compress::<fastpfor::cpp::CppFastPFor256>(&input).unwrap(),
+        compress::<FastPFor256>(&input).unwrap()
+    );
+}
