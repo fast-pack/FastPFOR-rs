@@ -12,7 +12,7 @@ Fast integer compression for Rust — both a pure-Rust implementation and a wrap
 Supports 32-bit (and for some codecs 64-bit) integers.
 Based on the [Decoding billions of integers per second through vectorization, 2012](https://arxiv.org/abs/1209.2137) paper.
 
-The Rust **decoder** is about 29% faster than the C++ version. The Rust implementation is safe code: its only `unsafe` is the call into the AVX2 kernels of the opt-in `Simd` codecs, made after runtime CPU feature detection. When built without the `cpp` feature this crate has `#![deny(unsafe_code)]`.
+The Rust **decoder** is about 29% faster than the C++ version. The Rust implementation is safe code: its only `unsafe` is the call into the AVX2 kernels of the opt-in `Simd` codecs, made after runtime CPU feature detection. The crate has `#![deny(unsafe_code)]`; the only other exemption is the generated FFI bridge of the optional `cpp` feature.
 
 ## Usage
 

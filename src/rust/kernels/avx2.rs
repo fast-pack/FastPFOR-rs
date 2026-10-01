@@ -62,7 +62,7 @@ impl Avx2Int for u32 {
         output: &mut [u32],
         output_offset: &mut Cursor<u32>,
     ) {
-        #[allow(unsafe_code, reason = "calls the #[target_feature] AVX2 page kernel")]
+        #[expect(unsafe_code, reason = "calls the #[target_feature] AVX2 page kernel")]
         // SAFETY: the `Avx2` token proves the CPU supports AVX2.
         unsafe {
             encode_page_u32(codec, input, this_size, input_offset, output, output_offset);
@@ -79,7 +79,7 @@ impl Avx2Int for u32 {
         output_offset: &mut Cursor<u32>,
         this_size: u32,
     ) -> FastPForResult<()> {
-        #[allow(unsafe_code, reason = "calls the #[target_feature] AVX2 page kernel")]
+        #[expect(unsafe_code, reason = "calls the #[target_feature] AVX2 page kernel")]
         // SAFETY: the `Avx2` token proves the CPU supports AVX2.
         unsafe {
             decode_page_u32(codec, input, input_offset, output, output_offset, this_size)
@@ -98,7 +98,7 @@ impl Avx2Int for u64 {
         output: &mut [u32],
         output_offset: &mut Cursor<u32>,
     ) {
-        #[allow(unsafe_code, reason = "calls the #[target_feature] AVX2 page kernel")]
+        #[expect(unsafe_code, reason = "calls the #[target_feature] AVX2 page kernel")]
         // SAFETY: the `Avx2` token proves the CPU supports AVX2.
         unsafe {
             encode_page_u64(codec, input, this_size, input_offset, output, output_offset);
@@ -115,7 +115,7 @@ impl Avx2Int for u64 {
         output_offset: &mut Cursor<u32>,
         this_size: u32,
     ) -> FastPForResult<()> {
-        #[allow(unsafe_code, reason = "calls the #[target_feature] AVX2 page kernel")]
+        #[expect(unsafe_code, reason = "calls the #[target_feature] AVX2 page kernel")]
         // SAFETY: the `Avx2` token proves the CPU supports AVX2.
         unsafe {
             decode_page_u64(codec, input, input_offset, output, output_offset, this_size)

@@ -1,4 +1,7 @@
-#![cfg_attr(not(feature = "cpp"), deny(unsafe_code))]
+#![deny(
+    unsafe_code,
+    reason = "x86 SIMD dispatch and C++ interop must allow, so can't use forbid here"
+)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc = include_str!("../README.md")]
 

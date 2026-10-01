@@ -77,8 +77,8 @@ fn build_fastpfor() {
 
     // Compile the bridge
     println!("cargo:rerun-if-changed=src/cpp/fastpfor_bridge.h");
-    println!("cargo:rerun-if-changed=src/cpp/mod.rs");
-    let mut bridge = cxx_build::bridge("src/cpp/mod.rs");
+    println!("cargo:rerun-if-changed=src/cpp/ffi.rs");
+    let mut bridge = cxx_build::bridge("src/cpp/ffi.rs");
     bridge
         .include("cpp/headers")
         .include("src/cpp")
