@@ -247,6 +247,24 @@ mod tests {
     }
 
     #[test]
+    fn decode_rejects_exceptions_from_prior_calls() {
+        let mut data = vec![0u32; 128];
+        data[45] = 1 << 20;
+        let mut codec = FastPForBlock128::default();
+        let (blocks, _) = crate::slice_to_blocks::<FastPForBlock128>(&data);
+        let mut words = Vec::new();
+        codec.encode_blocks(blocks, &mut words).unwrap();
+        let bytesize = words[2];
+        let bitmap_at = 3 + bytesize.div_ceil(4) as usize;
+        words[bitmap_at] = 0;
+
+        let fresh = FastPForBlock128::default().decode_blocks(&words, None, &mut Vec::new());
+        let reused = codec.decode_blocks(&words, None, &mut Vec::new());
+        assert!(fresh.is_err());
+        assert_eq!(format!("{reused:?}"), format!("{fresh:?}"));
+    }
+
+    #[test]
     fn decode_index1_branch_valid() {
         let mut data = vec![1u32; 256];
         data[0] = 3;
