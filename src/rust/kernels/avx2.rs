@@ -6,23 +6,78 @@ use std::arch::x86_64::{
 use std::io::Cursor;
 
 use bytemuck::cast;
+pub use token::Avx2;
 
 use crate::FastPForResult;
 use crate::rust::integer_compression::fastpfor::FastPFor;
 use crate::rust::integer_compression::fastpfor_int::FastPForInt;
-use crate::rust::kernels::Simd;
+use crate::rust::kernels::portable::{decode_page_scalar, encode_page_scalar};
+use crate::rust::kernels::{Simd, private};
 
-#[derive(Clone, Copy)]
-pub struct Avx2(());
+/// Isolated so that [`Avx2::detect`] is the only way to construct the token, even within this file.
+mod token {
+    /// Proof that the running CPU supports AVX2; obtained only from [`Avx2::detect`].
+    #[derive(Clone, Copy)]
+    pub struct Avx2(());
 
-impl Avx2 {
-    #[inline]
-    pub fn detect() -> Option<Self> {
-        #[cfg(feature = "__testing")]
-        if super::fallback_forced() {
-            return None;
+    impl Avx2 {
+        #[inline]
+        pub fn detect() -> Option<Self> {
+            #[cfg(feature = "__testing")]
+            if crate::rust::kernels::FORCE_FALLBACK.get() {
+                return None;
+            }
+            is_x86_feature_detected!("avx2").then_some(Self(()))
         }
-        std::is_x86_feature_detected!("avx2").then_some(Self(()))
+    }
+}
+
+/// [`Simd`] on `x86_64`: AVX2 when detected at runtime, scalar otherwise.
+impl private::PageCodec for Simd {
+    fn encode_page<const N: usize, T: FastPForInt>(
+        codec: &mut FastPFor<N, T, Self>,
+        input: &[T],
+        this_size: u32,
+        input_offset: &mut Cursor<u32>,
+        output: &mut [u32],
+        output_offset: &mut Cursor<u32>,
+    ) {
+        if let Some(token) = Avx2::detect() {
+            T::encode_page_avx2(
+                token,
+                codec,
+                input,
+                this_size,
+                input_offset,
+                output,
+                output_offset,
+            );
+        } else {
+            encode_page_scalar(codec, input, this_size, input_offset, output, output_offset);
+        }
+    }
+
+    fn decode_page<const N: usize, T: FastPForInt>(
+        codec: &mut FastPFor<N, T, Self>,
+        input: &[u32],
+        input_offset: &mut Cursor<u32>,
+        output: &mut [T],
+        output_offset: &mut Cursor<u32>,
+        this_size: u32,
+    ) -> FastPForResult<()> {
+        if let Some(token) = Avx2::detect() {
+            T::decode_page_avx2(
+                token,
+                codec,
+                input,
+                input_offset,
+                output,
+                output_offset,
+                this_size,
+            )
+        } else {
+            decode_page_scalar(codec, input, input_offset, output, output_offset, this_size)
+        }
     }
 }
 

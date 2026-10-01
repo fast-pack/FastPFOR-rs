@@ -17,11 +17,11 @@ mod sealed {
     impl Sealed for u64 {}
 }
 
-/// Sealed element type of a `FastPFOR` stream: [`u32`] or [`u64`].
+/// Sealed element type of `FastPFOR` stream: [`u32`] or [`u64`].
 pub trait FastPForInt:
     PrimInt + 'static + bytemuck::Pod + sealed::Sealed + BitOrAssign + SimdInt
 {
-    /// Bit width of the element: 32 or 64.
+    /// Bitwidth of the element: 32 or 64.
     const WIDTH: u8 = (size_of::<Self>() * 8) as u8;
     /// Output words occupied by the exception bitmap: 1 for `u32`, 2 for `u64`.
     const BITMAP_WORDS: u32 = Self::WIDTH as u32 / u32::BITS;
