@@ -5,7 +5,7 @@
 
 # How to call the current just executable. Note that just_executable() may have `\` in Windows paths, so we need to quote it.
 just := quote(just_executable())
-fuzz_target := "x86_64-unknown-linux-gnu"
+fuzz_target := if os() == "macos" { arch() + "-apple-darwin" } else { arch() + "-unknown-linux-gnu" }
 
 # List available fuzz targets
 list:

@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
         simd_mode: [portable, native]
     env:
       FASTPFOR_SIMD_MODE: ${{ matrix.simd_mode }}
@@ -69,22 +69,26 @@ jobs:
       - run: just ci-test-msrv
 
   fuzz:
-    name: Fuzz
+    name: Fuzz ${{ matrix.fuzz_target }} (${{ matrix.platform.target }})
     permissions: { contents: read }
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.platform.runner }}
     # The number of seconds to run the fuzz target.
     env: { FUZZ_TIME: 60 }
     strategy:
+      fail-fast: false
       matrix:
-        include:
-          - fuzz_target: cpp_roundtrip
-          - fuzz_target: encode_oracle
-          - fuzz_target: decode_oracle
-          - fuzz_target: decode_arbitrary
-          - fuzz_target: fastpfor_u64
-          - fuzz_target: compare_fastpfor_128
-          - fuzz_target: encode_compare
-          - fuzz_target: simd_compat
+        fuzz_target:
+          - cpp_roundtrip
+          - encode_oracle
+          - decode_oracle
+          - decode_arbitrary
+          - fastpfor_u64
+          - compare_fastpfor_128
+          - encode_compare
+          - simd_compat
+        platform:
+          - { runner: ubuntu-latest, target: x86_64-unknown-linux-gnu }
+          - { runner: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false, submodules: recursive }
@@ -95,14 +99,14 @@ jobs:
       - uses: taiki-e/install-action@4076c08d76dba979c11a7285295b0716c1d67908 # v2.87.15
         with: { tool: 'cargo-fuzz@0.13.2' }
       # Build and then run the fuzz target.
-      #  --target x86_64-unknown-linux-gnu is necessary to not default to musl, which is not supported by cargo-fuzz.
-      - run: cargo fuzz build --target x86_64-unknown-linux-gnu ${{ matrix.fuzz_target }}
-      - run: cargo fuzz run --target x86_64-unknown-linux-gnu ${{ matrix.fuzz_target }} -- -max_total_time=${{ env.FUZZ_TIME }}
+      #  An explicit --target is necessary to not default to musl, which is not supported by cargo-fuzz.
+      - run: cargo fuzz build --target ${{ matrix.platform.target }} ${{ matrix.fuzz_target }}
+      - run: cargo fuzz run --target ${{ matrix.platform.target }} ${{ matrix.fuzz_target }} -- -max_total_time=${{ env.FUZZ_TIME }}
       # Upload fuzzing artifacts on failure for post-mortem debugging.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:
-          name: fuzzing-artifacts-${{ matrix.fuzz_target }}-${{ github.sha }}
+          name: fuzzing-artifacts-${{ matrix.fuzz_target }}-${{ matrix.platform.target }}-${{ github.sha }}
           path: fuzz/artifacts
 
   coverage:
