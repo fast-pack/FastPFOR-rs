@@ -333,7 +333,7 @@ mod tests {
     fn pack64_matches_scalar() {
         check_pack(
             64,
-            |r| r.random::<u64>(),
+            rand::RngExt::random::<u64>,
             bit_pack64::pack_wide,
             u64::pack_neon,
         );
