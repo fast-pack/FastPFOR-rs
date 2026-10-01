@@ -25,6 +25,25 @@ pub struct Simd;
 impl Kernels for Scalar {}
 impl Kernels for Simd {}
 
+#[cfg(feature = "__testing")]
+thread_local! {
+    static FORCE_FALLBACK: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Runs `f` with [`Simd`] skipping runtime-detected kernels (AVX2) on the current thread.
+#[cfg(feature = "__testing")]
+pub fn with_simd_fallback<R>(f: impl FnOnce() -> R) -> R {
+    let previous = FORCE_FALLBACK.replace(true);
+    let result = f();
+    FORCE_FALLBACK.set(previous);
+    result
+}
+
+#[cfg(all(feature = "__testing", target_arch = "x86_64"))]
+fn fallback_forced() -> bool {
+    FORCE_FALLBACK.get()
+}
+
 pub(crate) mod private {
     use super::{Cursor, FastPFor, FastPForInt, FastPForResult, Kernels};
 
@@ -61,15 +80,7 @@ impl private::Sealed for Scalar {
         output: &mut [u32],
         output_offset: &mut Cursor<u32>,
     ) {
-        codec.encode_page_with(
-            input,
-            this_size,
-            input_offset,
-            output,
-            output_offset,
-            #[inline(always)]
-            |src, inpos, out, outpos, bit| T::fast_pack(src, inpos, out, outpos, bit),
-        );
+        encode_page_scalar(codec, input, this_size, input_offset, output, output_offset);
     }
 
     fn decode_page<const N: usize, T: FastPForInt>(
@@ -80,15 +91,7 @@ impl private::Sealed for Scalar {
         output_offset: &mut Cursor<u32>,
         this_size: u32,
     ) -> FastPForResult<()> {
-        codec.decode_page_with(
-            input,
-            input_offset,
-            output,
-            output_offset,
-            this_size,
-            #[inline(always)]
-            |src, inpos, out, outpos, bit| T::fast_unpack(src, inpos, out, outpos, bit),
-        )
+        decode_page_scalar(codec, input, input_offset, output, output_offset, this_size)
     }
 }
 
@@ -114,15 +117,7 @@ impl private::Sealed for Simd {
             );
             return;
         }
-        codec.encode_page_with(
-            input,
-            this_size,
-            input_offset,
-            output,
-            output_offset,
-            #[inline(always)]
-            |src, inpos, out, outpos, bit| fallback_pack::<T>(src, inpos, out, outpos, bit),
-        );
+        encode_page_fallback(codec, input, this_size, input_offset, output, output_offset);
     }
 
     fn decode_page<const N: usize, T: FastPForInt>(
@@ -145,40 +140,51 @@ impl private::Sealed for Simd {
                 this_size,
             );
         }
-        codec.decode_page_with(
-            input,
-            input_offset,
-            output,
-            output_offset,
-            this_size,
-            #[inline(always)]
-            |src, inpos, out, outpos, bit| fallback_unpack::<T>(src, inpos, out, outpos, bit),
-        )
+        decode_page_fallback(codec, input, input_offset, output, output_offset, this_size)
     }
 }
 
-#[expect(clippy::inline_always, reason = "kernel must inline into the page")]
-#[inline(always)]
-fn fallback_pack<T: FastPForInt>(src: &[T], inpos: usize, out: &mut [u32], outpos: usize, bit: u8) {
-    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-    T::pack_neon(src, inpos, out, outpos, bit);
-    #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
-    T::fast_pack(src, inpos, out, outpos, bit);
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+use neon::{decode_page as decode_page_fallback, encode_page as encode_page_fallback};
+#[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
+use {decode_page_scalar as decode_page_fallback, encode_page_scalar as encode_page_fallback};
+
+fn encode_page_scalar<const N: usize, T: FastPForInt, K: Kernels>(
+    codec: &mut FastPFor<N, T, K>,
+    input: &[T],
+    this_size: u32,
+    input_offset: &mut Cursor<u32>,
+    output: &mut [u32],
+    output_offset: &mut Cursor<u32>,
+) {
+    codec.encode_page_with(
+        input,
+        this_size,
+        input_offset,
+        output,
+        output_offset,
+        #[inline(always)]
+        |src, inpos, out, outpos, bit| T::fast_pack(src, inpos, out, outpos, bit),
+    );
 }
 
-#[expect(clippy::inline_always, reason = "kernel must inline into the page")]
-#[inline(always)]
-fn fallback_unpack<T: FastPForInt>(
-    src: &[u32],
-    inpos: usize,
-    out: &mut [T],
-    outpos: usize,
-    bit: u8,
-) {
-    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-    T::unpack_neon(src, inpos, out, outpos, bit);
-    #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
-    T::fast_unpack(src, inpos, out, outpos, bit);
+fn decode_page_scalar<const N: usize, T: FastPForInt, K: Kernels>(
+    codec: &mut FastPFor<N, T, K>,
+    input: &[u32],
+    input_offset: &mut Cursor<u32>,
+    output: &mut [T],
+    output_offset: &mut Cursor<u32>,
+    this_size: u32,
+) -> FastPForResult<()> {
+    codec.decode_page_with(
+        input,
+        input_offset,
+        output,
+        output_offset,
+        this_size,
+        #[inline(always)]
+        |src, inpos, out, outpos, bit| T::fast_unpack(src, inpos, out, outpos, bit),
+    )
 }
 
 #[cfg(target_arch = "x86_64")]

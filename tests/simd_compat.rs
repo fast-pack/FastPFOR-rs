@@ -250,3 +250,18 @@ fn simd_reuses_state_like_scalar() {
         assert_eq!(decode(&mut simd, &enc).unwrap(), data);
     }
 }
+
+#[cfg(feature = "__testing")]
+#[test]
+fn simd_fallback_matches_scalar() {
+    fastpfor::__testing::with_simd_fallback(|| {
+        check_all::<FastPFor128, FastPForSimd128, FastPForBlock128, FastPForSimdBlock128, u32>(128);
+        check_all::<
+            FastPForWide256,
+            FastPForSimdWide256,
+            FastPForBlockWide256,
+            FastPForSimdBlockWide256,
+            u64,
+        >(256);
+    });
+}

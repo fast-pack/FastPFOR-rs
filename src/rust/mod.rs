@@ -22,4 +22,6 @@ pub use integer_compression::fastpfor64::{
 pub use integer_compression::just_copy::JustCopy;
 /// Variable-byte codec — implements [`AnyLenCodec`](crate::codec::AnyLenCodec).
 pub use integer_compression::variable_byte::VariableByte;
+#[cfg(feature = "__testing")]
+pub use kernels::with_simd_fallback;
 pub use kernels::{Kernels, Scalar, Simd};

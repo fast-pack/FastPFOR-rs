@@ -38,6 +38,13 @@ pub use rust::{
     Scalar, Simd, VariableByte,
 };
 
+#[cfg(feature = "__testing")]
+#[doc(hidden)]
+/// Test-only hooks. Not part of the public API.
+pub mod __testing {
+    pub use crate::rust::with_simd_fallback;
+}
+
 // `src/test_utils.rs` uses `fastpfor::...`; alias this crate for unit tests only.
 #[cfg(test)]
 extern crate self as fastpfor;

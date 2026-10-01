@@ -31,7 +31,7 @@ build:
 
 # Quick compile without building a binary
 check:
-    cargo check --workspace --all-targets --features _all_compatible
+    cargo check --workspace --all-targets --features _all_compatible,__testing
     cargo check --workspace --all-targets --no-default-features --features cpp
     cargo check --workspace --all-targets --no-default-features --features rust
     cargo check --workspace --all-targets --manifest-path fuzz/Cargo.toml
@@ -63,7 +63,7 @@ clean:
 
 # Run cargo clippy to lint the code
 clippy *args:
-    cargo clippy --workspace --all-targets --features _all_compatible {{args}}
+    cargo clippy --workspace --all-targets --features _all_compatible,__testing {{args}}
     cargo clippy --workspace --all-targets --manifest-path fuzz/Cargo.toml {{args}}
 
 # Generate and open the HTML coverage report
@@ -72,7 +72,7 @@ coverage:  (_coverage '--open')
 # Clean, collect, and aggregate coverage using the requested report arguments
 _coverage *report_args:  (cargo-install 'cargo-llvm-cov')
     cargo llvm-cov clean --workspace
-    cargo llvm-cov --no-report --workspace --all-targets --features _all_compatible
+    cargo llvm-cov --no-report --workspace --all-targets --features _all_compatible,__testing
     cargo llvm-cov report --include-build-script {{report_args}}
 
 # Build and open code documentation
@@ -142,8 +142,8 @@ semver *args:  (cargo-install 'cargo-semver-checks')
 
 # Run all tests
 test:
-    cargo test --workspace --all-targets --features _all_compatible
-    cargo test --doc --workspace --features _all_compatible
+    cargo test --workspace --all-targets --features _all_compatible,__testing
+    cargo test --doc --workspace --features _all_compatible,__testing
 
 # Test with a specific SIMD mode (portable, native)
 test-simd mode='portable':

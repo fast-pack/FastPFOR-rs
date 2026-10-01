@@ -31,6 +31,7 @@ cpp_portable = ["cpp"]
 cpp_native = ["cpp"]
 cpp = ["dep:cmake", "dep:cxx", "dep:cxx-build"]
 rust = ["dep:bytes", "dep:num-traits", "dep:wide"]
+__testing = ["rust"]
 
 [dependencies]
 bytemuck = { version = "1.25.0", features = ["min_const_generics"] }

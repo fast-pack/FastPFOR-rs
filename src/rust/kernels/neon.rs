@@ -1,7 +1,12 @@
+use std::io::Cursor;
+
 use bytemuck::cast;
 use wide::{i8x16, u32x4};
 
+use crate::FastPForResult;
+use crate::rust::integer_compression::fastpfor::FastPFor;
 use crate::rust::integer_compression::fastpfor_int::FastPForInt;
+use crate::rust::kernels::Kernels;
 
 const ZERO: i8 = -1;
 
@@ -43,6 +48,44 @@ impl NeonInt for u64 {
             <Self as FastPForInt>::fast_unpack(src, inpos, out, outpos, bit);
         }
     }
+}
+
+pub fn encode_page<const N: usize, T: FastPForInt, K: Kernels>(
+    codec: &mut FastPFor<N, T, K>,
+    input: &[T],
+    this_size: u32,
+    input_offset: &mut Cursor<u32>,
+    output: &mut [u32],
+    output_offset: &mut Cursor<u32>,
+) {
+    codec.encode_page_with(
+        input,
+        this_size,
+        input_offset,
+        output,
+        output_offset,
+        #[inline(always)]
+        |src, inpos, out, outpos, bit| T::pack_neon(src, inpos, out, outpos, bit),
+    );
+}
+
+pub fn decode_page<const N: usize, T: FastPForInt, K: Kernels>(
+    codec: &mut FastPFor<N, T, K>,
+    input: &[u32],
+    input_offset: &mut Cursor<u32>,
+    output: &mut [T],
+    output_offset: &mut Cursor<u32>,
+    this_size: u32,
+) -> FastPForResult<()> {
+    codec.decode_page_with(
+        input,
+        input_offset,
+        output,
+        output_offset,
+        this_size,
+        #[inline(always)]
+        |src, inpos, out, outpos, bit| T::unpack_neon(src, inpos, out, outpos, bit),
+    )
 }
 
 const fn select_word(idx: &mut [i8; 16], lane: usize, w: u32) {

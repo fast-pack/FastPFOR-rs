@@ -18,6 +18,10 @@ pub struct Avx2(());
 impl Avx2 {
     #[inline]
     pub fn detect() -> Option<Self> {
+        #[cfg(feature = "__testing")]
+        if super::fallback_forced() {
+            return None;
+        }
         std::is_x86_feature_detected!("avx2").then_some(Self(()))
     }
 }
@@ -117,6 +121,15 @@ impl Avx2Int for u64 {
             decode_page_u64(codec, input, input_offset, output, output_offset, this_size)
         }
     }
+}
+
+macro_rules! layout {
+    (let $name:ident = $layout:expr) => {
+        #[cfg(not(feature = "__testing"))]
+        let $name = const { &$layout };
+        #[cfg(feature = "__testing")]
+        let $name = &$layout;
+    };
 }
 
 macro_rules! dispatch_width {
@@ -341,7 +354,7 @@ impl Unpack32Layout {
 #[target_feature(enable = "avx2")]
 #[inline]
 fn unpack32_bits<const B: u32>(src: &[u32], out: &mut [u32; 32]) {
-    let layout = const { &Unpack32Layout::new(B) };
+    layout!(let layout = Unpack32Layout::new(B));
     let src = &src[..layout.words_read()];
     let mask = _mm256_set1_epi32(((1u32 << B) - 1) as i32);
     for j in 0..4 {
@@ -363,7 +376,8 @@ fn unpack32_bits<const B: u32>(src: &[u32], out: &mut [u32; 32]) {
 #[target_feature(enable = "avx2")]
 #[inline]
 fn unpack32_group<const B: u32>(src: &[u32], inpos: usize, out: &mut [u32; 32]) {
-    let needed = const { Unpack32Layout::new(B).words_read() };
+    layout!(let layout = Unpack32Layout::new(B));
+    let needed = layout.words_read();
     if let Some(window) = src.get(inpos..inpos + needed) {
         unpack32_bits::<B>(window, out);
     } else {
@@ -415,7 +429,7 @@ impl Pack32Layout {
 #[target_feature(enable = "avx2")]
 #[inline]
 fn pack32_chunk<const B: u32, const J: usize>(src: &[u32; 32], out: &mut [u8]) {
-    let layout = const { &Pack32Layout::new(B) };
+    layout!(let layout = Pack32Layout::new(B));
     let mask = _mm256_set1_epi32(((1u32 << B) - 1) as i32);
     let v = _mm256_and_si256(load8(src, 8 * J), mask);
     let mut acc = _mm256_srlv_epi32(
@@ -503,7 +517,7 @@ impl Unpack64Layout {
 #[target_feature(enable = "avx2")]
 #[inline]
 fn unpack64_bits<const B: u32>(src: &[u32], out: &mut [u64; 32]) {
-    let layout = const { &Unpack64Layout::new(B) };
+    layout!(let layout = Unpack64Layout::new(B));
     let src = &src[..layout.words_read()];
     let mask = _mm256_set1_epi64x(((1u64 << B) - 1) as i64);
     for c in 0..8 {
@@ -524,7 +538,8 @@ fn unpack64_bits<const B: u32>(src: &[u32], out: &mut [u64; 32]) {
 #[target_feature(enable = "avx2")]
 #[inline]
 fn unpack64_group<const B: u32>(src: &[u32], inpos: usize, out: &mut [u64; 32]) {
-    let needed = const { Unpack64Layout::new(B).words_read() };
+    layout!(let layout = Unpack64Layout::new(B));
+    let needed = layout.words_read();
     if let Some(window) = src.get(inpos..inpos + needed) {
         unpack64_bits::<B>(window, out);
     } else {
@@ -597,7 +612,7 @@ fn select64(v0: __m256i, v1: __m256i, term: &Pack64Term) -> __m256i {
 #[target_feature(enable = "avx2")]
 #[inline]
 fn pack64_chunk<const B: u32>(src: &[u64], out: &mut [u8]) {
-    let layout = const { &Pack64Layout::new(B) };
+    layout!(let layout = Pack64Layout::new(B));
     let mask = _mm256_set1_epi64x(((1u64 << B) - 1) as i64);
     let src: &[u64; 8] = src[..8].try_into().expect("8-value subslice");
     let v0 = _mm256_and_si256(
@@ -635,119 +650,5 @@ fn pack64_group<const B: u32>(src: &[u64], inpos: usize, out: &mut [u32]) {
     let out: &mut [u8] = bytemuck::cast_slice_mut(&mut out[..B as usize]);
     for c in 0..4 {
         pack64_chunk::<B>(&src[8 * c..], &mut out[c * B as usize..]);
-    }
-}
-
-#[cfg(test)]
-#[target_feature(enable = "avx2")]
-pub(crate) fn unpack32(src: &[u32], inpos: usize, out: &mut [u32], outpos: usize, bit: u8) {
-    unpack32_body!(src, inpos, out, outpos, bit);
-}
-
-#[cfg(test)]
-#[target_feature(enable = "avx2")]
-pub(crate) fn pack32(src: &[u32], inpos: usize, out: &mut [u32], outpos: usize, bit: u8) {
-    pack32_body!(src, inpos, out, outpos, bit);
-}
-
-#[cfg(test)]
-#[target_feature(enable = "avx2")]
-pub(crate) fn unpack64(src: &[u32], inpos: usize, out: &mut [u64], outpos: usize, bit: u8) {
-    unpack64_body!(src, inpos, out, outpos, bit);
-}
-
-#[cfg(test)]
-#[target_feature(enable = "avx2")]
-pub(crate) fn pack64(src: &[u64], inpos: usize, out: &mut [u32], outpos: usize, bit: u8) {
-    pack64_body!(src, inpos, out, outpos, bit);
-}
-
-#[cfg(test)]
-#[allow(unsafe_code, reason = "calls AVX2 kernels after runtime detection")]
-mod tests {
-    use rand::rngs::StdRng;
-    use rand::{RngExt as _, SeedableRng as _};
-
-    use super::*;
-    use crate::rust::integer_compression::{bit_pack32, bit_pack64, bit_unpack32};
-
-    const SENTINEL: u32 = 0xDEAD_BEEF;
-
-    fn check_pack<T: Copy + Default>(
-        width: u8,
-        random: impl Fn(&mut StdRng) -> T,
-        scalar: fn(&[T], usize, &mut [u32], usize, u8),
-        simd: unsafe fn(&[T], usize, &mut [u32], usize, u8),
-    ) {
-        let mut rng = StdRng::seed_from_u64(1);
-        for bit in 0..=width {
-            for (inpos, outpos) in [(0, 0), (3, 5), (32, 1)] {
-                let src: Vec<T> = (0..inpos + 32).map(|_| random(&mut rng)).collect();
-                let len = outpos + usize::from(bit) + 4;
-                let mut expected = vec![SENTINEL; len];
-                scalar(&src, inpos, &mut expected, outpos, bit);
-                let mut actual = vec![SENTINEL; len];
-                unsafe { simd(&src, inpos, &mut actual, outpos, bit) };
-                assert_eq!(actual, expected, "bit={bit} inpos={inpos} outpos={outpos}");
-            }
-        }
-    }
-
-    fn check_unpack<T: Copy + Default + PartialEq + std::fmt::Debug>(
-        width: u8,
-        scalar: fn(&[u32], usize, &mut [T], usize, u8),
-        simd: unsafe fn(&[u32], usize, &mut [T], usize, u8),
-    ) {
-        let mut rng = StdRng::seed_from_u64(2);
-        for bit in 0..=width {
-            for (inpos, extra, outpos) in [(0, 0, 0), (2, 1, 3), (5, 9, 32), (1, 80, 0)] {
-                let src: Vec<u32> = (0..inpos + usize::from(bit) + extra)
-                    .map(|_| rng.random())
-                    .collect();
-                let mut expected = vec![T::default(); outpos + 36];
-                scalar(&src, inpos, &mut expected, outpos, bit);
-                let mut actual = vec![T::default(); outpos + 36];
-                unsafe { simd(&src, inpos, &mut actual, outpos, bit) };
-                assert_eq!(actual, expected, "bit={bit} inpos={inpos} extra={extra}");
-            }
-        }
-    }
-
-    #[test]
-    fn pack32_matches_scalar() {
-        if Avx2::detect().is_some() {
-            check_pack(
-                32,
-                rand::RngExt::random::<u32>,
-                bit_pack32::fast_pack,
-                pack32,
-            );
-        }
-    }
-
-    #[test]
-    fn unpack32_matches_scalar() {
-        if Avx2::detect().is_some() {
-            check_unpack(32, bit_unpack32::fast_unpack, unpack32);
-        }
-    }
-
-    #[test]
-    fn pack64_matches_scalar() {
-        if Avx2::detect().is_some() {
-            check_pack(
-                64,
-                rand::RngExt::random::<u64>,
-                bit_pack64::pack_wide,
-                pack64,
-            );
-        }
-    }
-
-    #[test]
-    fn unpack64_matches_scalar() {
-        if Avx2::detect().is_some() {
-            check_unpack(64, bit_pack64::unpack_wide, unpack64);
-        }
     }
 }
