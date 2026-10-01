@@ -1305,7 +1305,7 @@ mod tests {
     use rand::RngExt as _;
 
     use super::fast_pack;
-    use crate::rust::integer_compression::bitunpacking::fast_unpack;
+    use crate::rust::integer_compression::bit_unpack32::fast_unpack;
 
     #[test]
     fn pack_unpack_roundtrip() {
