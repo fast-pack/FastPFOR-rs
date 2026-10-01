@@ -85,7 +85,7 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
     /// Returns an error if `page_size` is not a multiple of the block size.
     /// Use [`Default`] for the default page size.
     pub fn new(page_size: u32) -> FastPForResult<Self> {
-        if page_size % N as u32 != 0 {
+        if !page_size.is_multiple_of(N as u32) {
             return Err(FastPForError::InvalidPageSize {
                 page_size,
                 block_size: N as u32,
