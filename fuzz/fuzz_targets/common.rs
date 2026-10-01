@@ -111,7 +111,7 @@ codec_ctor_fn!(make_rust_fastpfor256, FastPFor256, FastPFor256);
 codec_ctor_fn!(make_rust_fastpfor128, FastPFor128, FastPFor128);
 
 fn make_rust_variable_byte() -> FuzzAnyLen {
-    FuzzAnyLen::VariableByte(VariableByte)
+    FuzzAnyLen::VariableByte(VariableByte::new())
 }
 
 fn make_rust_just_copy() -> FuzzAnyLen {
@@ -261,7 +261,7 @@ fn pair_cpp_fastpfor256() -> FuzzAnyLen {
     FuzzAnyLen::CppFastPFor256(CppFastPFor256::default())
 }
 fn pair_rust_variable_byte() -> FuzzAnyLen {
-    FuzzAnyLen::VariableByte(VariableByte)
+    FuzzAnyLen::VariableByte(VariableByte::new())
 }
 fn pair_cpp_var_int() -> FuzzAnyLen {
     FuzzAnyLen::CppVarInt(CppVarInt::default())

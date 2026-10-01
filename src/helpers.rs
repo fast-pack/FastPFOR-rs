@@ -6,13 +6,6 @@ pub fn greatest_multiple(value: u32, factor: u32) -> u32 {
     value - value % factor
 }
 
-/// Returns the number of bits needed to represent `i`.
-/// Returns 0 for input 0.
-#[cfg_attr(feature = "cpp", allow(dead_code))]
-pub fn bits(i: u32) -> usize {
-    32 - i.leading_zeros().as_usize()
-}
-
 pub trait AsUsize: Eq + Copy {
     fn as_usize(self) -> usize;
 

@@ -62,3 +62,9 @@ name = "compare_fastpfor_128"
 path = "fuzz_targets/compare_fastpfor_128.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "fastpfor_u64"
+path = "fuzz_targets/fastpfor_u64.rs"
+test = false
+doc = false

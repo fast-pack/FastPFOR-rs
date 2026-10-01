@@ -17,6 +17,8 @@ impl JustCopy {
 }
 
 impl AnyLenCodec for JustCopy {
+    type Elem = u32;
+
     fn encode(&mut self, input: &[u32], out: &mut Vec<u32>) -> FastPForResult<()> {
         out.extend_from_slice(input);
         Ok(())

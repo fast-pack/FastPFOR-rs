@@ -37,6 +37,8 @@ macro_rules! implement_cpp_codecs {
             }
 
             impl AnyLenCodec for $name {
+                type Elem = u32;
+
                 fn encode(&mut self, input: &[u32], out: &mut Vec<u32>) -> FastPForResult<()> {
                     encode32_to_vec_ffi(&self.0, input, out)
                 }

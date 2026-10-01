@@ -4,3 +4,8 @@ codecov:
 coverage:
   status:
     patch: off
+
+# Test scaffolding. Integration tests include it via `#[path = "../src/test_utils.rs"]`,
+# which cargo-llvm-cov filters out as a `tests/` path, so its coverage is never accurate.
+ignore:
+  - "src/test_utils.rs"
