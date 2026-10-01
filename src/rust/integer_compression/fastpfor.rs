@@ -347,6 +347,7 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
             .checked_add(T::BITMAP_WORDS)
             .ok_or(FastPForError::NotEnoughData)?;
 
+        let mut exception_counts = [0usize; 65];
         for k in 2..=u32::from(T::WIDTH) {
             if bitmap & (T::one() << (k - 1) as usize) != T::zero() {
                 let size = input.get_val(inexcept)?;
@@ -357,6 +358,7 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
                 if size > self.page_size {
                     return Err(FastPForError::NotEnoughData);
                 }
+                exception_counts[k as usize] = size as usize;
                 // Ensure the buffer is large enough for `size` values, rounded up
                 // to the next group of 32 for the bitunpacking calls.
                 let rounded_up = size.next_multiple_of(32) as usize;
@@ -479,6 +481,9 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
                             return Err(FastPForError::OutputBufferTooSmall);
                         }
                         let ptr = self.data_pointers[index];
+                        if ptr >= exception_counts[index] {
+                            return Err(FastPForError::NotEnoughData);
+                        }
                         let except_value = self.exception_buffers[index].get_val(ptr)?;
                         output[out_idx] |= except_value << usize::from(bits);
                         self.data_pointers[index] += 1;
