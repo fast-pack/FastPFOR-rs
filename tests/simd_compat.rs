@@ -1,3 +1,5 @@
+//! Compatibility tests between the SIMD kernels and the scalar implementation.
+
 #![cfg(feature = "rust")]
 #![allow(missing_docs, clippy::unwrap_used)]
 
