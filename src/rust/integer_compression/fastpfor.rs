@@ -85,7 +85,7 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
     /// Returns an error if `page_size` is not a multiple of the block size.
     /// Use [`Default`] for the default page size.
     pub fn new(page_size: u32) -> FastPForResult<Self> {
-        if page_size % N as u32 != 0 {
+        if !page_size.is_multiple_of(N as u32) {
             return Err(FastPForError::InvalidPageSize {
                 page_size,
                 block_size: N as u32,
@@ -233,6 +233,10 @@ impl<const N: usize, T: FastPForInt> FastPFor<N, T> {
             if self.data_pointers[k] != 0 {
                 output[tmp_output_offset as usize] = self.data_pointers[k] as u32;
                 tmp_output_offset += 1;
+                // The last group of 32 is packed whole; zero its unused slots (as C++ does via
+                // `resize`) so stale values from earlier pages or calls don't leak into the output.
+                let used = self.data_pointers[k];
+                self.exception_buffers[k][used..used.next_multiple_of(32)].fill(T::zero());
                 let mut j = 0;
                 while j < self.data_pointers[k] {
                     T::fast_pack(
