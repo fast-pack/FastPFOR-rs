@@ -225,28 +225,6 @@ mod tests {
     }
 
     #[test]
-    fn encode_is_independent_of_prior_calls() {
-        let noisy: Vec<u32> = (0..512u32)
-            .map(|i| if i % 3 == 0 { 0xFFFF_FFF0 | i } else { 1 })
-            .collect();
-        let mut data = vec![1u32; 128];
-        data[5] = u32::MAX;
-        let fresh = block_compress::<FastPForBlock128>(&data).unwrap();
-
-        let mut codec = FastPForBlock128::default();
-        let (blocks, _) = crate::slice_to_blocks::<FastPForBlock128>(&noisy);
-        codec.encode_blocks(blocks, &mut Vec::new()).unwrap();
-        let noisy_enc = block_compress::<FastPForBlock128>(&noisy).unwrap();
-        codec
-            .decode_blocks(&noisy_enc, None, &mut Vec::new())
-            .unwrap();
-        let (blocks, _) = crate::slice_to_blocks::<FastPForBlock128>(&data);
-        let mut reused = Vec::new();
-        codec.encode_blocks(blocks, &mut reused).unwrap();
-        assert_eq!(reused, fresh);
-    }
-
-    #[test]
     fn decode_rejects_exceptions_from_prior_calls() {
         let mut data = vec![0u32; 128];
         data[45] = 1 << 20;
@@ -299,5 +277,27 @@ mod tests {
             matches!(result, Err(FastPForError::NotEnoughData)),
             "expected NotEnoughData, got {result:?}"
         );
+    }
+
+    #[test]
+    fn encode_is_independent_of_prior_calls() {
+        let noisy: Vec<u32> = (0..512u32)
+            .map(|i| if i % 3 == 0 { 0xFFFF_FFF0 | i } else { 1 })
+            .collect();
+        let mut data = vec![1u32; 128];
+        data[5] = u32::MAX;
+        let fresh = block_compress::<FastPForBlock128>(&data).unwrap();
+
+        let mut codec = FastPForBlock128::default();
+        let (blocks, _) = crate::slice_to_blocks::<FastPForBlock128>(&noisy);
+        codec.encode_blocks(blocks, &mut Vec::new()).unwrap();
+        let noisy_enc = block_compress::<FastPForBlock128>(&noisy).unwrap();
+        codec
+            .decode_blocks(&noisy_enc, None, &mut Vec::new())
+            .unwrap();
+        let (blocks, _) = crate::slice_to_blocks::<FastPForBlock128>(&data);
+        let mut reused = Vec::new();
+        codec.encode_blocks(blocks, &mut reused).unwrap();
+        assert_eq!(reused, fresh);
     }
 }
