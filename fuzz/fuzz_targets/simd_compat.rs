@@ -169,17 +169,17 @@ struct Pair<A, B> {
     simd: B,
 }
 
-fn check<T, S, V, BS, BV>(
-    mut any_len: Pair<S, V>,
-    mut blocks: Pair<BS, BV>,
+fn check<T, ScalarCodec, SimdCodec, ScalarBlocks, SimdBlocks>(
+    mut any_len: Pair<ScalarCodec, SimdCodec>,
+    mut blocks: Pair<ScalarBlocks, SimdBlocks>,
     block_size: usize,
     ops: &[Op<T>],
 ) where
     T: Elem,
-    S: AnyLenCodec<Elem = T>,
-    V: AnyLenCodec<Elem = T>,
-    BS: BlockCodec<Elem = T>,
-    BV: BlockCodec<Elem = T, Block = BS::Block>,
+    ScalarCodec: AnyLenCodec<Elem = T>,
+    SimdCodec: AnyLenCodec<Elem = T>,
+    ScalarBlocks: BlockCodec<Elem = T>,
+    SimdBlocks: BlockCodec<Elem = T, Block = ScalarBlocks::Block>,
 {
     for op in ops {
         match op {
@@ -194,7 +194,7 @@ fn check<T, S, V, BS, BV>(
             }
             Op::EncodeBlocks(data) => {
                 let data = materialize(data, block_size);
-                let (aligned, _) = slice_to_blocks::<BS>(&data);
+                let (aligned, _) = slice_to_blocks::<ScalarBlocks>(&data);
                 let mut scalar_enc = Vec::new();
                 blocks
                     .scalar
@@ -246,7 +246,7 @@ fn check<T, S, V, BS, BV>(
                 expected_len,
             } => {
                 let words = &words[..words.len().min(MAX_DECODE_WORDS)];
-                let max_len = BS::max_decompressed_len(words.len());
+                let max_len = ScalarBlocks::max_decompressed_len(words.len());
                 let expected_len = expected_len.filter(|&n| n as usize <= max_len);
                 assert_eq!(
                     decode_blocks(&mut blocks.simd, words, expected_len),

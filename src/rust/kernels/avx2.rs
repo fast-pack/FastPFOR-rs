@@ -12,7 +12,7 @@ use crate::FastPForResult;
 use crate::rust::integer_compression::fastpfor::FastPFor;
 use crate::rust::integer_compression::fastpfor_int::FastPForInt;
 use crate::rust::kernels::portable::{decode_page_scalar, encode_page_scalar};
-use crate::rust::kernels::{Simd, private};
+use crate::rust::kernels::{Simd, pack_narrowed, private, unpack_narrowed};
 
 /// Isolated so that [`Avx2::detect`] is the only way to construct the token, even within this file.
 mod token {
@@ -228,13 +228,10 @@ macro_rules! unpack64_body {
             .try_into()
             .expect("32-value subslice");
         if $bit <= 32 {
-            let mut narrow = [0u32; 32];
-            let narrow_out = &mut narrow[..];
-            let zero = 0;
-            unpack32_body!($src, $inpos, narrow_out, zero, $bit);
-            for (o, v) in out.iter_mut().zip(narrow) {
-                *o = u64::from(v);
-            }
+            unpack_narrowed(out, |narrow| {
+                let zero = 0;
+                unpack32_body!($src, $inpos, narrow, zero, $bit);
+            });
         } else {
             dispatch_width!($bit; 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63; |W| unpack64_group::<W>($src, $inpos, out);
                 64 => {
@@ -250,10 +247,10 @@ macro_rules! unpack64_body {
 macro_rules! pack64_body {
     ($src:ident, $inpos:ident, $out:ident, $outpos:ident, $bit:ident) => {{
         if $bit <= 32 {
-            let narrow: [u32; 32] = std::array::from_fn(|i| $src[$inpos + i] as u32);
-            let narrow_src = &narrow[..];
-            let zero = 0;
-            pack32_body!(narrow_src, zero, $out, $outpos, $bit);
+            pack_narrowed($src, $inpos, |narrow| {
+                let zero = 0;
+                pack32_body!(narrow, zero, $out, $outpos, $bit);
+            });
         } else {
             let out = &mut $out[$outpos..];
             dispatch_width!($bit; 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63; |W| pack64_group::<W>($src, $inpos, out);

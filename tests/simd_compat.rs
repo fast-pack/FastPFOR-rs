@@ -104,13 +104,13 @@ fn decode<C: AnyLenCodec>(codec: &mut C, data: &[u32]) -> Result<Vec<C::Elem>, S
         .map_err(|e| format!("{e:?}"))
 }
 
-fn assert_compatible<S, V, T>(data: &[T])
+fn assert_compatible<ScalarCodec, SimdCodec, T>(data: &[T])
 where
     T: Value,
-    S: AnyLenCodec<Elem = T>,
-    V: AnyLenCodec<Elem = T>,
+    ScalarCodec: AnyLenCodec<Elem = T>,
+    SimdCodec: AnyLenCodec<Elem = T>,
 {
-    let (mut scalar, mut simd) = (S::default(), V::default());
+    let (mut scalar, mut simd) = (ScalarCodec::default(), SimdCodec::default());
     let scalar_enc = encode(&mut scalar, data);
     let simd_enc = encode(&mut simd, data);
     assert_eq!(
@@ -124,20 +124,20 @@ where
     assert_eq!(decode(&mut simd, &simd_enc).unwrap(), data);
 }
 
-fn assert_block_compatible<S, V, T>(data: &[T])
+fn assert_block_compatible<ScalarCodec, SimdCodec, T>(data: &[T])
 where
     T: Value,
-    S: BlockCodec<Elem = T>,
-    V: BlockCodec<Elem = T, Block = S::Block>,
+    ScalarCodec: BlockCodec<Elem = T>,
+    SimdCodec: BlockCodec<Elem = T, Block = ScalarCodec::Block>,
 {
-    let (blocks, _) = slice_to_blocks::<S>(data);
-    let (mut scalar, mut simd) = (S::default(), V::default());
+    let (blocks, _) = slice_to_blocks::<ScalarCodec>(data);
+    let (mut scalar, mut simd) = (ScalarCodec::default(), SimdCodec::default());
     let mut scalar_enc = Vec::new();
     scalar.encode_blocks(blocks, &mut scalar_enc).unwrap();
     let mut simd_enc = Vec::new();
     simd.encode_blocks(blocks, &mut simd_enc).unwrap();
     assert_eq!(simd_enc, scalar_enc);
-    let n = Some(u32::try_from(blocks.len() * S::size()).unwrap());
+    let n = Some(u32::try_from(blocks.len() * ScalarCodec::size()).unwrap());
     let mut simd_dec = Vec::new();
     let simd_used = simd.decode_blocks(&scalar_enc, n, &mut simd_dec).unwrap();
     let mut scalar_dec = Vec::new();
@@ -147,14 +147,14 @@ where
     assert_eq!(&simd_dec[..], &data[..simd_dec.len()]);
 }
 
-fn assert_corruption_agrees<S, V, T>(data: &[T], seed: u64)
+fn assert_corruption_agrees<ScalarCodec, SimdCodec, T>(data: &[T], seed: u64)
 where
     T: Value,
-    S: AnyLenCodec<Elem = T>,
-    V: AnyLenCodec<Elem = T>,
+    ScalarCodec: AnyLenCodec<Elem = T>,
+    SimdCodec: AnyLenCodec<Elem = T>,
 {
     let mut rng = StdRng::seed_from_u64(seed);
-    let clean = encode(&mut S::default(), data);
+    let clean = encode(&mut ScalarCodec::default(), data);
     if clean.is_empty() {
         return;
     }
@@ -172,25 +172,25 @@ where
             }
         }
         assert_eq!(
-            decode(&mut V::default(), &bad),
-            decode(&mut S::default(), &bad)
+            decode(&mut SimdCodec::default(), &bad),
+            decode(&mut ScalarCodec::default(), &bad)
         );
     }
 }
 
-fn check_all<S, V, BS, BV, T>(block: usize)
+fn check_all<ScalarCodec, SimdCodec, ScalarBlocks, SimdBlocks, T>(block: usize)
 where
     T: Value,
-    S: AnyLenCodec<Elem = T>,
-    V: AnyLenCodec<Elem = T>,
-    BS: BlockCodec<Elem = T>,
-    BV: BlockCodec<Elem = T, Block = BS::Block>,
+    ScalarCodec: AnyLenCodec<Elem = T>,
+    SimdCodec: AnyLenCodec<Elem = T>,
+    ScalarBlocks: BlockCodec<Elem = T>,
+    SimdBlocks: BlockCodec<Elem = T, Block = ScalarBlocks::Block>,
 {
     for (i, data) in datasets::<T>(block).iter().enumerate() {
-        assert_compatible::<S, V, T>(data);
-        assert_block_compatible::<BS, BV, T>(data);
+        assert_compatible::<ScalarCodec, SimdCodec, T>(data);
+        assert_block_compatible::<ScalarBlocks, SimdBlocks, T>(data);
         if data.len() < 20_000 {
-            assert_corruption_agrees::<S, V, T>(data, i as u64);
+            assert_corruption_agrees::<ScalarCodec, SimdCodec, T>(data, i as u64);
         }
     }
 }

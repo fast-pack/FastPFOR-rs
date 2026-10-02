@@ -6,9 +6,9 @@ use wide::{i8x16, u32x4};
 use crate::FastPForResult;
 use crate::rust::integer_compression::fastpfor::FastPFor;
 use crate::rust::integer_compression::fastpfor_int::FastPForInt;
-use crate::rust::kernels::{Simd, private};
+use crate::rust::kernels::{Simd, pack_narrowed, private, unpack_narrowed};
 
-const ZERO: i8 = -1;
+const ZEROING_INDEX: i8 = -1;
 
 pub trait NeonInt: Sized {
     fn pack_neon(src: &[Self], inpos: usize, out: &mut [u32], outpos: usize, bit: u8);
@@ -30,8 +30,7 @@ impl NeonInt for u64 {
     #[inline]
     fn pack_neon(src: &[Self], inpos: usize, out: &mut [u32], outpos: usize, bit: u8) {
         if bit <= 32 {
-            let narrow: [u32; 32] = std::array::from_fn(|i| src[inpos + i] as u32);
-            pack32(&narrow, 0, out, outpos, bit);
+            pack_narrowed(src, inpos, |narrow| pack32(narrow, 0, out, outpos, bit));
         } else {
             <Self as FastPForInt>::fast_pack(src, inpos, out, outpos, bit);
         }
@@ -39,11 +38,9 @@ impl NeonInt for u64 {
     #[inline]
     fn unpack_neon(src: &[u32], inpos: usize, out: &mut [Self], outpos: usize, bit: u8) {
         if bit <= 32 {
-            let mut narrow = [0u32; 32];
-            unpack32(src, inpos, &mut narrow, 0, bit);
-            for (o, v) in out[outpos..outpos + 32].iter_mut().zip(narrow) {
-                *o = Self::from(v);
-            }
+            unpack_narrowed(&mut out[outpos..], |narrow| {
+                unpack32(src, inpos, narrow, 0, bit);
+            });
         } else {
             <Self as FastPForInt>::fast_unpack(src, inpos, out, outpos, bit);
         }
@@ -122,8 +119,8 @@ impl Unpack32Layout {
     const fn new(bit: u32) -> Self {
         let mut layout = Self {
             word_off: [0; 8],
-            lo: [[ZERO; 16]; 8],
-            hi: [[ZERO; 16]; 8],
+            lo: [[ZEROING_INDEX; 16]; 8],
+            hi: [[ZEROING_INDEX; 16]; 8],
             shift_lo: [[0; 4]; 8],
             shift_hi: [[0; 4]; 8],
         };
@@ -213,8 +210,8 @@ struct Pack32Layout {
 impl Pack32Layout {
     const fn new(bit: u32) -> Self {
         let empty = Pack32Term {
-            from0: [ZERO; 16],
-            from1: [ZERO; 16],
+            from0: [ZEROING_INDEX; 16],
+            from1: [ZEROING_INDEX; 16],
             shift: [0; 4],
         };
         let mut layout = Self {

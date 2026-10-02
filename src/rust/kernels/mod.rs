@@ -75,6 +75,36 @@ pub(crate) mod private {
     }
 }
 
+/// Packs 32 `u64` values of at most 32 bits each through a 32-bit `pack32` kernel.
+#[cfg(any(
+    target_arch = "x86_64",
+    all(target_arch = "aarch64", target_feature = "neon")
+))]
+#[expect(clippy::inline_always, reason = "kernel must inline into the page")]
+#[inline(always)]
+fn pack_narrowed(src: &[u64], inpos: usize, pack32: impl FnOnce(&[u32])) {
+    let mut narrow = [0u32; 32];
+    for (n, &v) in narrow.iter_mut().zip(&src[inpos..inpos + 32]) {
+        *n = v as u32;
+    }
+    pack32(&narrow);
+}
+
+/// Unpacks 32 values of at most 32 bits each through a 32-bit `unpack32` kernel into `out`.
+#[cfg(any(
+    target_arch = "x86_64",
+    all(target_arch = "aarch64", target_feature = "neon")
+))]
+#[expect(clippy::inline_always, reason = "kernel must inline into the page")]
+#[inline(always)]
+fn unpack_narrowed(out: &mut [u64], unpack32: impl FnOnce(&mut [u32])) {
+    let mut narrow = [0u32; 32];
+    unpack32(&mut narrow);
+    for (o, v) in out[..32].iter_mut().zip(narrow) {
+        *o = u64::from(v);
+    }
+}
+
 #[cfg(target_arch = "x86_64")]
 pub(crate) use avx2::Avx2Int as SimdInt;
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
