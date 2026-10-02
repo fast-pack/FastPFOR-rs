@@ -137,7 +137,7 @@ jobs:
     env:
       BASE_REF: ${{ github.base_ref }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Fetch base branch to detect newly added clones
         run: git fetch --no-tags --depth=1 origin "$BASE_REF"
       - uses: taiki-e/install-action@v2
