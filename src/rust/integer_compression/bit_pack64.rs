@@ -1,9 +1,11 @@
-//! Generic scalar bit-packing for 64-bit values.
+//! Scalar bit-packing for 64-bit values.
 //!
 //! Packs and unpacks groups of 32 values at any bit width `0..=64`.
 //! The layout is a little-endian bitstream, matching the hand-unrolled 32-bit kernels in [`bitpacking`](super::bit_pack32).
 //! Value `j` occupies bits `[j*bit, (j+1)*bit)` of the concatenated stream.
 //! Each call moves exactly `bit` `u32` words.
+//!
+//! Each width has its own fully unrolled kernel, so word offsets and shifts are compile-time constants.
 
 const fn low_mask(bit: u8) -> u64 {
     if bit >= 64 {
@@ -13,47 +15,102 @@ const fn low_mask(bit: u8) -> u64 {
     }
 }
 
+/// Expands `$body` with a `const $b: usize` set to `$bit`, for widths `1..=64`.
+macro_rules! dispatch_wide {
+    ($bit:expr, |$b:ident| $body:expr) => {
+        dispatch_wide!(@arms $bit, $b, $body;
+            1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16
+            17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32
+            33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48
+            49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64)
+    };
+    (@arms $bit:expr, $b:ident, $body:expr; $($n:literal)*) => {
+        match $bit {
+            $($n => {
+                const $b: usize = $n;
+                $body
+            })*
+            _ => panic!("Unsupported bit width"),
+        }
+    };
+}
+
+/// Expands `$body` 32 times with `const $j: usize` set to `0..32`, so indices fold to constants.
+macro_rules! for_each_value {
+    (|$j:ident| $body:block) => {
+        for_each_value!(@values $j $body;
+            0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
+            16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31)
+    };
+    (@values $j:ident $body:block; $($n:literal)*) => {
+        $({
+            const $j: usize = $n;
+            $body
+        })*
+    };
+}
+
 /// Packs 32 values from `input[inpos..]` into `output[outpos..]` at `bit` bits each.
 pub fn pack_wide(input: &[u64], inpos: usize, output: &mut [u32], outpos: usize, bit: u8) {
     if bit == 0 {
         return;
     }
-    let mask = u128::from(low_mask(bit));
-    let mut acc: u128 = 0;
-    let mut filled: u32 = 0;
-    let mut out = outpos;
-    for j in 0..32 {
-        acc |= (u128::from(input[inpos + j]) & mask) << filled;
-        filled += u32::from(bit);
-        while filled >= 32 {
-            output[out] = acc as u32;
-            out += 1;
-            acc >>= 32;
-            filled -= 32;
-        }
-    }
+    let input: &[u64; 32] = input[inpos..inpos + 32]
+        .try_into()
+        .expect("32-value subslice");
+    dispatch_wide!(bit, |B| pack_bits::<B>(
+        input,
+        &mut output[outpos..outpos + B]
+    ));
 }
 
 /// Unpacks 32 values from `input[inpos..]` into `output[outpos..]` at `bit` bits each.
 pub fn unpack_wide(input: &[u32], inpos: usize, output: &mut [u64], outpos: usize, bit: u8) {
+    let output: &mut [u64; 32] = (&mut output[outpos..outpos + 32])
+        .try_into()
+        .expect("32-value subslice");
     if bit == 0 {
-        output[outpos..outpos + 32].fill(0);
-        return;
+        output.fill(0);
+    } else {
+        dispatch_wide!(bit, |B| unpack_bits::<B>(&input[inpos..inpos + B], output));
     }
-    let mask = u128::from(low_mask(bit));
-    let mut acc: u128 = 0;
-    let mut avail: u32 = 0;
-    let mut inp = inpos;
-    for j in 0..32 {
-        while avail < u32::from(bit) {
-            acc |= u128::from(input[inp]) << avail;
-            inp += 1;
-            avail += 32;
+}
+
+/// Packs at `B` bits, `0 < B <= 64`: each value spans one to three output words.
+#[inline]
+fn pack_bits<const B: usize>(input: &[u64; 32], output: &mut [u32]) {
+    let mask = low_mask(B as u8);
+    let mut words = [0u32; B];
+    for_each_value!(|J| {
+        let v = input[J] & mask;
+        let (w, s) = (J * B / 32, J * B % 32);
+        words[w] |= (v << s) as u32;
+        if s + B > 32 {
+            words[w + 1] |= (v >> (32 - s)) as u32;
         }
-        output[outpos + j] = (acc & mask) as u64;
-        acc >>= u32::from(bit);
-        avail -= u32::from(bit);
-    }
+        if s + B > 64 {
+            words[w + 2] |= (v >> (64 - s)) as u32;
+        }
+    });
+    output.copy_from_slice(&words);
+}
+
+/// Unpacks at `B` bits, `0 < B <= 64`: each value spans one to three input words.
+#[inline]
+fn unpack_bits<const B: usize>(input: &[u32], output: &mut [u64; 32]) {
+    let input: &[u32; B] = input.try_into().expect("B-word subslice");
+    let mask = low_mask(B as u8);
+    for_each_value!(|J| {
+        let (w, s) = (J * B / 32, J * B % 32);
+        let mut v = u64::from(input[w]) >> s;
+        if s + B > 32 {
+            v |= u64::from(input[w + 1]) << (32 - s);
+        }
+        if s + B > 64 {
+            v |= u64::from(input[w + 2]) << (64 - s);
+        }
+        output[J] = v & mask;
+    });
 }
 
 #[cfg(test)]
