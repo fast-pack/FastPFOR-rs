@@ -16,8 +16,11 @@ jobs:
         run: gh pr review --approve "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
+          # A PAT or app token, because merges made with the default token do not trigger the push workflows (release-plz).
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
       - name: Enable auto-merge for Dependabot PRs
         if: steps.metadata.outputs.update-type == 'version-update:semver-patch'
         run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
