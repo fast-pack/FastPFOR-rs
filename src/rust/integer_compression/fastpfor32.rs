@@ -70,18 +70,17 @@ where
         if block_n_values % N as u32 != 0 {
             return Err(FastPForError::NotEnoughData);
         }
+        let max = Self::max_decompressed_len(input.len());
         if let Some(expected) = expected_len {
+            expected.is_valid_expected(max)?;
             if block_n_values != expected {
                 return Err(FastPForError::DecodedCountMismatch {
                     actual: block_n_values.as_usize(),
                     expected: expected.as_usize(),
                 });
             }
-        } else {
-            let max = Self::max_decompressed_len(input.len());
-            if block_n_values.as_usize() > max {
-                return Err(FastPForError::NotEnoughData);
-            }
+        } else if block_n_values.as_usize() > max {
+            return Err(FastPForError::NotEnoughData);
         }
         let n_blocks = block_n_values as usize / N;
         if n_blocks == 0 {
@@ -276,6 +275,21 @@ mod tests {
         assert!(
             matches!(result, Err(FastPForError::NotEnoughData)),
             "expected NotEnoughData, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn decode_blocks_expected_len_exceeds_max_len_errors() {
+        let input = vec![4_286_056_704u32, 27_590_491];
+        let max = FastPForBlock256::max_decompressed_len(input.len());
+        let result = block_decompress::<FastPForBlock256>(&input, Some(4_286_056_704));
+        assert!(
+            matches!(
+                result,
+                Err(FastPForError::ExpectedCountExceedsMax { expected: 4_286_056_704, max: m })
+                    if m == max
+            ),
+            "expected ExpectedCountExceedsMax, got {result:?}"
         );
     }
 
