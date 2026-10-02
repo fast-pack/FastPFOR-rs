@@ -138,9 +138,10 @@ jobs:
       BASE_REF: ${{ github.base_ref }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
       - name: Fetch base branch to detect newly added clones
         run: git fetch --no-tags --depth=1 origin "$BASE_REF"
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@4076c08d76dba979c11a7285295b0716c1d67908 # v2.87.15
         with: { tool: 'just,cargo-binstall' }
       - run: just ci-cpd "origin/$BASE_REF"
         env:
@@ -148,7 +149,7 @@ jobs:
       # Pull requests from forks get a read-only token, so they only get the job summary
       - if: github.event.pull_request.head.repo.full_name == github.repository
         name: Post summary as a PR comment
-        uses: marocchino/sticky-pull-request-comment@v3
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
         with:
           header: jscpd
           path: target/jscpd/summary.md
