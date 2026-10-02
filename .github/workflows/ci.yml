@@ -168,40 +168,42 @@ jobs:
       - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
         run: exit 1
 
-  # Release unpublished packages or create a PR with changes
-  release-plz:
-    name: Release-plz
-    needs: [ ci-passed ]
-    # Some dependencies of the `ci-passed` job might be skipped, but we still want to run if the `ci-passed` job succeeded.
-    if: |
-      always()
-      && needs.ci-passed.result == 'success'
-      && github.event_name == 'push'
-      && github.ref == 'refs/heads/main'
-      && github.repository_owner == 'fast-pack'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      id-token: write
-      pull-requests: write
-    concurrency:
-      group: release-plz-${{ github.ref }}
-      cancel-in-progress: false
-    steps:
-      # The full history is needed to compute versions and changelogs, and the `cpp` submodule is part of the published package.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { fetch-depth: 0, persist-credentials: false, submodules: recursive }
-      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
-        with: { toolchain: stable }
-      - name: Publish to crates.io if crate's version is newer
-        uses: release-plz/action@b8d6b54b02889ff2ae2bb82e8b57c3a8fc1683a5 # v0.5.139
-        id: release
-        with: { command: release }
-        env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
-      - if: ${{ steps.release.outputs.releases_created == 'false' }}
-        name: If version is the same, create a PR proposing new version and changelog for the next release
-        uses: release-plz/action@b8d6b54b02889ff2ae2bb82e8b57c3a8fc1683a5 # v0.5.139
-        with: { command: release-pr }
-        env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+# Automated release needs a token approved by fast-pack org admin
+#
+#  # Release unpublished packages or create a PR with changes
+#  release-plz:
+#    name: Release-plz
+#    needs: [ ci-passed ]
+#    # Some dependencies of the `ci-passed` job might be skipped, but we still want to run if the `ci-passed` job succeeded.
+#    if: |
+#      always()
+#      && needs.ci-passed.result == 'success'
+#      && github.event_name == 'push'
+#      && github.ref == 'refs/heads/main'
+#      && github.repository_owner == 'fast-pack'
+#    runs-on: ubuntu-latest
+#    permissions:
+#      contents: write
+#      id-token: write
+#      pull-requests: write
+#    concurrency:
+#      group: release-plz-${{ github.ref }}
+#      cancel-in-progress: false
+#    steps:
+#      # The full history is needed to compute versions and changelogs, and the `cpp` submodule is part of the published package.
+#      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+#        with: { fetch-depth: 0, persist-credentials: false, submodules: recursive }
+#      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+#        with: { toolchain: stable }
+#      - name: Publish to crates.io if crate's version is newer
+#        uses: release-plz/action@b8d6b54b02889ff2ae2bb82e8b57c3a8fc1683a5 # v0.5.139
+#        id: release
+#        with: { command: release }
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+#      - if: ${{ steps.release.outputs.releases_created == 'false' }}
+#        name: If version is the same, create a PR proposing new version and changelog for the next release
+#        uses: release-plz/action@b8d6b54b02889ff2ae2bb82e8b57c3a8fc1683a5 # v0.5.139
+#        with: { command: release-pr }
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}

@@ -37,7 +37,7 @@ impl<T, F: Fn(&[u32], usize, &mut [T], usize, u8) + Copy> UnpackFn<T> for F {}
 
 /// Fast Patched Frame-of-Reference ([FastPFOR](https://github.com/lemire/FastPFor)) codec.
 ///
-/// `N` is the block size (128 or 256 values per block) and `T` the element type
+/// `N` is the block size (128 or 256 values per block) and `T` the element type, defaulting to `u32`
 /// ([`u32`] or [`u64`]). `K` selects the bit-packing [`Kernels`]: [`Scalar`] (the default) or
 /// [`Simd`](crate::Simd). Both produce byte-identical output. This struct implements [`BlockCodec`](crate::BlockCodec)
 /// with `Block = [u32; N]` for the `u32` element type, giving compile-time guarantees that only
@@ -61,7 +61,7 @@ impl<T, F: Fn(&[u32], usize, &mut [T], usize, u8) + Copy> UnpackFn<T> for F {}
 /// codec.encode(&data, &mut out).unwrap();
 /// ```
 #[derive(Debug)]
-pub struct FastPFor<const N: usize, T: FastPForInt, K: Kernels = Scalar> {
+pub struct FastPFor<const N: usize, T: FastPForInt = u32, K: Kernels = Scalar> {
     /// Exception values indexed by bit width difference
     exception_buffers: T::ExceptionBuffers,
     /// Metadata buffer for encoding/decoding
