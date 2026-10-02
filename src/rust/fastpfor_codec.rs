@@ -9,12 +9,13 @@ use crate::rust::VariableByte;
 use crate::rust::composite::CompositeCodec;
 use crate::rust::integer_compression::fastpfor::{FastPFor, sealed};
 use crate::rust::integer_compression::fastpfor_int::FastPForInt;
-use crate::rust::kernels::{Kernels, Scalar, Simd};
+use crate::rust::kernels::{Interleaved, Kernels, Scalar, Simd};
 
 /// Any-length `FastPFOR` codec over `N`-value blocks of width `T` ([`u32`] or [`u64`]).
 ///
 /// A single [`CompositeCodec`] pairing the width-generic block engine with a [`VariableByte`] tail.
-/// `K` selects the bit-packing [`Kernels`]; all choices produce byte-identical output.
+/// `K` selects the bit-packing [`Kernels`]: [`Scalar`] and [`Simd`] produce byte-identical output in the standard
+/// layout, and `Interleaved`/`InterleavedScalar` produce it in the layout of C++ `SIMDFastPFor`.
 /// Instantiate through the [`FastPFor128`]/[`FastPForWide128`]/[`FastPForSimd128`] aliases.
 #[derive(Debug)]
 pub struct FastPForCodec<const N: usize, T: FastPForInt, K: Kernels = Scalar>
@@ -99,6 +100,22 @@ pub type FastPForSimdWide128 = FastPForCodec<128, u64, Simd>;
 
 /// [`FastPForWide256`] using [`Simd`] kernels; byte-compatible with it.
 pub type FastPForSimdWide256 = FastPForCodec<256, u64, Simd>;
+
+/// Any-length `u32` codec with 128-value blocks in the interleaved layout, byte-identical to
+/// the C++ `SIMDFastPFor<4>` plus variable-byte codec. **Not** compatible with [`FastPFor128`].
+pub type FastPForInterleaved128 = FastPForCodec<128, u32, Interleaved>;
+
+/// Any-length `u32` codec with 256-value blocks in the interleaved layout, byte-identical to
+/// the C++ `SIMDFastPFor<8>` plus variable-byte codec. **Not** compatible with [`FastPFor256`].
+pub type FastPForInterleaved256 = FastPForCodec<256, u32, Interleaved>;
+
+/// Any-length `u64` codec with 128-value blocks in the interleaved layout, defined by this crate
+/// (C++ has no 64-bit `SIMDFastPFor`). **Not** compatible with [`FastPForWide128`].
+pub type FastPForInterleavedWide128 = FastPForCodec<128, u64, Interleaved>;
+
+/// Any-length `u64` codec with 256-value blocks in the interleaved layout; see
+/// [`FastPForInterleavedWide128`]. **Not** compatible with [`FastPForWide256`].
+pub type FastPForInterleavedWide256 = FastPForCodec<256, u64, Interleaved>;
 
 #[cfg(test)]
 mod tests {

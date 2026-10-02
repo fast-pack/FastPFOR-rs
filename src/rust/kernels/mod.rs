@@ -7,11 +7,24 @@ use crate::rust::integer_compression::fastpfor_int::FastPForInt;
 
 #[cfg(target_arch = "x86_64")]
 mod avx2;
+mod lanes;
+#[cfg(any(
+    target_arch = "x86_64",
+    all(
+        target_arch = "aarch64",
+        target_feature = "neon",
+        target_endian = "little"
+    )
+))]
+mod lanes_wide;
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 mod neon;
 mod portable;
 
-/// Bit-packing kernels used by [`FastPFor`]: [`Scalar`] or [`Simd`]. Sealed.
+pub(crate) use lanes::LaneElem;
+
+/// Bit-packing kernels used by [`FastPFor`]: [`Scalar`] or [`Simd`] for the standard layout,
+/// [`InterleavedScalar`] or [`Interleaved`] for the interleaved layout. Sealed.
 pub trait Kernels: private::PageCodec + Debug + 'static {}
 
 /// Portable scalar kernels.
@@ -23,8 +36,27 @@ pub struct Scalar;
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Simd;
 
+/// Portable kernels for the interleaved layout of the C++ `SIMDFastPFor` codec.
+///
+/// Not byte-compatible with [`Scalar`] or [`Simd`]: the bit layout of blocks and exception arrays is
+/// different, as is the bit-width choice. For `u32` it is byte-identical to C++ `SIMDFastPFor`.
+/// For `u64`, which C++ lacks, it extends the same layout to two 64-bit lanes per 128-bit vector.
+/// See [`Interleaved`] for the same format with vector kernels.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct InterleavedScalar;
+
+/// Interleaved layout kernels, as [`InterleavedScalar`], using SIMD where the target has it:
+/// SSE2 on `x86_64` and NEON on `aarch64`, both always available there, so no runtime detection is needed;
+/// [`InterleavedScalar`]'s code elsewhere.
+///
+/// Byte-identical to [`InterleavedScalar`], and to C++ `SIMDFastPFor` for `u32`.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Interleaved;
+
 impl Kernels for Scalar {}
 impl Kernels for Simd {}
+impl Kernels for InterleavedScalar {}
+impl Kernels for Interleaved {}
 
 #[cfg(feature = "__testing")]
 thread_local! {
@@ -114,3 +146,50 @@ pub(crate) use neon::NeonInt as SimdInt;
     all(target_arch = "aarch64", target_feature = "neon")
 )))]
 pub(crate) use portable::fallback::SimdInt;
+
+/// [`Interleaved`] on targets with no vector kernels for it: the portable ones.
+#[cfg(not(any(
+    target_arch = "x86_64",
+    all(
+        target_arch = "aarch64",
+        target_feature = "neon",
+        target_endian = "little"
+    )
+)))]
+impl private::PageCodec for Interleaved {
+    fn encode_page<const N: usize, T: FastPForInt>(
+        codec: &mut FastPFor<N, T, Self>,
+        input: &[T],
+        this_size: u32,
+        input_offset: &mut Cursor<u32>,
+        output: &mut [u32],
+        output_offset: &mut Cursor<u32>,
+    ) {
+        lanes::encode_page_lanes::<N, T, Self, lanes::Portable>(
+            codec,
+            input,
+            this_size,
+            input_offset,
+            output,
+            output_offset,
+        );
+    }
+
+    fn decode_page<const N: usize, T: FastPForInt>(
+        codec: &mut FastPFor<N, T, Self>,
+        input: &[u32],
+        input_offset: &mut Cursor<u32>,
+        output: &mut [T],
+        output_offset: &mut Cursor<u32>,
+        this_size: u32,
+    ) -> FastPForResult<()> {
+        lanes::decode_page_lanes::<N, T, Self, lanes::Portable>(
+            codec,
+            input,
+            input_offset,
+            output,
+            output_offset,
+            this_size,
+        )
+    }
+}

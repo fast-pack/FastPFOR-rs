@@ -26,6 +26,12 @@ pub(crate) mod sealed {
 /// Overhead cost (in bits) for storing each exception's position in the block
 const OVERHEAD_OF_EACH_EXCEPT: u32 = 8;
 
+/// Values per group in the interleaved layout.
+const GROUP: usize = 128;
+
+/// Output words per packed bit for one interleaved group (`GROUP` values at `bit` bits).
+const GROUP_WORDS_PER_BIT: u32 = GROUP as u32 / 32;
+
 /// Default page size in number of integers.
 const DEFAULT_PAGE_SIZE: u32 = 65536;
 
@@ -174,6 +180,65 @@ impl<const N: usize, T: FastPForInt, K: Kernels> FastPFor<N, T, K> {
         output_offset: &mut Cursor<u32>,
         pack: impl PackFn<T>,
     ) {
+        self.encode_page_layout::<false>(
+            input,
+            this_size,
+            input_offset,
+            output,
+            output_offset,
+            pack,
+            pack,
+        );
+    }
+
+    /// Like [`encode_page_with`](Self::encode_page_with), but in the interleaved `SIMDFastPFor` layout:
+    /// blocks and the bulk of each exception array are packed 128 values at a time by `pack_group`,
+    /// and `pack` (32 values) only handles the tail of an exception array.
+    #[expect(
+        clippy::inline_always,
+        reason = "the kernel must inline into the page, including inside #[target_feature] callers"
+    )]
+    #[expect(clippy::too_many_arguments, reason = "the page state plus two kernels")]
+    #[inline(always)]
+    pub(crate) fn encode_page_interleaved_with(
+        &mut self,
+        input: &[T],
+        this_size: u32,
+        input_offset: &mut Cursor<u32>,
+        output: &mut [u32],
+        output_offset: &mut Cursor<u32>,
+        pack: impl PackFn<T>,
+        pack_group: impl PackFn<T>,
+    ) {
+        self.encode_page_layout::<true>(
+            input,
+            this_size,
+            input_offset,
+            output,
+            output_offset,
+            pack,
+            pack_group,
+        );
+    }
+
+    /// Shared page encoder. `INTERLEAVED` selects the layout: when `false`, `pack_group` is unused.
+    #[expect(
+        clippy::inline_always,
+        reason = "the kernel must inline into the page, including inside #[target_feature] callers"
+    )]
+    #[expect(clippy::too_many_arguments, reason = "the page state plus two kernels")]
+    #[expect(clippy::too_many_lines)]
+    #[inline(always)]
+    fn encode_page_layout<const INTERLEAVED: bool>(
+        &mut self,
+        input: &[T],
+        this_size: u32,
+        input_offset: &mut Cursor<u32>,
+        output: &mut [u32],
+        output_offset: &mut Cursor<u32>,
+        pack: impl PackFn<T>,
+        pack_group: impl PackFn<T>,
+    ) {
         let header_pos = output_offset.position() as usize;
         output_offset.increment();
         let mut tmp_output_offset = output_offset.position() as u32;
@@ -185,7 +250,7 @@ impl<const N: usize, T: FastPForInt, K: Kernels> FastPFor<N, T, K> {
         let mut tmp_input_offset = input_offset.position() as u32;
         let final_input_offset = tmp_input_offset + this_size - N as u32;
         while tmp_input_offset <= final_input_offset {
-            self.best_bit_from_data(input, tmp_input_offset);
+            self.best_bit_from_data::<INTERLEAVED>(input, tmp_input_offset);
             self.bytes_container.put_u8(self.optimal_bits);
             self.bytes_container.put_u8(self.exception_count);
             if self.exception_count > 0 {
@@ -209,15 +274,28 @@ impl<const N: usize, T: FastPForInt, K: Kernels> FastPFor<N, T, K> {
                     }
                 }
             }
-            for k in (0..N as u32).step_by(32) {
-                pack(
-                    input,
-                    (tmp_input_offset + k) as usize,
-                    output,
-                    tmp_output_offset as usize,
-                    self.optimal_bits,
-                );
-                tmp_output_offset += u32::from(self.optimal_bits);
+            if INTERLEAVED {
+                for k in (0..N as u32).step_by(GROUP) {
+                    pack_group(
+                        input,
+                        (tmp_input_offset + k) as usize,
+                        output,
+                        tmp_output_offset as usize,
+                        self.optimal_bits,
+                    );
+                    tmp_output_offset += GROUP_WORDS_PER_BIT * u32::from(self.optimal_bits);
+                }
+            } else {
+                for k in (0..N as u32).step_by(32) {
+                    pack(
+                        input,
+                        (tmp_input_offset + k) as usize,
+                        output,
+                        tmp_output_offset as usize,
+                        self.optimal_bits,
+                    );
+                    tmp_output_offset += u32::from(self.optimal_bits);
+                }
             }
             tmp_input_offset += N as u32;
         }
@@ -255,6 +333,19 @@ impl<const N: usize, T: FastPForInt, K: Kernels> FastPFor<N, T, K> {
                 let used = self.data_pointers[k];
                 self.exception_buffers[k][used..used.next_multiple_of(32)].fill(T::zero());
                 let mut j = 0;
+                if INTERLEAVED {
+                    while j + GROUP <= self.data_pointers[k] {
+                        pack_group(
+                            &self.exception_buffers[k],
+                            j,
+                            output,
+                            tmp_output_offset as usize,
+                            k as u8,
+                        );
+                        tmp_output_offset += GROUP_WORDS_PER_BIT * k as u32;
+                        j += GROUP;
+                    }
+                }
                 while j < self.data_pointers[k] {
                     pack(
                         &self.exception_buffers[k],
@@ -278,7 +369,11 @@ impl<const N: usize, T: FastPForInt, K: Kernels> FastPFor<N, T, K> {
     /// Computes optimal bit width minimizing total storage cost.
     ///
     /// Analyzes frequency distribution to balance regular value bits against exception overhead.
-    fn best_bit_from_data(&mut self, input: &[T], pos: u32) {
+    ///
+    /// The standard layout discounts exceptions that are a single bit wider than the packed width,
+    /// since they need no exception array. The interleaved layout (`INTERLEAVED`) does not,
+    /// matching the C++ `SIMDFastPFor` encoder.
+    fn best_bit_from_data<const INTERLEAVED: bool>(&mut self, input: &[T], pos: u32) {
         self.freqs.as_mut().fill(0);
         let k_end = min(pos + N as u32, input.len() as u32);
         for k in pos..k_end {
@@ -305,7 +400,7 @@ impl<const N: usize, T: FastPForInt, K: Kernels> FastPFor<N, T, K> {
                 + num_exceptions * diff
                 + u32::from(bits) * N as u32
                 + 8;
-            if diff == 1 {
+            if diff == 1 && !INTERLEAVED {
                 cost -= num_exceptions;
             }
             if cost < best_cost {
@@ -325,7 +420,6 @@ impl<const N: usize, T: FastPForInt, K: Kernels> FastPFor<N, T, K> {
     /// * `this_size` - Expected decompressed integer count
     /// * `input_offset` - Advanced by bytes read
     /// * `output_offset` - Advanced by `this_size`
-    #[expect(clippy::too_many_lines)]
     #[expect(
         clippy::inline_always,
         reason = "the kernel must inline into the page, including inside #[target_feature] callers"
@@ -339,6 +433,64 @@ impl<const N: usize, T: FastPForInt, K: Kernels> FastPFor<N, T, K> {
         output_offset: &mut Cursor<u32>,
         this_size: u32,
         unpack: impl UnpackFn<T>,
+    ) -> FastPForResult<()> {
+        self.decode_page_layout::<false>(
+            input,
+            input_offset,
+            output,
+            output_offset,
+            this_size,
+            unpack,
+            unpack,
+        )
+    }
+
+    /// Like [`decode_page_with`](Self::decode_page_with), but for the interleaved `SIMDFastPFor` layout.
+    /// See [`encode_page_interleaved_with`](Self::encode_page_interleaved_with).
+    #[expect(
+        clippy::inline_always,
+        reason = "the kernel must inline into the page, including inside #[target_feature] callers"
+    )]
+    #[expect(clippy::too_many_arguments, reason = "the page state plus two kernels")]
+    #[inline(always)]
+    pub(crate) fn decode_page_interleaved_with(
+        &mut self,
+        input: &[u32],
+        input_offset: &mut Cursor<u32>,
+        output: &mut [T],
+        output_offset: &mut Cursor<u32>,
+        this_size: u32,
+        unpack: impl UnpackFn<T>,
+        unpack_group: impl UnpackFn<T>,
+    ) -> FastPForResult<()> {
+        self.decode_page_layout::<true>(
+            input,
+            input_offset,
+            output,
+            output_offset,
+            this_size,
+            unpack,
+            unpack_group,
+        )
+    }
+
+    /// Shared page decoder. `INTERLEAVED` selects the layout: when `false`, `unpack_group` is unused.
+    #[expect(clippy::too_many_lines)]
+    #[expect(clippy::too_many_arguments, reason = "the page state plus two kernels")]
+    #[expect(
+        clippy::inline_always,
+        reason = "the kernel must inline into the page, including inside #[target_feature] callers"
+    )]
+    #[inline(always)]
+    fn decode_page_layout<const INTERLEAVED: bool>(
+        &mut self,
+        input: &[u32],
+        input_offset: &mut Cursor<u32>,
+        output: &mut [T],
+        output_offset: &mut Cursor<u32>,
+        this_size: u32,
+        unpack: impl UnpackFn<T>,
+        unpack_group: impl UnpackFn<T>,
     ) -> FastPForResult<()> {
         let n = u32::try_from(input.len())
             .map_err(|_| FastPForError::InvalidInputLength(input.len()))?;
@@ -393,6 +545,24 @@ impl<const N: usize, T: FastPForInt, K: Kernels> FastPFor<N, T, K> {
                     self.exception_buffers[k as usize].resize(rounded_up, T::zero());
                 }
                 let mut j: u32 = 0;
+                if INTERLEAVED {
+                    // Whole interleaved groups first, then the 32-value groups below handle the rest.
+                    while j.checked_add(GROUP as u32).is_some_and(|jg| jg <= size) {
+                        let words = GROUP_WORDS_PER_BIT * k; // safe: k <= 64
+                        if inexcept.checked_add(words).is_none_or(|ie| ie > n) {
+                            return Err(FastPForError::NotEnoughData);
+                        }
+                        unpack_group(
+                            input,
+                            inexcept as usize,
+                            &mut self.exception_buffers[k as usize],
+                            j as usize,
+                            k as u8,
+                        );
+                        inexcept += words; // safe: checked above
+                        j += GROUP as u32; // safe: loop guard checked j + GROUP <= size
+                    }
+                }
                 // Process full groups directly from input
                 while j.checked_add(32).is_some_and(|j32| j32 <= size)
                     && inexcept.checked_add(k).is_some_and(|ie| ie <= n)
@@ -455,23 +625,32 @@ impl<const N: usize, T: FastPForInt, K: Kernels> FastPFor<N, T, K> {
             byte_pos += 1;
             let num_exceptions = input_bytes.get_val(byte_pos)?;
             byte_pos += 1;
-            for k in (0..N as u32).step_by(32) {
+            let (group, words_per_group) = if INTERLEAVED {
+                (GROUP, GROUP_WORDS_PER_BIT * u32::from(bits))
+            } else {
+                (32, u32::from(bits))
+            };
+            for k in (0..N as u32).step_by(group) {
                 let in_start = tmp_input_offset as usize;
                 let out_start = (tmp_output_offset + k) as usize;
                 let in_end = in_start
-                    .checked_add(usize::from(bits))
+                    .checked_add(words_per_group as usize)
                     .ok_or(FastPForError::NotEnoughData)?;
                 if in_end > input.len() {
                     return Err(FastPForError::NotEnoughData);
                 }
                 let out_end = out_start
-                    .checked_add(32)
+                    .checked_add(group)
                     .ok_or(FastPForError::OutputBufferTooSmall)?;
                 if out_end > output.len() {
                     return Err(FastPForError::OutputBufferTooSmall);
                 }
-                unpack(input, in_start, output, out_start, bits);
-                tmp_input_offset += u32::from(bits);
+                if INTERLEAVED {
+                    unpack_group(input, in_start, output, out_start, bits);
+                } else {
+                    unpack(input, in_start, output, out_start, bits);
+                }
+                tmp_input_offset += words_per_group;
             }
             if num_exceptions > 0 {
                 let maxbits = input_bytes.get_val(byte_pos)?;

@@ -5,6 +5,8 @@
 //! Codec pairs (Rust vs C++) expected to produce identical compressed bytes:
 //! - FastPFor128 vs CppFastPFor128
 //! - FastPFor256 vs CppFastPFor256
+//! - FastPForInterleaved128 vs CppSimdFastPFor128 (the interleaved `SIMDFastPFor` layout)
+//! - FastPForInterleaved256 vs CppSimdFastPFor256
 //! - VariableByte vs CppVarInt
 //! - JustCopy vs CppCopy
 

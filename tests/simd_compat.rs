@@ -9,10 +9,14 @@ mod test_utils;
 use std::fmt::Debug;
 
 use fastpfor::{
-    AnyLenCodec, BlockCodec, FastPFor128, FastPFor256, FastPForBlock128, FastPForBlock256,
-    FastPForBlockWide128, FastPForBlockWide256, FastPForSimd128, FastPForSimd256,
-    FastPForSimdBlock128, FastPForSimdBlock256, FastPForSimdBlockWide128, FastPForSimdBlockWide256,
-    FastPForSimdWide128, FastPForSimdWide256, FastPForWide128, FastPForWide256, slice_to_blocks,
+    AnyLenCodec, BlockCodec, CompositeCodec, FastPFor, FastPFor128, FastPFor256, FastPForBlock128,
+    FastPForBlock256, FastPForBlockWide128, FastPForBlockWide256, FastPForInterleaved128,
+    FastPForInterleaved256, FastPForInterleavedBlock128, FastPForInterleavedBlock256,
+    FastPForInterleavedBlockWide128, FastPForInterleavedBlockWide256, FastPForInterleavedWide128,
+    FastPForInterleavedWide256, FastPForSimd128, FastPForSimd256, FastPForSimdBlock128,
+    FastPForSimdBlock256, FastPForSimdBlockWide128, FastPForSimdBlockWide256, FastPForSimdWide128,
+    FastPForSimdWide256, FastPForWide128, FastPForWide256, InterleavedScalar, VariableByte,
+    slice_to_blocks,
 };
 use rand::rngs::StdRng;
 use rand::{RngExt as _, SeedableRng as _};
@@ -225,6 +229,69 @@ fn simd_wide256_matches_scalar() {
         FastPForSimdBlockWide256,
         u64,
     >(256);
+}
+
+/// The portable kernels of the interleaved layout, to compare with the vector ones.
+type InterleavedPortable<const N: usize, T> =
+    CompositeCodec<FastPFor<N, T, InterleavedScalar>, VariableByte<T>>;
+
+#[test]
+fn interleaved128_matches_portable() {
+    check_all::<
+        InterleavedPortable<128, u32>,
+        FastPForInterleaved128,
+        FastPFor<128, u32, InterleavedScalar>,
+        FastPForInterleavedBlock128,
+        u32,
+    >(128);
+}
+
+#[test]
+fn interleaved256_matches_portable() {
+    check_all::<
+        InterleavedPortable<256, u32>,
+        FastPForInterleaved256,
+        FastPFor<256, u32, InterleavedScalar>,
+        FastPForInterleavedBlock256,
+        u32,
+    >(256);
+}
+
+#[test]
+fn interleaved_wide128_matches_portable() {
+    check_all::<
+        InterleavedPortable<128, u64>,
+        FastPForInterleavedWide128,
+        FastPFor<128, u64, InterleavedScalar>,
+        FastPForInterleavedBlockWide128,
+        u64,
+    >(128);
+}
+
+#[test]
+fn interleaved_wide256_matches_portable() {
+    check_all::<
+        InterleavedPortable<256, u64>,
+        FastPForInterleavedWide256,
+        FastPFor<256, u64, InterleavedScalar>,
+        FastPForInterleavedBlockWide256,
+        u64,
+    >(256);
+}
+
+/// Interleaved and standard layouts both round-trip, but write different bytes.
+#[test]
+fn interleaved_layout_differs_from_standard() {
+    let data = every_width::<u32>(128);
+    assert_ne!(
+        encode(&mut FastPForInterleaved128::default(), &data),
+        encode(&mut FastPFor128::default(), &data)
+    );
+    let data = every_width::<u64>(128);
+    assert_ne!(
+        encode(&mut FastPForInterleavedWide128::default(), &data),
+        encode(&mut FastPForWide128::default(), &data)
+    );
 }
 
 #[test]

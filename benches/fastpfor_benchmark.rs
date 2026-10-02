@@ -8,8 +8,10 @@ use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_m
 #[cfg(feature = "cpp")]
 use fastpfor::AnyLenCodec;
 use fastpfor::{
-    BlockCodec, FastPForBlock128, FastPForBlock256, FastPForBlockWide128, FastPForBlockWide256,
-    FastPForSimdBlock128, FastPForSimdBlock256, FastPForSimdBlockWide128, FastPForSimdBlockWide256,
+    BlockCodec, FastPFor, FastPForBlock128, FastPForBlock256, FastPForBlockWide128,
+    FastPForBlockWide256, FastPForInterleavedBlock128, FastPForInterleavedBlock256,
+    FastPForInterleavedBlockWide128, FastPForInterleavedBlockWide256, FastPForSimdBlock128,
+    FastPForSimdBlock256, FastPForSimdBlockWide128, FastPForSimdBlockWide256, InterleavedScalar,
     slice_to_blocks,
 };
 
@@ -344,12 +346,48 @@ fn benchmark_scalar_vs_simd(c: &mut Criterion) {
         let name = fix.name;
         bench_kernel::<FastPForBlock128>(c, "kernels/u32x128", name, "scalar", data);
         bench_kernel::<FastPForSimdBlock128>(c, "kernels/u32x128", name, "simd", data);
+        // The interleaved layout (C++ `SIMDFastPFor`): a different wire format, not a different speed of the same one.
+        bench_kernel::<FastPFor<128, u32, InterleavedScalar>>(
+            c,
+            "kernels/u32x128",
+            name,
+            "interleaved-portable",
+            data,
+        );
+        bench_kernel::<FastPForInterleavedBlock128>(
+            c,
+            "kernels/u32x128",
+            name,
+            "interleaved",
+            data,
+        );
         bench_kernel::<FastPForBlock256>(c, "kernels/u32x256", name, "scalar", data);
         bench_kernel::<FastPForSimdBlock256>(c, "kernels/u32x256", name, "simd", data);
+        bench_kernel::<FastPForInterleavedBlock256>(
+            c,
+            "kernels/u32x256",
+            name,
+            "interleaved",
+            data,
+        );
         bench_kernel::<FastPForBlockWide128>(c, "kernels/u64x128", name, "scalar", &wide);
         bench_kernel::<FastPForSimdBlockWide128>(c, "kernels/u64x128", name, "simd", &wide);
+        bench_kernel::<FastPForInterleavedBlockWide128>(
+            c,
+            "kernels/u64x128",
+            name,
+            "interleaved",
+            &wide,
+        );
         bench_kernel::<FastPForBlockWide256>(c, "kernels/u64x256", name, "scalar", &wide);
         bench_kernel::<FastPForSimdBlockWide256>(c, "kernels/u64x256", name, "simd", &wide);
+        bench_kernel::<FastPForInterleavedBlockWide256>(
+            c,
+            "kernels/u64x256",
+            name,
+            "interleaved",
+            &wide,
+        );
     }
 }
 

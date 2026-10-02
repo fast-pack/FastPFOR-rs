@@ -3,7 +3,10 @@
 #![allow(dead_code)]
 
 use fastpfor::cpp::*;
-use fastpfor::{AnyLenCodec, FastPFor128, FastPFor256, FastPForResult, JustCopy, VariableByte};
+use fastpfor::{
+    AnyLenCodec, FastPFor128, FastPFor256, FastPForInterleaved128, FastPForInterleaved256,
+    FastPForResult, JustCopy, VariableByte,
+};
 
 // ── Debug helper ─────────────────────────────────────────────────────────────
 
@@ -68,6 +71,8 @@ macro_rules! define_fuzz_any_len {
 define_fuzz_any_len!(
     FastPFor256(FastPFor256),
     FastPFor128(FastPFor128),
+    FastPForInterleaved256(FastPForInterleaved256),
+    FastPForInterleaved128(FastPForInterleaved128),
     VariableByte(VariableByte),
     JustCopy(JustCopy),
     CppBP32(CppBP32),
@@ -109,6 +114,16 @@ macro_rules! codec_ctor_fn {
 
 codec_ctor_fn!(make_rust_fastpfor256, FastPFor256, FastPFor256);
 codec_ctor_fn!(make_rust_fastpfor128, FastPFor128, FastPFor128);
+codec_ctor_fn!(
+    make_rust_interleaved256,
+    FastPForInterleaved256,
+    FastPForInterleaved256
+);
+codec_ctor_fn!(
+    make_rust_interleaved128,
+    FastPForInterleaved128,
+    FastPForInterleaved128
+);
 
 fn make_rust_variable_byte() -> FuzzAnyLen {
     FuzzAnyLen::VariableByte(VariableByte::new())
@@ -124,6 +139,8 @@ pub static RUST: &[CodecEntry] = &[
     ("FastPFor128", make_rust_fastpfor128),
     ("VariableByte", make_rust_variable_byte),
     ("JustCopy", make_rust_just_copy),
+    ("FastPForInterleaved256", make_rust_interleaved256),
+    ("FastPForInterleaved128", make_rust_interleaved128),
 ];
 
 codec_ctor_fn!(make_cpp_bp32, CppBP32, CppBP32);
@@ -260,6 +277,18 @@ fn pair_rust_fastpfor256() -> FuzzAnyLen {
 fn pair_cpp_fastpfor256() -> FuzzAnyLen {
     FuzzAnyLen::CppFastPFor256(CppFastPFor256::default())
 }
+fn pair_rust_interleaved128() -> FuzzAnyLen {
+    FuzzAnyLen::FastPForInterleaved128(FastPForInterleaved128::default())
+}
+fn pair_cpp_simdfastpfor128() -> FuzzAnyLen {
+    FuzzAnyLen::CppSimdFastPFor128(CppSimdFastPFor128::default())
+}
+fn pair_rust_interleaved256() -> FuzzAnyLen {
+    FuzzAnyLen::FastPForInterleaved256(FastPForInterleaved256::default())
+}
+fn pair_cpp_simdfastpfor256() -> FuzzAnyLen {
+    FuzzAnyLen::CppSimdFastPFor256(CppSimdFastPFor256::default())
+}
 fn pair_rust_variable_byte() -> FuzzAnyLen {
     FuzzAnyLen::VariableByte(VariableByte::new())
 }
@@ -284,6 +313,16 @@ pub static ENCODE_COMPARE_PAIRS: &[CodecPair] = &[
         name: "FastPFor256",
         make_rust: pair_rust_fastpfor256,
         make_cpp: pair_cpp_fastpfor256,
+    },
+    CodecPair {
+        name: "FastPForInterleaved128",
+        make_rust: pair_rust_interleaved128,
+        make_cpp: pair_cpp_simdfastpfor128,
+    },
+    CodecPair {
+        name: "FastPForInterleaved256",
+        make_rust: pair_rust_interleaved256,
+        make_cpp: pair_cpp_simdfastpfor256,
     },
     CodecPair {
         name: "VariableByte",

@@ -11,9 +11,10 @@
 A Rust implementation of [FastPFOR](https://github.com/fast-pack/FastPFor) integer compression
 ([Decoding billions of integers per second through vectorization, 2012](https://arxiv.org/abs/1209.2137)).
 
-* **Pure Rust, `u32` and `u64`:** `FastPFor` codecs with 128- or 256-value blocks for both integer widths.
-  Each has a portable scalar version and a `Simd` version (AVX2 on `x86_64`, selected at runtime; NEON on `aarch64`;
-  the scalar kernels everywhere else). The Rust **decoder** is about 29% faster than the C++ version.
+* **Pure Rust, `u32` and `u64`:** `FastPFor` codecs with 128- or 256-value blocks for both integer widths,
+  in the two wire formats of the C++ library: the standard one (`FastPFor*`) and the interleaved one of its
+  `SIMDFastPFor` (`FastPForInterleaved*`). Each has portable kernels and vector kernels: AVX2 (selected at runtime)
+  or SSE2 on `x86_64`, NEON on `aarch64`. The Rust **decoder** is about 29% faster than the C++ version.
   The Rust code is safe except for one `unsafe` call into the AVX2 kernels, made after runtime CPU feature detection;
   the crate has `#![deny(unsafe_code)]`, with the generated C++ FFI bridge as the only other exemption.
 * **Optional C++ wrappers:** the `cpp` feature wraps the original [C++ library](https://github.com/fast-pack/FastPFor),
@@ -21,20 +22,32 @@ A Rust implementation of [FastPFOR](https://github.com/fast-pack/FastPFor) integ
 
 ## Wire format
 
-The Rust `FastPFor` codecs, scalar **and** `Simd`, write byte-identical streams, and those streams are identical to
-the **non-SIMD** C++ `FastPFor` codec (`CppFastPFor128` / `CppFastPFor256`) for both `u32` and `u64`.
-`Simd` is a faster implementation of the same format, so encoders and decoders can be mixed freely.
-Tests and fuzzing check the scalar codecs byte-for-byte against the C++ library, and `Simd` against scalar, on x86_64 and aarch64.
+There are two formats. They are **not interchangeable**, and decoding one as the other is not detected:
+the output is silently wrong. Pick one per data set.
 
-The C++ **`SIMDFastPFor`** codec (`CppSimdFastPFor128` / `CppSimdFastPFor256`) uses a *different* format, and the Rust
-codecs do not support it:
+| Format | Rust codecs | Compatible with C++ | Kernels |
+|---|---|---|---|
+| **Standard** | `FastPFor128`, `FastPFor256`, `FastPForWide*` (`u64`), `FastPForBlock*`, and the `FastPForSimd*` variants | `CppFastPFor128` / `CppFastPFor256`, byte-identical, `u32` and `u64` | scalar; `Simd`: AVX2 (runtime-detected) or NEON |
+| **Interleaved** | `FastPForInterleaved128`, `FastPForInterleaved256`, `FastPForInterleavedWide*` (`u64`), `FastPForInterleavedBlock*` | `CppSimdFastPFor128` / `CppSimdFastPFor256`, byte-identical, `u32` only | portable; `Interleaved`: SSE2 or NEON, always available on those targets |
 
-* It packs values in an interleaved 4-lane layout over 128-value groups, which the exception arrays use as well,
-  instead of consecutive values; its bit-width choice also differs slightly.
-  It is not a padded variant of the standard format: its streams are about the same size.
-* It exists for `u32` only.
-* The two formats are not interchangeable. Decoding one as the other is not detected: the output is silently wrong.
-  Use the `cpp` wrappers if you need to read or write that format.
+The kernels of one format all write the same bytes: scalar and `Simd` for the standard format, portable and `Interleaved`
+for the interleaved one, so encoders and decoders can be mixed freely within a format.
+Tests and fuzzing check the Rust codecs byte-for-byte against the C++ library (the real `FastPFor` and `SIMDFastPFor`),
+and the vector kernels against the portable ones, on `x86_64` and `aarch64`.
+
+**How the interleaved format differs.** It is the layout of C++ `SIMDFastPFor`:
+
+* Blocks are packed 128 values at a time into four interleaved lanes: value `i` goes to lane `i % 4`, and each lane is
+  bit-packed on its own. The bulk of each exception array uses the same layout, with the remainder packed as in the
+  standard format. The standard format packs consecutive values into one continuous bitstream, 32 at a time.
+* The encoder's bit-width choice differs slightly (the standard one discounts exceptions that are one bit wider),
+  so sizes can differ by a word or two. Neither format pads each block.
+* C++ has no 64-bit `SIMDFastPFor`. The `u64` interleaved format is this crate's extension of the same layout to two
+  64-bit lanes per 128-bit vector, so for `u64` there is nothing in C++ to interoperate with.
+
+**Which to use.** Use the standard format to stay compatible with existing streams and with the C++ `FastPFor`.
+The interleaved format needs only baseline vector instructions, so it needs no runtime detection, and in local
+benchmarks its `u32` decoder was 10-25% faster than the AVX2 kernels of the standard format for narrow widths.
 
 ## Usage
 
@@ -129,8 +142,32 @@ FastPFor256::default().decode(&encoded, &mut decoded, None).unwrap();
 assert_eq!(decoded, input);
 ```
 
-Note that the C++ `CppSimdFastPFor*` codecs use a different, interleaved bit layout and are **not**
-compatible with either the Rust codecs or the C++ `CppFastPFor*` codecs.
+The `FastPForSimd*` codecs use the standard format. The C++ `CppSimdFastPFor*` codecs use the interleaved one:
+use `FastPForInterleaved*` for those, see [Wire format](#wire-format).
+
+### Interleaved format (C++ `SIMDFastPFor` compatible)
+
+`FastPForInterleaved128` / `FastPForInterleaved256` (`u32`) and `FastPForInterleavedWide128` / `FastPForInterleavedWide256`
+(`u64`) are used like the other codecs, but write the interleaved format, see [Wire format](#wire-format).
+Their `u32` output is byte-identical to the C++ `CppSimdFastPFor128` / `CppSimdFastPFor256`.
+
+```rust
+use fastpfor::{AnyLenCodec, FastPFor256, FastPForInterleaved256};
+
+let input: Vec<u32> = (0..1000).collect();
+
+let mut encoded = Vec::new();
+FastPForInterleaved256::default().encode(&input, &mut encoded).unwrap();
+
+let mut decoded = Vec::new();
+FastPForInterleaved256::default().decode(&encoded, &mut decoded, None).unwrap();
+assert_eq!(decoded, input);
+
+// A different format: the standard codec writes other bytes for the same input.
+let mut standard = Vec::new();
+FastPFor256::default().encode(&input, &mut standard).unwrap();
+assert_ne!(encoded, standard);
+```
 
 ### C++ Wrapper (`cpp` feature)
 
@@ -177,6 +214,7 @@ Rust block codecs require block-aligned input. `CompositeCodec` chains a block c
 | `FastPForBlock256` | `FastPFor` with 256-element `u32` blocks; block-aligned input only |
 | `FastPForBlock128` | `FastPFor` with 128-element `u32` blocks; block-aligned input only |
 | `FastPForSimd*`    | Same as the codec without `Simd`, using SIMD kernels; byte-identical output |
+| `FastPForInterleaved*` | Interleaved format of C++ `SIMDFastPFor` (`u32`, byte-identical) and its `u64` extension; **not** compatible with the codecs above |
 
 ### C++ (`cpp` feature)
 
