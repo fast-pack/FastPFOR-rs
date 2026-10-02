@@ -75,7 +75,7 @@ pub(crate) mod private {
     }
 }
 
-/// Packs 32 `u64` values of at most 32 bits each through a 32-bit `pack32` kernel.
+/// Narrows 32 `u64` values to their low 32 bits and passes them to a 32-bit `pack32` kernel.
 #[cfg(any(
     target_arch = "x86_64",
     all(target_arch = "aarch64", target_feature = "neon")
