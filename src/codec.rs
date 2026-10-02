@@ -70,13 +70,15 @@ pub trait BlockCodec: Default {
     /// [`CompositeCodec`](crate::CompositeCodec)) can locate the tail without parsing the block format.
     ///
     /// When `expected_len` is `Some(n)`:
+    /// - Rejects if `n` exceeds [`max_decompressed_len`](BlockCodec::max_decompressed_len)(`input.len()`)
     /// - Validates that the header value equals `n` (must be a multiple of
     ///   [`size`](BlockCodec::size)).
     ///
     /// When `expected_len` is `None`:
     /// - Validates the header value against
     ///   [`max_decompressed_len`](BlockCodec::max_decompressed_len)(`input.len()`)
-    ///   to avoid allocation from malicious or corrupted data.
+    ///
+    /// Either way, malicious or corrupted data cannot trigger a large allocation.
     fn decode_blocks(
         &mut self,
         input: &[u32],
