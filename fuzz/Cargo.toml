@@ -68,3 +68,9 @@ name = "fastpfor_u64"
 path = "fuzz_targets/fastpfor_u64.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "simd_compat"
+path = "fuzz_targets/simd_compat.rs"
+test = false
+doc = false

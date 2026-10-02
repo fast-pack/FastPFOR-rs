@@ -56,6 +56,18 @@ fn build_fastpfor() {
     });
     println!("cargo:rerun-if-env-changed=FASTPFOR_SIMD_MODE");
 
+    // The C++ CMake build adds `-msse4.2` in portable mode unconditionally,
+    // which non-x86 compilers reject. Fall back to native there.
+    let is_x86 = env::var("CARGO_CFG_TARGET_ARCH").is_ok_and(|arch| arch.starts_with("x86"));
+    let simd_mode = if !is_x86 && simd_mode == "portable" {
+        println!(
+            "cargo::warning=FASTPFOR_SIMD_MODE=portable is x86-only in the C++ library; using native."
+        );
+        "native"
+    } else {
+        simd_mode
+    };
+
     let cmake_out = cmake::Config::new("cpp")
         .define("FASTPFOR_WITH_TEST", "OFF")
         .define("FASTPFOR_SIMD_MODE", simd_mode)
@@ -65,8 +77,8 @@ fn build_fastpfor() {
 
     // Compile the bridge
     println!("cargo:rerun-if-changed=src/cpp/fastpfor_bridge.h");
-    println!("cargo:rerun-if-changed=src/cpp/mod.rs");
-    let mut bridge = cxx_build::bridge("src/cpp/mod.rs");
+    println!("cargo:rerun-if-changed=src/cpp/ffi.rs");
+    let mut bridge = cxx_build::bridge("src/cpp/ffi.rs");
     bridge
         .include("cpp/headers")
         .include("src/cpp")

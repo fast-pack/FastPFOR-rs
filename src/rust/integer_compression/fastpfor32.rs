@@ -5,6 +5,7 @@ use bytemuck::cast_slice;
 use crate::helpers::AsUsize;
 use crate::rust::integer_compression::fastpfor::sealed;
 use crate::rust::integer_compression::fastpfor_int::FastPForInt;
+use crate::rust::kernels::{Kernels, Simd};
 use crate::{BlockCodec, FastPFor, FastPForError, FastPForResult};
 
 /// Type alias for [`FastPFor`] with 128-element `u32` blocks.
@@ -13,7 +14,13 @@ pub type FastPForBlock128 = FastPFor<128, u32>;
 /// Type alias for [`FastPFor`] with 256-element `u32` blocks.
 pub type FastPForBlock256 = FastPFor<256, u32>;
 
-impl<const N: usize, T: FastPForInt> BlockCodec for FastPFor<N, T>
+/// [`FastPForBlock128`] using [`Simd`] kernels; byte-compatible with it.
+pub type FastPForSimdBlock128 = FastPFor<128, u32, Simd>;
+
+/// [`FastPForBlock256`] using [`Simd`] kernels; byte-compatible with it.
+pub type FastPForSimdBlock256 = FastPFor<256, u32, Simd>;
+
+impl<const N: usize, T: FastPForInt, K: Kernels> BlockCodec for FastPFor<N, T, K>
 where
     [T; N]: sealed::BlockSize,
 {

@@ -7,7 +7,11 @@ use std::hint::black_box;
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 #[cfg(feature = "cpp")]
 use fastpfor::AnyLenCodec;
-use fastpfor::{BlockCodec as _, FastPForBlock128, FastPForBlock256, slice_to_blocks};
+use fastpfor::{
+    BlockCodec, FastPForBlock128, FastPForBlock256, FastPForBlockWide128, FastPForBlockWide256,
+    FastPForSimdBlock128, FastPForSimdBlock256, FastPForSimdBlockWide128, FastPForSimdBlockWide256,
+    slice_to_blocks,
+};
 
 // Shared helpers live in `src/bench_utils.rs` (library exposes the same file only under `cfg(test)`).
 #[path = "../src/test_utils.rs"]
@@ -288,6 +292,67 @@ fn benchmark_cpp_vs_rust(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_kernel<C: BlockCodec>(
+    c: &mut Criterion,
+    group_name: &str,
+    name: &str,
+    kernel: &str,
+    data: &[C::Elem],
+) {
+    let (blocks, _) = slice_to_blocks::<C>(data);
+    let n_values = blocks.len() * C::size();
+    let expected = Some(u32::try_from(n_values).expect("value count fits in u32"));
+    let mut codec = C::default();
+    let mut compressed = Vec::new();
+    codec.encode_blocks(blocks, &mut compressed).unwrap();
+
+    let mut group = c.benchmark_group(format!("{group_name}/encode"));
+    group.throughput(Throughput::Elements(n_values as u64));
+    group.bench_function(BenchmarkId::new(name, kernel), |b| {
+        let mut out = Vec::new();
+        b.iter(|| {
+            out.clear();
+            codec.encode_blocks(black_box(blocks), &mut out).unwrap();
+            black_box(out.len())
+        });
+    });
+    group.finish();
+
+    let mut group = c.benchmark_group(format!("{group_name}/decode"));
+    group.throughput(Throughput::Elements(n_values as u64));
+    group.bench_function(BenchmarkId::new(name, kernel), |b| {
+        let mut out = Vec::new();
+        b.iter(|| {
+            out.clear();
+            codec
+                .decode_blocks(black_box(&compressed), expected, &mut out)
+                .unwrap();
+            black_box(out.len())
+        });
+    });
+    group.finish();
+}
+
+fn benchmark_scalar_vs_simd(c: &mut Criterion) {
+    let bc = *BLOCK_COUNTS.last().unwrap();
+    for (_, fix) in compress_fixtures::<FastPForBlock256>(&[bc]) {
+        let data = &fix.original;
+        let wide: Vec<u64> = data
+            .iter()
+            .map(|&v| u64::from(v) << 24 | u64::from(v))
+            .collect();
+        let name = fix.name;
+        bench_kernel::<FastPForBlock128>(c, "kernels/u32x128", name, "scalar", data);
+        bench_kernel::<FastPForSimdBlock128>(c, "kernels/u32x128", name, "simd", data);
+        bench_kernel::<FastPForBlock256>(c, "kernels/u32x256", name, "scalar", data);
+        bench_kernel::<FastPForSimdBlock256>(c, "kernels/u32x256", name, "simd", data);
+        bench_kernel::<FastPForBlockWide128>(c, "kernels/u64x128", name, "scalar", &wide);
+        bench_kernel::<FastPForSimdBlockWide128>(c, "kernels/u64x128", name, "simd", &wide);
+        bench_kernel::<FastPForBlockWide256>(c, "kernels/u64x256", name, "scalar", &wide);
+        bench_kernel::<FastPForSimdBlockWide256>(c, "kernels/u64x256", name, "simd", &wide);
+    }
+}
+
 criterion_group!(
     benches,
     benchmark_compression,
@@ -295,6 +360,7 @@ criterion_group!(
     benchmark_roundtrip,
     benchmark_block_sizes,
     benchmark_compression_ratio,
+    benchmark_scalar_vs_simd,
 );
 
 #[cfg(feature = "cpp")]

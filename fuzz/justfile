@@ -5,7 +5,7 @@
 
 # How to call the current just executable. Note that just_executable() may have `\` in Windows paths, so we need to quote it.
 just := quote(just_executable())
-fuzz_target := "x86_64-unknown-linux-gnu"
+fuzz_target := if os() == "macos" { arch() + "-apple-darwin" } else { arch() + "-unknown-linux-gnu" }
 
 # List available fuzz targets
 list:
@@ -48,6 +48,9 @@ compare-fastpfor-128 *args: (run 'compare_fastpfor_128' args)
 
 # Run encode_compare (Rust vs C++ bit-identical encode)
 full-compare *args: (run 'encode_compare' args)
+
+# Run simd_compat (SIMD vs scalar byte-compatibility, both directions)
+simd-compat *args: (run 'simd_compat' args)
 
 # Run a single pass of every fuzz target (CI smoke test; stops after 1 iteration each).
 ci-test:

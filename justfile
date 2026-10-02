@@ -31,10 +31,35 @@ build:
 
 # Quick compile without building a binary
 check:
-    cargo check --workspace --all-targets --features _all_compatible
+    cargo check --workspace --all-targets --features _all_compatible,__testing
     cargo check --workspace --all-targets --no-default-features --features cpp
     cargo check --workspace --all-targets --no-default-features --features rust
     cargo check --workspace --all-targets --manifest-path fuzz/Cargo.toml
+
+# Run `check` for every SIMD platform: x86_64 without and with AVX2, aarch64 with and without NEON.
+# Non-native architectures only check the library: the `cpp` feature and dev-dependencies need a C cross-compiler.
+# Install their std with `rustup target add <triple>`, e.g. `aarch64-unknown-linux-gnu`.
+check-platforms:
+    {{just}} _check-platform x86_64 no-avx2 '-C target-feature=-avx2'
+    {{just}} _check-platform x86_64 avx2 '-C target-feature=+avx2'
+    {{just}} _check-platform aarch64 neon '-C target-feature=+neon'
+    # rustc warns that disabling NEON changes the aarch64 float ABI; that is expected here.
+    {{just}} _check-platform aarch64 no-neon '-C target-feature=-neon'
+
+# Check one platform. An explicit target keeps RUSTFLAGS away from build scripts, and a separate target dir keeps caches apart.
+_check-platform arch name rustflags:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    triple='{{arch}}-{{if os() == "macos" { "apple-darwin" } else { "unknown-linux-gnu" } }}'
+    export RUSTFLAGS={{quote(rustflags)}}
+    export CARGO_BUILD_TARGET="$triple"
+    export CARGO_TARGET_DIR='target/check-{{name}}'
+    echo "::: Checking $triple with RUSTFLAGS='$RUSTFLAGS'"
+    if [ '{{arch}}' = '{{arch()}}' ]; then
+        {{just}} check
+    else
+        cargo check --workspace --lib --no-default-features --features rust,__testing
+    fi
 
 # Generate LCOV coverage report for CI to upload to codecov.io
 ci-coverage: env-info && \
@@ -63,7 +88,7 @@ clean:
 
 # Run cargo clippy to lint the code
 clippy *args:
-    cargo clippy --workspace --all-targets --features _all_compatible {{args}}
+    cargo clippy --workspace --all-targets --features _all_compatible,__testing {{args}}
     cargo clippy --workspace --all-targets --manifest-path fuzz/Cargo.toml {{args}}
 
 # Generate and open the HTML coverage report
@@ -72,7 +97,7 @@ coverage:  (_coverage '--open')
 # Clean, collect, and aggregate coverage using the requested report arguments
 _coverage *report_args:  (cargo-install 'cargo-llvm-cov')
     cargo llvm-cov clean --workspace
-    cargo llvm-cov --no-report --workspace --all-targets --features _all_compatible
+    cargo llvm-cov --no-report --workspace --all-targets --features _all_compatible,__testing
     cargo llvm-cov report --include-build-script {{report_args}}
 
 # Build and open code documentation
@@ -142,8 +167,8 @@ semver *args:  (cargo-install 'cargo-semver-checks')
 
 # Run all tests
 test:
-    cargo test --workspace --all-targets --features _all_compatible
-    cargo test --doc --workspace --features _all_compatible
+    cargo test --workspace --all-targets --features _all_compatible,__testing
+    cargo test --doc --workspace --features _all_compatible,__testing
 
 # Test with a specific SIMD mode (portable, native)
 test-simd mode='portable':
