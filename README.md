@@ -8,11 +8,33 @@
 [![CI build status](https://github.com/fast-pack/FastPFOR-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/fast-pack/FastPFOR-rs/actions)
 [![Codecov](https://img.shields.io/codecov/c/github/fast-pack/FastPFOR-rs)](https://app.codecov.io/gh/fast-pack/FastPFOR-rs)
 
-Fast integer compression for Rust — both a pure-Rust implementation and a wrapper around the [C++ FastPFor library](https://github.com/fast-pack/FastPFor).
-Supports 32-bit (and for some codecs 64-bit) integers.
-Based on the [Decoding billions of integers per second through vectorization, 2012](https://arxiv.org/abs/1209.2137) paper.
+A Rust implementation of [FastPFOR](https://github.com/fast-pack/FastPFor) integer compression
+([Decoding billions of integers per second through vectorization, 2012](https://arxiv.org/abs/1209.2137)).
 
-The Rust **decoder** is about 29% faster than the C++ version. The Rust implementation is safe code: its only `unsafe` is the call into the AVX2 kernels of the opt-in `Simd` codecs, made after runtime CPU feature detection. The crate has `#![deny(unsafe_code)]`; the only other exemption is the generated FFI bridge of the optional `cpp` feature.
+* **Pure Rust, `u32` and `u64`:** `FastPFor` codecs with 128- or 256-value blocks for both integer widths.
+  Each has a portable scalar version and a `Simd` version (AVX2 on `x86_64`, selected at runtime; NEON on `aarch64`;
+  the scalar kernels everywhere else). The Rust **decoder** is about 29% faster than the C++ version.
+  The Rust code is safe except for one `unsafe` call into the AVX2 kernels, made after runtime CPU feature detection;
+  the crate has `#![deny(unsafe_code)]`, with the generated C++ FFI bridge as the only other exemption.
+* **Optional C++ wrappers:** the `cpp` feature wraps the original [C++ library](https://github.com/fast-pack/FastPFor),
+  including its other codecs.
+
+## Wire format
+
+The Rust `FastPFor` codecs, scalar **and** `Simd`, write byte-identical streams, and those streams are identical to
+the **non-SIMD** C++ `FastPFor` codec (`CppFastPFor128` / `CppFastPFor256`) for both `u32` and `u64`.
+`Simd` is a faster implementation of the same format, so encoders and decoders can be mixed freely.
+Tests and fuzzing check the scalar codecs byte-for-byte against the C++ library, and `Simd` against scalar, on x86_64 and aarch64.
+
+The C++ **`SIMDFastPFor`** codec (`CppSimdFastPFor128` / `CppSimdFastPFor256`) uses a *different* format, and the Rust
+codecs do not support it:
+
+* It packs values in an interleaved 4-lane layout over 128-value groups, which the exception arrays use as well,
+  instead of consecutive values; its bit-width choice also differs slightly.
+  It is not a padded variant of the standard format: its streams are about the same size.
+* It exists for `u32` only.
+* The two formats are not interchangeable. Decoding one as the other is not detected: the output is silently wrong.
+  Use the `cpp` wrappers if you need to read or write that format.
 
 ## Usage
 
