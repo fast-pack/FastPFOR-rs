@@ -44,3 +44,7 @@ cpp-vs-rust-encode mode='portable':
 # Benchmark C++ vs Rust decoding speed only
 cpp-vs-rust-decode mode='portable':
     cargo bench --bench fastpfor_benchmark --features rust,cpp_{{mode}} -- "cpp_vs_rust/decode"
+
+# Benchmark scalar vs SIMD kernels (byte-identical output)
+kernels *args:
+    cargo bench --bench fastpfor_benchmark --features rust -- kernels/ {{args}}

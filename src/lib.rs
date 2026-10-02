@@ -1,4 +1,7 @@
-#![cfg_attr(not(feature = "cpp"), forbid(unsafe_code))]
+#![deny(
+    unsafe_code,
+    reason = "x86 SIMD dispatch and C++ interop must allow, so can't use forbid here"
+)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc = include_str!("../README.md")]
 
@@ -14,7 +17,10 @@ pub use error::{FastPForError, FastPForResult};
 pub mod cpp;
 
 #[cfg(feature = "rust")]
-#[forbid(unsafe_code, reason = "Rust code must always be safe")]
+#[deny(
+    unsafe_code,
+    reason = "Rust code must be safe; the only exception is calling SIMD kernels after runtime CPU feature detection"
+)]
 pub(crate) mod rust;
 
 mod codec;
@@ -29,9 +35,18 @@ pub use bytemuck::Pod;
 #[cfg(feature = "rust")]
 pub use rust::{
     CompositeCodec, FastPFor, FastPFor128, FastPFor256, FastPForBlock128, FastPForBlock256,
-    FastPForBlockWide128, FastPForBlockWide256, FastPForWide128, FastPForWide256, JustCopy,
-    VariableByte,
+    FastPForBlockWide128, FastPForBlockWide256, FastPForSimd128, FastPForSimd256,
+    FastPForSimdBlock128, FastPForSimdBlock256, FastPForSimdBlockWide128, FastPForSimdBlockWide256,
+    FastPForSimdWide128, FastPForSimdWide256, FastPForWide128, FastPForWide256, JustCopy, Kernels,
+    Scalar, Simd, VariableByte,
 };
+
+#[cfg(feature = "__testing")]
+#[doc(hidden)]
+/// Test-only hooks. Not part of the public API.
+pub mod __testing {
+    pub use crate::rust::with_simd_fallback;
+}
 
 // `src/test_utils.rs` uses `fastpfor::...`; alias this crate for unit tests only.
 #[cfg(test)]
