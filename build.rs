@@ -6,6 +6,13 @@ fn build_fastpfor() {
     use std::env;
     use std::path::Path;
 
+    // docs.rs builds with all features but has no network, while the C++ build downloads dependencies
+    // through CMake. Documentation is only generated, never linked, so the C++ build can be skipped.
+    println!("cargo:rerun-if-env-changed=DOCS_RS");
+    if env::var_os("DOCS_RS").is_some() {
+        return;
+    }
+
     assert!(
         Path::new("cpp/CMakeLists.txt").exists(),
         "FastPFOR submodule not initialized. Run `git submodule update --init`."
