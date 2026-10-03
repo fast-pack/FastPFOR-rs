@@ -100,12 +100,12 @@ pub trait BlockCodec: Default {
 
 /// Codec that supports compressing 64-bit integers into a 32-bit word stream.
 ///
-/// Implemented by the pure-Rust [`FastPForWide128`](crate::FastPForWide128) and
-/// [`FastPForWide256`](crate::FastPForWide256) codecs.
+/// Implemented by the pure-Rust [`FastPForSequential64x128`](crate::FastPForSequential64x128) and
+/// [`FastPForSequential64x256`](crate::FastPForSequential64x256) codecs.
 /// With the `cpp` feature, `CppFastPFor128`, `CppFastPFor256`, and `CppVarInt` also implement it.
 ///
 /// This is a shared interface for cross-codec comparison; for native Rust use,
-/// [`FastPForWide128`](crate::FastPForWide128) also implements [`AnyLenCodec`] with `Elem = u64`.
+/// [`FastPForSequential64x128`](crate::FastPForSequential64x128) also implements [`AnyLenCodec`] with `Elem = u64`.
 /// Import `BlockCodec64` only when writing generic code over several 64-bit codecs.
 pub trait BlockCodec64 {
     /// Compress 64-bit integers into a 32-bit word stream.
@@ -168,9 +168,9 @@ pub trait AnyLenCodec: Default {
 /// # Example
 ///
 /// ```
-/// # use fastpfor::{slice_to_blocks, FastPForBlock256};
+/// # use fastpfor::{FastPForBlock, Sequential, slice_to_blocks};
 /// let data: Vec<u32> = (0..600).collect(); // 2 × 256 + 88 remainder
-/// let (blocks, remainder) = slice_to_blocks::<FastPForBlock256>(&data);
+/// let (blocks, remainder) = slice_to_blocks::<FastPForBlock<Sequential, u32, 256>>(&data);
 /// assert_eq!(blocks.len(), 2);    // 2 blocks of [u32; 256]
 /// assert_eq!(remainder.len(), 88);
 /// ```

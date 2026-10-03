@@ -8,7 +8,7 @@ use bytes::{Buf as _, BufMut as _, BytesMut};
 use crate::helpers::{GetWithErr, greatest_multiple};
 use crate::rust::cursor::IncrementCursor;
 use crate::rust::integer_compression::fastpfor_int::FastPForInt;
-use crate::rust::kernels::{Kernels, Scalar};
+use crate::rust::kernels::{Auto, Kernels, Layout, Scalar};
 use crate::{FastPForError, FastPForResult};
 
 pub(crate) mod sealed {
@@ -60,6 +60,7 @@ impl<T, F: Fn(&[u32], usize, &mut [T], usize, u8) + Copy> UnpackFn<T> for F {}
 /// let mut codec = FastPFor256::default();
 /// codec.encode(&data, &mut out).unwrap();
 /// ```
+#[deprecated(since = "0.9.2", note = "use `FastPForBlock<Sequential, T, N, K>`")]
 #[derive(Debug)]
 pub struct FastPFor<const N: usize, T: FastPForInt = u32, K: Kernels = Scalar> {
     /// Exception values indexed by bit width difference
@@ -81,6 +82,13 @@ pub struct FastPFor<const N: usize, T: FastPForInt = u32, K: Kernels = Scalar> {
     max_bits: u8,
     kernels: PhantomData<K>,
 }
+
+/// Block codec of `FastPFOR`, for whole blocks only: `FastPForBlock<L, T, N, K>`.
+///
+/// `L` is the wire [`Layout`] ([`Sequential`](crate::Sequential)), `T` the value type ([`u32`] or [`u64`]),
+/// `N` the block size (128 or 256), and `K` the [`Kernels`] ([`Auto`], the default, or
+/// [`Portable`](crate::Portable)), which only affect speed. This is the name [`FastPFor`] has from 0.10 on.
+pub type FastPForBlock<L, T, const N: usize, K = Auto> = <L as Layout>::Block<T, N, K>;
 
 impl<const N: usize, T: FastPForInt, K: Kernels> Default for FastPFor<N, T, K> {
     fn default() -> Self {

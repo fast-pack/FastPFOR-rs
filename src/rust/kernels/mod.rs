@@ -11,17 +11,46 @@ mod avx2;
 mod neon;
 mod portable;
 
-/// Bit-packing kernels used by [`FastPFor`]: [`Scalar`] or [`Simd`]. Sealed.
+/// Bit-packing kernels used by [`FastPFor`]: [`Portable`] or [`Auto`]. Sealed.
 pub trait Kernels: private::PageCodec + Debug + 'static {}
 
 /// Portable scalar kernels.
+#[deprecated(since = "0.9.2", note = "renamed to `Portable`")]
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Scalar;
 
 /// SIMD kernels producing byte-identical output to [`Scalar`]: AVX2 on `x86_64` when detected
 /// at runtime, NEON on `aarch64`, and [`Scalar`] otherwise.
+#[deprecated(since = "0.9.2", note = "renamed to `Auto`")]
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Simd;
+
+/// Portable kernels: plain Rust with no SIMD intrinsics. The name of [`Scalar`] from 0.10 on.
+pub type Portable = Scalar;
+
+/// The fastest kernels available: AVX2 on `x86_64` when detected at runtime, NEON on `aarch64`, and
+/// [`Portable`] otherwise. Byte-identical to [`Portable`]. The name of [`Simd`] from 0.10 on.
+pub type Auto = Simd;
+
+/// Wire format of a `FastPFor` stream. Sealed.
+///
+/// This release has one, [`Sequential`]: the layout of the C++ `FastPFor` codec, which all the codecs of
+/// this crate write. 0.10 adds `Interleaved`, the layout of the C++ `SIMDFastPFor` codec.
+pub trait Layout: private::SealedLayout + Debug + 'static {
+    /// The block codec of this layout, named through [`FastPForBlock`](crate::FastPForBlock).
+    #[doc(hidden)]
+    type Block<T: FastPForInt, const N: usize, K: Kernels>;
+}
+
+/// The layout of the C++ `FastPFor` codec: each block is bit-packed 32 values at a time, as one
+/// continuous bitstream. Every codec of this crate writes it.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Sequential;
+
+impl private::SealedLayout for Sequential {}
+impl Layout for Sequential {
+    type Block<T: FastPForInt, const N: usize, K: Kernels> = FastPFor<N, T, K>;
+}
 
 impl Kernels for Scalar {}
 impl Kernels for Simd {}
@@ -73,6 +102,9 @@ pub(crate) mod private {
             decode_page_scalar(codec, input, input_offset, output, output_offset, this_size)
         }
     }
+
+    /// Seals [`Layout`](super::Layout).
+    pub trait SealedLayout {}
 }
 
 /// Narrows 32 `u64` values to their low 32 bits and passes them to a 32-bit `pack32` kernel.

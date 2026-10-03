@@ -2,6 +2,7 @@
 
 #![cfg(feature = "rust")]
 #![allow(missing_docs, clippy::unwrap_used)]
+#![allow(deprecated, reason = "tests the deprecated names")]
 
 #[path = "../src/test_utils.rs"]
 mod test_utils;

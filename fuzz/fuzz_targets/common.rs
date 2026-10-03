@@ -1,6 +1,7 @@
 // The fuzz crate always enables both "rust" and "cpp" features of fastpfor.
 // Items here may only be used by some binaries; suppress dead_code lint.
 #![allow(dead_code)]
+#![allow(deprecated, reason = "tests the deprecated names")]
 
 use fastpfor::cpp::*;
 use fastpfor::{AnyLenCodec, FastPFor128, FastPFor256, FastPForResult, JustCopy, VariableByte};

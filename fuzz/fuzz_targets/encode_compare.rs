@@ -8,6 +8,8 @@
 //! - VariableByte vs CppVarInt
 //! - JustCopy vs CppCopy
 
+#![allow(deprecated, reason = "tests the deprecated names")]
+
 use libfuzzer_sys::fuzz_target;
 mod common;
 use common::{FuzzInput, instantiate_pair, resolve_encode_compare_pair};

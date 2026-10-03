@@ -9,15 +9,19 @@ use crate::rust::kernels::{Kernels, Simd};
 use crate::{BlockCodec, FastPFor, FastPForError, FastPForResult};
 
 /// Type alias for [`FastPFor`] with 128-element `u32` blocks.
+#[deprecated(since = "0.9.2", note = "use `FastPForSequentialBlock32x128`")]
 pub type FastPForBlock128 = FastPFor<128, u32>;
 
 /// Type alias for [`FastPFor`] with 256-element `u32` blocks.
+#[deprecated(since = "0.9.2", note = "use `FastPForSequentialBlock32x256`")]
 pub type FastPForBlock256 = FastPFor<256, u32>;
 
 /// [`FastPForBlock128`] using [`Simd`] kernels; byte-compatible with it.
+#[deprecated(since = "0.9.2", note = "use `FastPForSequentialBlock32x128`")]
 pub type FastPForSimdBlock128 = FastPFor<128, u32, Simd>;
 
 /// [`FastPForBlock256`] using [`Simd`] kernels; byte-compatible with it.
+#[deprecated(since = "0.9.2", note = "use `FastPForSequentialBlock32x256`")]
 pub type FastPForSimdBlock256 = FastPFor<256, u32, Simd>;
 
 impl<const N: usize, T: FastPForInt, K: Kernels> BlockCodec for FastPFor<N, T, K>

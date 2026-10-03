@@ -25,6 +25,8 @@
 //! by `CppFastPFor128` cannot be correctly decoded by `CppSimdFastPFor128`
 //! (and vice versa).
 
+#![allow(deprecated, reason = "tests the deprecated names")]
+
 use fastpfor::cpp::CppFastPFor128;
 use fastpfor::{AnyLenCodec, FastPFor128};
 use libfuzzer_sys::fuzz_target;
