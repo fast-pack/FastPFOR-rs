@@ -13,7 +13,7 @@ use wide::{u32x4, u64x2};
 use crate::FastPForResult;
 use crate::rust::integer_compression::fastpfor::FastPFor;
 use crate::rust::integer_compression::fastpfor_int::FastPForInt;
-use crate::rust::kernels::lanes::{Backend, Lane, decode_page_lanes, encode_page_lanes};
+use crate::rust::kernels::lanes::{Lane, decode_page_lanes, encode_page_lanes};
 use crate::rust::kernels::{Interleaved, private};
 
 /// The vector backend: `wide`'s 128-bit types.
@@ -27,10 +27,7 @@ pub struct W32(u32x4);
 #[derive(Clone, Copy)]
 pub struct W64(u64x2);
 
-impl Backend for Wide {
-    type V32 = W32;
-    type V64 = W64;
-}
+crate::rust::kernels::lanes::backend!(Wide, W32, W64);
 
 impl Lane for W32 {
     type E = u32;

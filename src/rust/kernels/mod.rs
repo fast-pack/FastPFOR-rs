@@ -24,7 +24,7 @@ mod portable;
 pub(crate) use lanes::LaneElem;
 
 /// Bit-packing kernels used by [`FastPFor`]: [`Scalar`] or [`Simd`] for the standard layout,
-/// [`InterleavedScalar`] or [`Interleaved`] for the interleaved layout. Sealed.
+/// [`InterleavedPortable`] or [`Interleaved`] for the interleaved layout. Sealed.
 pub trait Kernels: private::PageCodec + Debug + 'static {}
 
 /// Portable scalar kernels.
@@ -43,19 +43,19 @@ pub struct Simd;
 /// For `u64`, which C++ lacks, it extends the same layout to two 64-bit lanes per 128-bit vector.
 /// See [`Interleaved`] for the same format with vector kernels.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct InterleavedScalar;
+pub struct InterleavedPortable;
 
-/// Interleaved layout kernels, as [`InterleavedScalar`], using SIMD where the target has it:
-/// SSE2 on `x86_64` and NEON on `aarch64`, both always available there, so no runtime detection is needed;
-/// [`InterleavedScalar`]'s code elsewhere.
+/// Interleaved layout kernels, as [`InterleavedPortable`], using SIMD where the target has it:
+/// SSE2 on `x86_64` and NEON on little-endian `aarch64`, both always available there, so no runtime
+/// detection is needed; [`InterleavedPortable`]'s code elsewhere, including big-endian `aarch64`.
 ///
-/// Byte-identical to [`InterleavedScalar`], and to C++ `SIMDFastPFor` for `u32`.
+/// Byte-identical to [`InterleavedPortable`], and to C++ `SIMDFastPFor` for `u32`.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Interleaved;
 
 impl Kernels for Scalar {}
 impl Kernels for Simd {}
-impl Kernels for InterleavedScalar {}
+impl Kernels for InterleavedPortable {}
 impl Kernels for Interleaved {}
 
 #[cfg(feature = "__testing")]

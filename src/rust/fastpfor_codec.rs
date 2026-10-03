@@ -15,7 +15,7 @@ use crate::rust::kernels::{Interleaved, Kernels, Scalar, Simd};
 ///
 /// A single [`CompositeCodec`] pairing the width-generic block engine with a [`VariableByte`] tail.
 /// `K` selects the bit-packing [`Kernels`]: [`Scalar`] and [`Simd`] produce byte-identical output in the standard
-/// layout, and `Interleaved`/`InterleavedScalar` produce it in the layout of C++ `SIMDFastPFor`.
+/// layout, and `Interleaved`/`InterleavedPortable` produce it in the layout of C++ `SIMDFastPFor`.
 /// Instantiate through the [`FastPFor128`]/[`FastPForWide128`]/[`FastPForSimd128`] aliases.
 #[derive(Debug)]
 pub struct FastPForCodec<const N: usize, T: FastPForInt, K: Kernels = Scalar>

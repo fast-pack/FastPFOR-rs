@@ -15,7 +15,7 @@ use fastpfor::{
     FastPForInterleavedBlockWide128, FastPForInterleavedBlockWide256, FastPForInterleavedWide128,
     FastPForInterleavedWide256, FastPForSimd128, FastPForSimd256, FastPForSimdBlock128,
     FastPForSimdBlock256, FastPForSimdBlockWide128, FastPForSimdBlockWide256, FastPForSimdWide128,
-    FastPForSimdWide256, FastPForWide128, FastPForWide256, InterleavedScalar, VariableByte,
+    FastPForSimdWide256, FastPForWide128, FastPForWide256, InterleavedPortable, VariableByte,
     slice_to_blocks,
 };
 use rand::rngs::StdRng;
@@ -232,15 +232,15 @@ fn simd_wide256_matches_scalar() {
 }
 
 /// The portable kernels of the interleaved layout, to compare with the vector ones.
-type InterleavedPortable<const N: usize, T> =
-    CompositeCodec<FastPFor<N, T, InterleavedScalar>, VariableByte<T>>;
+type InterleavedPortableCodec<const N: usize, T> =
+    CompositeCodec<FastPFor<N, T, InterleavedPortable>, VariableByte<T>>;
 
 #[test]
 fn interleaved128_matches_portable() {
     check_all::<
-        InterleavedPortable<128, u32>,
+        InterleavedPortableCodec<128, u32>,
         FastPForInterleaved128,
-        FastPFor<128, u32, InterleavedScalar>,
+        FastPFor<128, u32, InterleavedPortable>,
         FastPForInterleavedBlock128,
         u32,
     >(128);
@@ -249,9 +249,9 @@ fn interleaved128_matches_portable() {
 #[test]
 fn interleaved256_matches_portable() {
     check_all::<
-        InterleavedPortable<256, u32>,
+        InterleavedPortableCodec<256, u32>,
         FastPForInterleaved256,
-        FastPFor<256, u32, InterleavedScalar>,
+        FastPFor<256, u32, InterleavedPortable>,
         FastPForInterleavedBlock256,
         u32,
     >(256);
@@ -260,9 +260,9 @@ fn interleaved256_matches_portable() {
 #[test]
 fn interleaved_wide128_matches_portable() {
     check_all::<
-        InterleavedPortable<128, u64>,
+        InterleavedPortableCodec<128, u64>,
         FastPForInterleavedWide128,
-        FastPFor<128, u64, InterleavedScalar>,
+        FastPFor<128, u64, InterleavedPortable>,
         FastPForInterleavedBlockWide128,
         u64,
     >(128);
@@ -271,9 +271,9 @@ fn interleaved_wide128_matches_portable() {
 #[test]
 fn interleaved_wide256_matches_portable() {
     check_all::<
-        InterleavedPortable<256, u64>,
+        InterleavedPortableCodec<256, u64>,
         FastPForInterleavedWide256,
-        FastPFor<256, u64, InterleavedScalar>,
+        FastPFor<256, u64, InterleavedPortable>,
         FastPForInterleavedBlockWide256,
         u64,
     >(256);

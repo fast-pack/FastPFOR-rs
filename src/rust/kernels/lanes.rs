@@ -22,7 +22,7 @@ use std::io::Cursor;
 use crate::FastPForResult;
 use crate::rust::integer_compression::fastpfor::FastPFor;
 use crate::rust::integer_compression::fastpfor_int::FastPForInt;
-use crate::rust::kernels::{InterleavedScalar, Kernels, private};
+use crate::rust::kernels::{InterleavedPortable, Kernels, private};
 
 /// A 128-bit vector of unsigned lanes, with the handful of operations the kernels need.
 ///
@@ -57,13 +57,47 @@ pub trait Lane: Copy {
     fn shr(self, s: u32) -> Self;
 }
 
-/// A set of [`Lane`] vector types, one per element width.
+/// A set of [`Lane`] vector types, one per element width, and the group kernels built on them.
+///
+/// The kernels are plain (non-generic) methods so they are compiled once, in this crate, instead of
+/// being monomorphized again in every crate that uses an interleaved codec.
 pub trait Backend {
     /// Vector of `u32` lanes.
     type V32: Lane<E = u32>;
     /// Vector of `u64` lanes.
     type V64: Lane<E = u64>;
+    /// Packs one `u32` group at `bit` (1..=32) bits.
+    fn pack32(src: &[u32], out: &mut [u32], bit: u8);
+    /// Unpacks one `u32` group at `bit` (1..=32) bits.
+    fn unpack32(input: &[u32], out: &mut [u32], bit: u8);
+    /// Packs one `u64` group at `bit` (1..=64) bits.
+    fn pack64(src: &[u64], out: &mut [u32], bit: u8);
+    /// Unpacks one `u64` group at `bit` (1..=64) bits.
+    fn unpack64(input: &[u32], out: &mut [u64], bit: u8);
 }
+
+/// Implements [`Backend`] for `$backend` with the given lane types.
+macro_rules! backend {
+    ($backend:ty, $v32:ty, $v64:ty) => {
+        impl $crate::rust::kernels::lanes::Backend for $backend {
+            type V32 = $v32;
+            type V64 = $v64;
+            fn pack32(src: &[u32], out: &mut [u32], bit: u8) {
+                $crate::rust::kernels::lanes::pack_u32::<$v32>(src, out, bit);
+            }
+            fn unpack32(input: &[u32], out: &mut [u32], bit: u8) {
+                $crate::rust::kernels::lanes::unpack_u32::<$v32>(input, out, bit);
+            }
+            fn pack64(src: &[u64], out: &mut [u32], bit: u8) {
+                $crate::rust::kernels::lanes::pack_u64::<$v64>(src, out, bit);
+            }
+            fn unpack64(input: &[u32], out: &mut [u64], bit: u8) {
+                $crate::rust::kernels::lanes::unpack_u64::<$v64>(input, out, bit);
+            }
+        }
+    };
+}
+pub(crate) use backend;
 
 /// Element types with interleaved kernels: [`u32`] and [`u64`].
 pub trait LaneElem: Sized {
@@ -143,13 +177,14 @@ macro_rules! group_kernels {
         // Not `inline(always)`: the width dispatch would then hold a copy of every width's kernel, and at
         // opt-level 0 each copy keeps its own stack slots, enough to overflow the stack in debug builds.
         fn $unpack<V: Lane, const B: usize>(input: &[u32], out: &mut [V::E]) {
-            let input = &input[..4 * B];
+            // Fixed lengths let every per-row index be checked at compile time.
+            let (input, out) = (&input[..4 * B], &mut out[..128]);
             let mask = V::mask(B as u32);
             for_rows!($rows, V, unpack_row::<B>(input, mask, out));
         }
 
         fn $pack<V: Lane, const B: usize>(src: &[V::E], out: &mut [u32]) {
-            let out = &mut out[..4 * B];
+            let (src, out) = (&src[..128], &mut out[..4 * B]);
             let mask = V::mask(B as u32);
             let mut state = (V::zero(), V::zero());
             for_rows!($rows, V, pack_row::<B>(src, mask, out, &mut state));
@@ -170,23 +205,23 @@ macro_rules! dispatch_bits {
     };
 }
 
-fn pack_u32<V: Lane<E = u32>>(src: &[u32], out: &mut [u32], bit: u8) {
+pub(super) fn pack_u32<V: Lane<E = u32>>(src: &[u32], out: &mut [u32], bit: u8) {
     dispatch_bits!(bit, pack_group_32::<V>(src, out);
         1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32);
 }
 
-fn unpack_u32<V: Lane<E = u32>>(input: &[u32], out: &mut [u32], bit: u8) {
+pub(super) fn unpack_u32<V: Lane<E = u32>>(input: &[u32], out: &mut [u32], bit: u8) {
     dispatch_bits!(bit, unpack_group_32::<V>(input, out);
         1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32);
 }
 
-fn pack_u64<V: Lane<E = u64>>(src: &[u64], out: &mut [u32], bit: u8) {
+pub(super) fn pack_u64<V: Lane<E = u64>>(src: &[u64], out: &mut [u32], bit: u8) {
     dispatch_bits!(bit, pack_group_64::<V>(src, out);
         1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32
         33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64);
 }
 
-fn unpack_u64<V: Lane<E = u64>>(input: &[u32], out: &mut [u64], bit: u8) {
+pub(super) fn unpack_u64<V: Lane<E = u64>>(input: &[u32], out: &mut [u64], bit: u8) {
     dispatch_bits!(bit, unpack_group_64::<V>(input, out);
         1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32
         33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64);
@@ -196,7 +231,7 @@ impl LaneElem for u32 {
     #[inline]
     fn pack_group<B: Backend>(src: &[Self], inpos: usize, out: &mut [u32], outpos: usize, bit: u8) {
         if bit != 0 {
-            pack_u32::<B::V32>(
+            B::pack32(
                 &src[inpos..inpos + 128],
                 &mut out[outpos..outpos + 4 * usize::from(bit)],
                 bit,
@@ -216,7 +251,7 @@ impl LaneElem for u32 {
         if bit == 0 {
             out.fill(0);
         } else {
-            unpack_u32::<B::V32>(&input[inpos..inpos + 4 * usize::from(bit)], out, bit);
+            B::unpack32(&input[inpos..inpos + 4 * usize::from(bit)], out, bit);
         }
     }
 }
@@ -225,7 +260,7 @@ impl LaneElem for u64 {
     #[inline]
     fn pack_group<B: Backend>(src: &[Self], inpos: usize, out: &mut [u32], outpos: usize, bit: u8) {
         if bit != 0 {
-            pack_u64::<B::V64>(
+            B::pack64(
                 &src[inpos..inpos + 128],
                 &mut out[outpos..outpos + 4 * usize::from(bit)],
                 bit,
@@ -245,7 +280,7 @@ impl LaneElem for u64 {
         if bit == 0 {
             out.fill(0);
         } else {
-            unpack_u64::<B::V64>(&input[inpos..inpos + 4 * usize::from(bit)], out, bit);
+            B::unpack64(&input[inpos..inpos + 4 * usize::from(bit)], out, bit);
         }
     }
 }
@@ -307,10 +342,7 @@ pub struct P32([u32; 4]);
 #[derive(Clone, Copy)]
 pub struct P64([u64; 2]);
 
-impl Backend for Portable {
-    type V32 = P32;
-    type V64 = P64;
-}
+backend!(Portable, P32, P64);
 
 macro_rules! elementwise {
     ($self:ident, $rhs:ident, $op:tt) => {
@@ -417,7 +449,7 @@ impl Lane for P64 {
     }
 }
 
-impl private::PageCodec for InterleavedScalar {
+impl private::PageCodec for InterleavedPortable {
     fn encode_page<const N: usize, T: FastPForInt>(
         codec: &mut FastPFor<N, T, Self>,
         input: &[T],

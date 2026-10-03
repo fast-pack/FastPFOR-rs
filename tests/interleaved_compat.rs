@@ -9,7 +9,7 @@ mod test_utils;
 use fastpfor::cpp::{CppFastPFor128, CppFastPFor256, CppSimdFastPFor128, CppSimdFastPFor256};
 use fastpfor::{
     AnyLenCodec, CompositeCodec, FastPFor, FastPFor128, FastPFor256, FastPForInterleaved128,
-    FastPForInterleaved256, InterleavedScalar, VariableByte,
+    FastPForInterleaved256, InterleavedPortable, VariableByte,
 };
 use rand::rngs::StdRng;
 use rand::{RngExt as _, SeedableRng as _};
@@ -88,7 +88,7 @@ where
 }
 
 type Portable<const N: usize> =
-    CompositeCodec<FastPFor<N, u32, InterleavedScalar>, VariableByte<u32>>;
+    CompositeCodec<FastPFor<N, u32, InterleavedPortable>, VariableByte<u32>>;
 
 #[test]
 fn interleaved128_matches_cpp_simdfastpfor() {

@@ -11,7 +11,7 @@ use fastpfor::{
     BlockCodec, FastPFor, FastPForBlock128, FastPForBlock256, FastPForBlockWide128,
     FastPForBlockWide256, FastPForInterleavedBlock128, FastPForInterleavedBlock256,
     FastPForInterleavedBlockWide128, FastPForInterleavedBlockWide256, FastPForSimdBlock128,
-    FastPForSimdBlock256, FastPForSimdBlockWide128, FastPForSimdBlockWide256, InterleavedScalar,
+    FastPForSimdBlock256, FastPForSimdBlockWide128, FastPForSimdBlockWide256, InterleavedPortable,
     slice_to_blocks,
 };
 
@@ -347,7 +347,7 @@ fn benchmark_scalar_vs_simd(c: &mut Criterion) {
         bench_kernel::<FastPForBlock128>(c, "kernels/u32x128", name, "scalar", data);
         bench_kernel::<FastPForSimdBlock128>(c, "kernels/u32x128", name, "simd", data);
         // The interleaved layout (C++ `SIMDFastPFor`): a different wire format, not a different speed of the same one.
-        bench_kernel::<FastPFor<128, u32, InterleavedScalar>>(
+        bench_kernel::<FastPFor<128, u32, InterleavedPortable>>(
             c,
             "kernels/u32x128",
             name,

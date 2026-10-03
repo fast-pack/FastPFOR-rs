@@ -27,4 +27,4 @@ pub use integer_compression::just_copy::JustCopy;
 pub use integer_compression::variable_byte::VariableByte;
 #[cfg(feature = "__testing")]
 pub use kernels::with_simd_fallback;
-pub use kernels::{Interleaved, InterleavedScalar, Kernels, Scalar, Simd};
+pub use kernels::{Interleaved, InterleavedPortable, Kernels, Scalar, Simd};

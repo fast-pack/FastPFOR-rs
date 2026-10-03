@@ -4,7 +4,7 @@ use std::fmt::Debug;
 
 use arbitrary::Arbitrary;
 use fastpfor::{
-    AnyLenCodec, BlockCodec, CompositeCodec, FastPFor, Interleaved, InterleavedScalar, Scalar,
+    AnyLenCodec, BlockCodec, CompositeCodec, FastPFor, Interleaved, InterleavedPortable, Scalar,
     Simd, VariableByte, slice_to_blocks,
 };
 use libfuzzer_sys::fuzz_target;
@@ -309,16 +309,16 @@ fuzz_target!(|input: Input| {
         Case::Wide128(ops) => run!(128, u64, page_blocks, ops),
         Case::Wide256(ops) => run!(256, u64, page_blocks, ops),
         Case::InterleavedNarrow128(ops) => {
-            run!(128, u32, InterleavedScalar, Interleaved, page_blocks, ops);
+            run!(128, u32, InterleavedPortable, Interleaved, page_blocks, ops);
         }
         Case::InterleavedNarrow256(ops) => {
-            run!(256, u32, InterleavedScalar, Interleaved, page_blocks, ops);
+            run!(256, u32, InterleavedPortable, Interleaved, page_blocks, ops);
         }
         Case::InterleavedWide128(ops) => {
-            run!(128, u64, InterleavedScalar, Interleaved, page_blocks, ops);
+            run!(128, u64, InterleavedPortable, Interleaved, page_blocks, ops);
         }
         Case::InterleavedWide256(ops) => {
-            run!(256, u64, InterleavedScalar, Interleaved, page_blocks, ops);
+            run!(256, u64, InterleavedPortable, Interleaved, page_blocks, ops);
         }
     }
 });

@@ -28,7 +28,7 @@ the output is silently wrong. Pick one per data set.
 | Format | Rust codecs | Compatible with C++ | Kernels |
 |---|---|---|---|
 | **Standard** | `FastPFor128`, `FastPFor256`, `FastPForWide*` (`u64`), `FastPForBlock*`, and the `FastPForSimd*` variants | `CppFastPFor128` / `CppFastPFor256`, byte-identical, `u32` and `u64` | scalar; `Simd`: AVX2 (runtime-detected) or NEON |
-| **Interleaved** | `FastPForInterleaved128`, `FastPForInterleaved256`, `FastPForInterleavedWide*` (`u64`), `FastPForInterleavedBlock*` | `CppSimdFastPFor128` / `CppSimdFastPFor256`, byte-identical, `u32` only | portable; `Interleaved`: SSE2 or NEON, always available on those targets |
+| **Interleaved** | `FastPForInterleaved128`, `FastPForInterleaved256`, `FastPForInterleavedWide*` (`u64`), `FastPForInterleavedBlock*` | `CppSimdFastPFor128` / `CppSimdFastPFor256`, byte-identical, `u32` only | portable; `Interleaved`: SSE2 on `x86_64` or NEON on little-endian `aarch64`, always available there; portable elsewhere |
 
 The kernels of one format all write the same bytes: scalar and `Simd` for the standard format, portable and `Interleaved`
 for the interleaved one, so encoders and decoders can be mixed freely within a format.

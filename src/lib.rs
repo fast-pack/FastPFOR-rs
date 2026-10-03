@@ -40,7 +40,7 @@ pub use rust::{
     FastPForInterleavedBlockWide256, FastPForInterleavedWide128, FastPForInterleavedWide256,
     FastPForSimd128, FastPForSimd256, FastPForSimdBlock128, FastPForSimdBlock256,
     FastPForSimdBlockWide128, FastPForSimdBlockWide256, FastPForSimdWide128, FastPForSimdWide256,
-    FastPForWide128, FastPForWide256, Interleaved, InterleavedScalar, JustCopy, Kernels, Scalar,
+    FastPForWide128, FastPForWide256, Interleaved, InterleavedPortable, JustCopy, Kernels, Scalar,
     Simd, VariableByte,
 };
 
