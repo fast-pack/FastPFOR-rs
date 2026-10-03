@@ -36,9 +36,13 @@ compatibility and speed:
 | Encode                    | about the same                                          | about the same                                             |
 | Code size (`u64`)         | smaller                                                 | about 140 KB more: unrolled kernels for each of 64 widths  |
 
-The speeds are from one machine (Intel i9-10885H, one core, `x86_64`), for 128-value blocks: treat them as relative.
-For comparison, the C++ library decoded at 420-575 M values/s (`FastPFor`) and 535-1205 M values/s (`SIMDFastPFor`)
-on the same data.
+The speeds are from one machine (Intel i9-10885H, one core, `x86_64`), for 128-value blocks and should therefore be only treated as relative data points.
+For comparison, the C++ library decoded at 420-575 M values/s (`FastPFor`) and 535-1205 M values/s (`SIMDFastPFor`).
+
+The Rust `FastPFor` codecs, scalar **and** `Simd`, write byte-identical streams, and those streams are identical to
+the **non-SIMD** C++ `FastPFor` codec (`CppFastPFor128` / `CppFastPFor256`) for both `u32` and `u64`.
+`Simd` is a faster implementation of the same format, so encoders and decoders can be mixed freely.
+Tests and fuzzing check the scalar codecs byte-for-byte against the C++ library, and `Simd` against scalar, on` x86_64` and `aarch64`.
 
 **In short:** use sequential to stay compatible with existing data and with the C++ `FastPFor`, or when values are
 close to 32 bits wide. Use interleaved to read or write C++ `SIMDFastPFor` data, or for the fastest decoding of
