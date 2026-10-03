@@ -1,4 +1,4 @@
-//! The interleaved codecs against the C++ `SIMDFastPFor`: identical bytes, and each decodes the other's output.
+//! The Rust codecs against their C++ counterparts: identical bytes, and each decodes the other's output.
 
 #![cfg(all(feature = "rust", feature = "cpp"))]
 #![allow(missing_docs, clippy::unwrap_used)]
@@ -9,7 +9,7 @@ mod test_utils;
 use fastpfor::cpp::{CppFastPFor128, CppFastPFor256, CppSimdFastPFor128, CppSimdFastPFor256};
 use fastpfor::{
     AnyLenCodec, FastPForCodec, FastPForInterleaved32x128, FastPForInterleaved32x256,
-    FastPForSequential32x128, FastPForSequential32x256, Interleaved, Portable,
+    FastPForSequential32x128, FastPForSequential32x256, Interleaved, Portable, Sequential,
 };
 use rand::rngs::StdRng;
 use rand::{RngExt as _, SeedableRng as _};
@@ -89,6 +89,18 @@ where
 
 /// The interleaved format with the portable kernels, to check them against C++ as well.
 type PortableCodec<const N: usize> = FastPForCodec<Interleaved, u32, N, Portable>;
+
+type PortableSequential<const N: usize> = FastPForCodec<Sequential, u32, N, Portable>;
+
+#[test]
+fn sequential128_matches_cpp_fastpfor() {
+    check_matches_cpp::<FastPForSequential32x128, CppFastPFor128, PortableSequential<128>>(128);
+}
+
+#[test]
+fn sequential256_matches_cpp_fastpfor() {
+    check_matches_cpp::<FastPForSequential32x256, CppFastPFor256, PortableSequential<256>>(256);
+}
 
 #[test]
 fn interleaved128_matches_cpp_simdfastpfor() {

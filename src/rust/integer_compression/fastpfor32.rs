@@ -307,3 +307,107 @@ mod tests {
         assert_eq!(reused, fresh);
     }
 }
+
+#[cfg(test)]
+mod interleaved_tests {
+    use super::*;
+    use crate::rust::kernels::Interleaved;
+    use crate::test_utils::{block_compress, block_decompress, block_roundtrip};
+
+    type Int128 = FastPForBlock<Interleaved, u32, 128>;
+    type Int256 = FastPForBlock<Interleaved, u32, 256>;
+
+    #[test]
+    fn exception_roundtrip() {
+        let mut data = vec![0u32; 128];
+        data[126] = u32::MAX;
+        block_roundtrip::<Int128>(&data);
+        let mut data = vec![0u32; 256];
+        data[126] = u32::MAX;
+        block_roundtrip::<Int256>(&data);
+    }
+
+    #[test]
+    fn multi_page_roundtrip() {
+        block_roundtrip::<Int128>(&vec![42u32; 65536]);
+        let data: Vec<u32> = (0..1024u32)
+            .map(|i| if i % 2 == 0 { 1 << 30 } else { 3 })
+            .collect();
+        block_roundtrip::<Int128>(&data);
+        block_roundtrip::<Int256>(&data);
+    }
+
+    #[test]
+    fn empty_blocks_ok() {
+        let enc = block_compress::<Int256>(&[]).unwrap();
+        assert_eq!(enc, [0]);
+        assert!(
+            block_decompress::<Int256>(&enc, Some(0))
+                .unwrap()
+                .is_empty()
+        );
+        block_decompress::<Int256>(&[], None).unwrap_err();
+    }
+
+    #[test]
+    fn index1_exception_branch() {
+        let mut data = vec![1u32; 256];
+        data[0] = 3;
+        block_roundtrip::<Int256>(&data);
+    }
+
+    #[test]
+    fn expected_len_mismatch_errors() {
+        let compressed = block_compress::<Int128>(&[7u32; 256]).unwrap();
+        let err = block_decompress::<Int128>(&compressed, Some(128)).unwrap_err();
+        assert_eq!(
+            format!("{err:?}"),
+            "DecodedCountMismatch { actual: 256, expected: 128 }"
+        );
+    }
+
+    #[test]
+    fn header_exceeds_max_len_errors() {
+        let result = block_decompress::<Int128>(&[2048u32], None);
+        assert!(matches!(result, Err(FastPForError::NotEnoughData)));
+    }
+
+    #[test]
+    fn decode_rejects_exceptions_from_prior_calls() {
+        let mut data = vec![0u32; 128];
+        data[45] = 1 << 20;
+        let mut codec = Int128::default();
+        let (blocks, _) = crate::slice_to_blocks::<Int128>(&data);
+        let mut words = Vec::new();
+        codec.encode_blocks(blocks, &mut words).unwrap();
+        let bitmap_at = 3 + words[2].div_ceil(4) as usize;
+        words[bitmap_at] = 0;
+
+        let fresh = Int128::default().decode_blocks(&words, None, &mut Vec::new());
+        let reused = codec.decode_blocks(&words, None, &mut Vec::new());
+        assert!(fresh.is_err());
+        assert_eq!(format!("{reused:?}"), format!("{fresh:?}"));
+    }
+
+    #[test]
+    fn encode_is_independent_of_prior_calls() {
+        let noisy: Vec<u32> = (0..512u32)
+            .map(|i| if i % 3 == 0 { 0xFFFF_FFF0 | i } else { 1 })
+            .collect();
+        let mut data = vec![1u32; 128];
+        data[5] = u32::MAX;
+        let fresh = block_compress::<Int128>(&data).unwrap();
+
+        let mut codec = Int128::default();
+        let (blocks, _) = crate::slice_to_blocks::<Int128>(&noisy);
+        codec.encode_blocks(blocks, &mut Vec::new()).unwrap();
+        let noisy_enc = block_compress::<Int128>(&noisy).unwrap();
+        codec
+            .decode_blocks(&noisy_enc, None, &mut Vec::new())
+            .unwrap();
+        let (blocks, _) = crate::slice_to_blocks::<Int128>(&data);
+        let mut reused = Vec::new();
+        codec.encode_blocks(blocks, &mut reused).unwrap();
+        assert_eq!(reused, fresh);
+    }
+}

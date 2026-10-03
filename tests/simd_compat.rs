@@ -346,6 +346,23 @@ fn simd_reuses_state_like_scalar() {
     }
 }
 
+#[test]
+fn interleaved_simd_reuses_state_like_scalar() {
+    let mut rng = StdRng::seed_from_u64(RNG_SEED);
+    let (mut scalar, mut simd) = (
+        FastPForCodec::<Interleaved, u32, 128, Portable>::default(),
+        FastPForCodec::<Interleaved, u32, 128, Auto>::default(),
+    );
+    for _ in 0..20 {
+        let blocks = rng.random_range(0..40);
+        let tail = rng.random_range(0..128);
+        let data = pfor_like::<u32>(&mut rng, blocks, 128, tail);
+        let enc = encode(&mut scalar, &data);
+        assert_eq!(encode(&mut simd, &data), enc);
+        assert_eq!(decode(&mut simd, &enc).unwrap(), data);
+    }
+}
+
 #[cfg(feature = "__testing")]
 #[test]
 fn simd_fallback_matches_portable() {
