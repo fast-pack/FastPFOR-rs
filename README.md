@@ -24,7 +24,7 @@ A Rust implementation of [FastPFOR](https://github.com/fast-pack/FastPFor) integ
 The Rust `FastPFor` codecs, scalar **and** `Simd`, write byte-identical streams, and those streams are identical to
 the **non-SIMD** C++ `FastPFor` codec (`CppFastPFor128` / `CppFastPFor256`) for both `u32` and `u64`.
 `Simd` is a faster implementation of the same format, so encoders and decoders can be mixed freely.
-Tests and fuzzing check the scalar codecs byte-for-byte against the C++ library, and `Simd` against scalar, on x86_64 and aarch64.
+Tests and fuzzing check the scalar codecs byte-for-byte against the C++ library, and `Simd` against scalar, on` x86_64` and `aarch64`.
 
 The C++ **`SIMDFastPFor`** codec (`CppSimdFastPFor128` / `CppSimdFastPFor256`) uses a *different* format, and the Rust
 codecs do not support it:
