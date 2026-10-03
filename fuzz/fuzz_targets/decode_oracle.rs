@@ -1,65 +1,59 @@
 #![no_main]
 
-//! Cross-codec oracle: independent Rust and C++ roundtrips, decompressed values must match.
-//!
-//! Uses matching Rust/C++ pairs from [`RUST`] and [`CPP`] (by the same index).
-//! Both sides compress the input independently and decompress independently;
-//! the decompressed output from each must equal the original input.
-//!
-//! Both sides use the same wire format so only the final decompressed values are compared.
-
 use libfuzzer_sys::fuzz_target;
 mod common;
-use common::{CPP, FuzzInput, RUST};
+use common::{FuzzAnyLen, FuzzInput, HexSlice, instantiate_pair, resolve_encode_compare_pair};
 
-/// Selects a matching Rust/C++ pair by a single index into the shorter of the
-/// two lists.
-#[derive(arbitrary::Arbitrary, Clone, Copy, Debug)]
-struct CompatSelector {
+#[derive(arbitrary::Arbitrary, Debug)]
+struct PairSelector {
     idx: u8,
+    pass_expected_len: bool,
 }
 
-fuzz_target!(|data: FuzzInput<CompatSelector>| {
+fn decode(codec: &mut FuzzAnyLen, words: &[u32], expected_len: Option<u32>) -> Vec<u32> {
+    let mut out = Vec::new();
+    codec
+        .decode(words, &mut out, expected_len)
+        .unwrap_or_else(|e| panic!("decode of {:?} failed: {e:?}", HexSlice(words)));
+    out
+}
+
+fuzz_target!(|data: FuzzInput<PairSelector>| {
+    let Some(pair) = resolve_encode_compare_pair(data.codec.idx) else {
+        return;
+    };
+    let (mut rust, mut cpp) = instantiate_pair(pair);
     let input = &data.data;
-    if input.is_empty() {
-        return;
-    }
+    let expected_len = data
+        .codec
+        .pass_expected_len
+        .then(|| u32::try_from(input.len()).unwrap());
 
-    // Use the same index for both lists; clamp to the shorter list.
-    let n = RUST.len().min(CPP.len());
-    let i = data.codec.idx as usize % n;
-    let (rust_name, make_rust) = RUST[i];
-    let (cpp_name, make_cpp) = CPP[i];
+    let mut rust_enc = Vec::new();
+    rust.encode(input, &mut rust_enc)
+        .expect("Rust encode failed");
+    let mut cpp_enc = Vec::new();
+    cpp.encode(input, &mut cpp_enc).expect("C++ encode failed");
 
-    let mut rust_codec = make_rust();
-    let mut cpp_codec = make_cpp();
-
-    // Rust roundtrip
-    let mut rust_compressed = Vec::new();
-    if rust_codec.encode(input, &mut rust_compressed).is_err() {
-        return;
-    }
-    let mut rust_decompressed = Vec::new();
-    rust_codec
-        .decode(&rust_compressed, &mut rust_decompressed, None)
-        .expect("Rust decompress of self-compressed data must not fail");
-
-    // C++ roundtrip (independent oracle)
-    let mut cpp_compressed = Vec::new();
-    cpp_codec
-        .encode(input, &mut cpp_compressed)
-        .expect("C++ compression failed");
-    let mut cpp_decompressed = Vec::new();
-    cpp_codec
-        .decode(&cpp_compressed, &mut cpp_decompressed, None)
-        .expect("C++ decompression failed");
-
+    let name = pair.name;
     assert_eq!(
-        rust_decompressed, *input,
-        "Rust roundtrip failed for codec {rust_name}",
+        decode(&mut rust, &cpp_enc, expected_len),
+        *input,
+        "{name}: Rust decoding C++ output"
     );
     assert_eq!(
-        cpp_decompressed, *input,
-        "C++ roundtrip failed for codec {cpp_name}",
+        decode(&mut cpp, &rust_enc, expected_len),
+        *input,
+        "{name}: C++ decoding Rust output"
+    );
+    assert_eq!(
+        decode(&mut rust, &rust_enc, expected_len),
+        *input,
+        "{name}: Rust roundtrip"
+    );
+    assert_eq!(
+        decode(&mut cpp, &cpp_enc, expected_len),
+        *input,
+        "{name}: C++ roundtrip"
     );
 });
