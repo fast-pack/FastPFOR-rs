@@ -13,7 +13,7 @@ use crate::helpers::AsUsize;
 /// input length, encodes the aligned prefix with `Blocks`, and the
 /// sub-block remainder with `Tail`.
 ///
-/// **Rust-only:** Use only with Rust codecs (e.g. `FastPForBlock256`, `VariableByte`).
+/// **Rust-only:** Use only with Rust codecs (e.g. `FastPForSequential32x256`, `VariableByte`).
 /// C++ block codecs are already any-length in the C++ library; use them directly.
 ///
 /// # Wire format (matches C++ `CompositeCodec`)
@@ -28,10 +28,10 @@ use crate::helpers::AsUsize;
 /// # Example
 ///
 /// ```
-/// use fastpfor::{AnyLenCodec, FastPFor256};
+/// use fastpfor::{AnyLenCodec, FastPForSequential32x256};
 ///
 /// let data: Vec<u32> = (0..600).collect(); // 2 × 256 + 88 remainder
-/// let mut codec = FastPFor256::default();
+/// let mut codec = FastPForSequential32x256::default();
 ///
 /// let mut encoded = Vec::new();
 /// codec.encode(&data, &mut encoded).unwrap();

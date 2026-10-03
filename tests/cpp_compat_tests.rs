@@ -4,6 +4,7 @@
 //! for block-aligned data. Both sides use the same element-count header.
 
 #![cfg(all(feature = "rust", feature = "cpp"))]
+#![allow(deprecated, reason = "tests the deprecated names")]
 
 #[path = "../src/test_utils.rs"]
 mod test_utils;

@@ -11,15 +11,19 @@ use crate::rust::integer_compression::fastpfor::FastPFor;
 use crate::rust::kernels::Simd;
 
 /// Type alias for [`FastPFor`] with 128-element `u64` blocks.
+#[deprecated(since = "0.9.2", note = "use `FastPForSequentialBlock64x128`")]
 pub type FastPForBlockWide128 = FastPFor<128, u64>;
 
 /// Type alias for [`FastPFor`] with 256-element `u64` blocks.
+#[deprecated(since = "0.9.2", note = "use `FastPForSequentialBlock64x256`")]
 pub type FastPForBlockWide256 = FastPFor<256, u64>;
 
 /// [`FastPForBlockWide128`] using [`Simd`] kernels; byte-compatible with it.
+#[deprecated(since = "0.9.2", note = "use `FastPForSequentialBlock64x128`")]
 pub type FastPForSimdBlockWide128 = FastPFor<128, u64, Simd>;
 
 /// [`FastPForBlockWide256`] using [`Simd`] kernels; byte-compatible with it.
+#[deprecated(since = "0.9.2", note = "use `FastPForSequentialBlock64x256`")]
 pub type FastPForSimdBlockWide256 = FastPFor<256, u64, Simd>;
 
 #[cfg(test)]

@@ -12,8 +12,8 @@ A Rust implementation of [FastPFOR](https://github.com/fast-pack/FastPFor) integ
 ([Decoding billions of integers per second through vectorization, 2012](https://arxiv.org/abs/1209.2137)).
 
 * **Pure Rust, `u32` and `u64`:** `FastPFor` codecs with 128- or 256-value blocks for both integer widths.
-  Each has a portable scalar version and a `Simd` version (AVX2 on `x86_64`, selected at runtime; NEON on `aarch64`;
-  the scalar kernels everywhere else). The Rust **decoder** is about 29% faster than the C++ version.
+  Each has portable kernels (`Portable`) and SIMD kernels (`Auto`: AVX2 on `x86_64`, selected at runtime; NEON on
+  `aarch64`; and falls back to the portable kernel everywhere else). The Rust **decoder** is about 29% faster than the C++ version.
   The Rust code is safe except for one `unsafe` call into the AVX2 kernels, made after runtime CPU feature detection;
   the crate has `#![deny(unsafe_code)]`, with the generated C++ FFI bridge as the only other exemption.
 * **Optional C++ wrappers:** the `cpp` feature wraps the original [C++ library](https://github.com/fast-pack/FastPFor),
@@ -21,10 +21,11 @@ A Rust implementation of [FastPFOR](https://github.com/fast-pack/FastPFor) integ
 
 ## Wire format
 
-The Rust `FastPFor` codecs, scalar **and** `Simd`, write byte-identical streams, and those streams are identical to
+The Rust `FastPFor` codecs, `Portable` **and** `Auto`, write byte-identical streams, and those streams are identical to
 the **non-SIMD** C++ `FastPFor` codec (`CppFastPFor128` / `CppFastPFor256`) for both `u32` and `u64`.
-`Simd` is a faster implementation of the same format, so encoders and decoders can be mixed freely.
-Tests and fuzzing check the scalar codecs byte-for-byte against the C++ library, and `Simd` against scalar, on` x86_64` and `aarch64`.
+`Auto` is a faster implementation of the same format, so encoders and decoders can be mixed freely.
+Tests and fuzzing check the portable codecs byte-for-byte against the C++ library, and `Auto` against `Portable`,
+on `x86_64` and `aarch64`. Version 0.10 calls this format *sequential*, hence the `FastPForSequential*` names.
 
 The C++ **`SIMDFastPFor`** codec (`CppSimdFastPFor128` / `CppSimdFastPFor256`) uses a *different* format, and the Rust
 codecs do not support it:
@@ -40,14 +41,13 @@ codecs do not support it:
 
 ### Rust Implementation (default)
 
-The simplest way is `FastPFor256` — a composite codec that handles any input
-length by compressing aligned 256-element blocks with `FastPForBlock256` and encoding any
-leftover values with `VariableByte`.
+The simplest way is `FastPForSequential32x256`: `u32` values in 256-value blocks. It handles any input length by
+compressing whole blocks with `FastPForBlock` and the remaining values with `VariableByte`.
 
 ```rust
-use fastpfor::{AnyLenCodec, FastPFor256};
+use fastpfor::{AnyLenCodec, FastPForSequential32x256};
 
-let mut codec = FastPFor256::default();
+let mut codec = FastPForSequential32x256::default();
 let input: Vec<u32> = (0..1000).collect();
 
 let mut encoded = Vec::new();
@@ -62,12 +62,14 @@ assert_eq!(decoded, input);
 For block-aligned inputs you can use the lower-level `BlockCodec` API:
 
 ```rust
-use fastpfor::{BlockCodec, FastPForBlock256, slice_to_blocks};
+use fastpfor::{BlockCodec, FastPForSequentialBlock32x256, slice_to_blocks};
 
-let mut codec = FastPForBlock256::default();
+type Codec = FastPForSequentialBlock32x256;
+
+let mut codec = Codec::default();
 let input: Vec<u32> = (0..512).collect();   // exactly 2 blocks of 256
 
-let (blocks, remainder) = slice_to_blocks::<FastPForBlock256>(&input);
+let (blocks, remainder) = slice_to_blocks::<Codec>(&input);
 assert_eq!(blocks.len(), 2);
 assert!(remainder.is_empty());
 
@@ -82,15 +84,15 @@ assert_eq!(decoded, input);
 
 ### 64-bit integers (`u64`)
 
-The `FastPForWide128` / `FastPForWide256` codecs compress `u64` values.
+The `FastPForSequential64x128` / `FastPForSequential64x256` codecs compress `u64` values.
 They implement `AnyLenCodec` (with `Elem = u64`) for native use, and `BlockCodec64`
 (`encode64` / `decode64`) for comparison against the C++ codecs.
 The wire format is byte-compatible with the C++ `CppFastPFor128` / `CppFastPFor256` 64-bit paths.
 
 ```rust
-use fastpfor::{AnyLenCodec, FastPForWide256};
+use fastpfor::{AnyLenCodec, FastPForSequential64x256};
 
-let mut codec = FastPForWide256::default();
+let mut codec = FastPForSequential64x256::default();
 let input: Vec<u64> = (0..600).map(|i| i * 1_000_000_000).collect();
 
 let mut encoded = Vec::new();
@@ -104,33 +106,60 @@ assert_eq!(decoded, input);
 
 ### SIMD kernels
 
-The `FastPForSimd*` codecs (`FastPForSimd128`, `FastPForSimd256`, `FastPForSimdWide128`, `FastPForSimdWide256`,
-and the matching `FastPForSimdBlock*` block codecs) are drop-in replacements for the codecs above.
-They produce **byte-identical** output and decode each other's streams, so encoders and decoders can be mixed freely.
+The `FastPForSequential*` codecs and `FastPForBlock` use the `Auto` kernels by default, the fastest available:
 
-- `x86_64`: AVX2 kernels, selected at runtime; CPUs without AVX2 use the scalar kernels.
-- `aarch64`: NEON kernels. `u64` values wider than 32 bits use the scalar kernels.
-- Other targets: the scalar kernels.
+- `x86_64`: AVX2 kernels, selected at runtime; CPUs without AVX2 use the portable kernels.
+- `aarch64`: NEON kernels. `u64` values wider than 32 bits use the portable kernels.
+- Other targets: the portable kernels.
+
+All kernels produce **byte-identical** output and decode each other's streams. To always run the portable kernels,
+pass `Portable` as the last type parameter of `FastPForBlock`:
 
 ```rust
-use fastpfor::{AnyLenCodec, FastPFor256, FastPForSimd256};
+use fastpfor::{
+    AnyLenCodec, CompositeCodec, FastPForBlock, FastPForSequential32x256, Portable, Sequential,
+    VariableByte,
+};
+
+type PortableCodec = CompositeCodec<FastPForBlock<Sequential, u32, 256, Portable>, VariableByte>;
 
 let input: Vec<u32> = (0..1000).collect();
 
 let mut encoded = Vec::new();
-FastPForSimd256::default().encode(&input, &mut encoded).unwrap();
+FastPForSequential32x256::default().encode(&input, &mut encoded).unwrap();
 
-let mut scalar_encoded = Vec::new();
-FastPFor256::default().encode(&input, &mut scalar_encoded).unwrap();
-assert_eq!(encoded, scalar_encoded);
+let mut portable_encoded = Vec::new();
+PortableCodec::default().encode(&input, &mut portable_encoded).unwrap();
+assert_eq!(encoded, portable_encoded);
 
 let mut decoded = Vec::new();
-FastPFor256::default().decode(&encoded, &mut decoded, None).unwrap();
+PortableCodec::default().decode(&encoded, &mut decoded, None).unwrap();
 assert_eq!(decoded, input);
 ```
 
 Note that the C++ `CppSimdFastPFor*` codecs use a different, interleaved bit layout and are **not**
 compatible with either the Rust codecs or the C++ `CppFastPFor*` codecs.
+
+### Names deprecated in 0.9.2
+
+Version 0.10 names each codec by its wire format, value width and block size, and adds a second format
+(C++ `SIMDFastPFor`, called *interleaved*). Version 0.9.2 adds the new names for the existing codecs and
+deprecates the old ones, which 0.10 removes:
+
+| Deprecated                                              | Use instead                                    |
+|---------------------------------------------------------|------------------------------------------------|
+| `FastPFor128`, `FastPForSimd128`                        | `FastPForSequential32x128`                     |
+| `FastPFor256`, `FastPForSimd256`                        | `FastPForSequential32x256`                     |
+| `FastPForWide128`, `FastPForSimdWide128`                | `FastPForSequential64x128`                     |
+| `FastPForWide256`, `FastPForSimdWide256`                | `FastPForSequential64x256`                     |
+| `FastPForBlock128`, `FastPForSimdBlock128`             | `FastPForSequentialBlock32x128`                |
+| `FastPForBlock256`, `FastPForSimdBlock256`             | `FastPForSequentialBlock32x256`                |
+| `FastPForBlockWide128`, `FastPForSimdBlockWide128`     | `FastPForSequentialBlock64x128`                |
+| `FastPForBlockWide256`, `FastPForSimdBlockWide256`     | `FastPForSequentialBlock64x256`                |
+| `FastPFor<N, T, K>`                                     | `FastPForBlock<Sequential, T, N, K>`           |
+| `Scalar` / `Simd` kernels                               | `Portable` / `Auto`                            |
+
+The new names use the `Auto` (SIMD) kernels by default where the old ones used `Scalar`. The output is the same.
 
 ### C++ Wrapper (`cpp` feature)
 
@@ -164,19 +193,18 @@ The `FASTPFOR_SIMD_MODE` environment variable (`portable` or `native`) can overr
 
 ### Rust (`rust` feature)
 
-Rust block codecs require block-aligned input. `CompositeCodec` chains a block codec with a tail codec (e.g. `VariableByte`) to handle arbitrary-length input. `FastPFor256`/`FastPFor128` (for `u32`) and `FastPForWide256`/`FastPForWide128` (for `u64`) are type aliases for such composites.
+Rust block codecs require block-aligned input. `CompositeCodec` chains a block codec with a tail codec (e.g. `VariableByte`) to handle arbitrary-length input. The `FastPForSequential32x*` and `FastPForSequential64x*` codecs are type aliases for such composites.
 
-| Codec              | Description                                                     |
-|--------------------|-----------------------------------------------------------------|
-| `FastPFor256`      | `CompositeCodec` of `FastPForBlock256` + `VariableByte` (`u32`)  |
-| `FastPFor128`      | `CompositeCodec` of `FastPForBlock128` + `VariableByte` (`u32`)  |
-| `FastPForWide256`  | `CompositeCodec` of `FastPForBlockWide256` + `VariableByte` (`u64`) |
-| `FastPForWide128`  | `CompositeCodec` of `FastPForBlockWide128` + `VariableByte` (`u64`) |
-| `VariableByte`     | Variable-byte encoding, MSB is opposite to protobuf's varint    |
-| `JustCopy`         | No compression; useful as a baseline                            |
-| `FastPForBlock256` | `FastPFor` with 256-element `u32` blocks; block-aligned input only |
-| `FastPForBlock128` | `FastPFor` with 128-element `u32` blocks; block-aligned input only |
-| `FastPForSimd*`    | Same as the codec without `Simd`, using SIMD kernels; byte-identical output |
+| Codec                      | Description                                                                 |
+|----------------------------|-----------------------------------------------------------------------------|
+| `FastPForSequential32x256` | `CompositeCodec` of `FastPForBlock<Sequential, u32, 256>` + `VariableByte`  |
+| `FastPForSequential32x128` | `CompositeCodec` of `FastPForBlock<Sequential, u32, 128>` + `VariableByte`  |
+| `FastPForSequential64x256` | `CompositeCodec` of `FastPForBlock<Sequential, u64, 256>` + `VariableByte`  |
+| `FastPForSequential64x128` | `CompositeCodec` of `FastPForBlock<Sequential, u64, 128>` + `VariableByte`  |
+| `VariableByte`             | Variable-byte encoding, MSB is opposite to protobuf's varint                |
+| `JustCopy`                 | No compression; useful as a baseline                                        |
+| `FastPForSequentialBlock*` | The block codec of each, for block-aligned input only                       |
+| `FastPForBlock`            | The same, generically: `FastPForBlock<Sequential, T, N, Kernels>`           |
 
 ### C++ (`cpp` feature)
 

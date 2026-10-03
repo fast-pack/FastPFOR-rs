@@ -33,12 +33,16 @@ pub(crate) mod helpers;
 // `bytemuck` dependency.
 pub use bytemuck::Pod;
 #[cfg(feature = "rust")]
+#[allow(deprecated, reason = "re-exports deprecated names")]
 pub use rust::{
-    CompositeCodec, FastPFor, FastPFor128, FastPFor256, FastPForBlock128, FastPForBlock256,
-    FastPForBlockWide128, FastPForBlockWide256, FastPForSimd128, FastPForSimd256,
-    FastPForSimdBlock128, FastPForSimdBlock256, FastPForSimdBlockWide128, FastPForSimdBlockWide256,
-    FastPForSimdWide128, FastPForSimdWide256, FastPForWide128, FastPForWide256, JustCopy, Kernels,
-    Scalar, Simd, VariableByte,
+    Auto, CompositeCodec, FastPFor, FastPFor128, FastPFor256, FastPForBlock, FastPForBlock128,
+    FastPForBlock256, FastPForBlockWide128, FastPForBlockWide256, FastPForSequential32x128,
+    FastPForSequential32x256, FastPForSequential64x128, FastPForSequential64x256,
+    FastPForSequentialBlock32x128, FastPForSequentialBlock32x256, FastPForSequentialBlock64x128,
+    FastPForSequentialBlock64x256, FastPForSimd128, FastPForSimd256, FastPForSimdBlock128,
+    FastPForSimdBlock256, FastPForSimdBlockWide128, FastPForSimdBlockWide256, FastPForSimdWide128,
+    FastPForSimdWide256, FastPForWide128, FastPForWide256, JustCopy, Kernels, Layout, Portable,
+    Scalar, Sequential, Simd, VariableByte,
 };
 
 #[cfg(feature = "__testing")]

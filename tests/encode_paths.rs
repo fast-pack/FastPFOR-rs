@@ -5,6 +5,7 @@
 //! API with inputs crafted to reach specific branches.
 
 #![cfg(feature = "rust")]
+#![allow(deprecated, reason = "tests the deprecated names")]
 
 #[path = "../src/test_utils.rs"]
 mod test_utils;

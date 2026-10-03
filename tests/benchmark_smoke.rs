@@ -5,6 +5,7 @@
 //! cover the benchmark code paths without Criterion overhead.
 
 #![cfg(feature = "rust")]
+#![allow(deprecated, reason = "tests the deprecated names")]
 
 #[path = "../src/test_utils.rs"]
 mod test_utils;

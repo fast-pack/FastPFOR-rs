@@ -1,4 +1,5 @@
 #![no_main]
+#![allow(deprecated, reason = "tests the deprecated names")]
 
 use std::fmt::Debug;
 

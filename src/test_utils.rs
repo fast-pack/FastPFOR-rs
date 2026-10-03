@@ -6,6 +6,7 @@
 //! consumed from outside must be `pub`. Each consumer uses a different subset,
 //! so dead-code is allowed at module scope.
 
+#![allow(deprecated, reason = "tests the deprecated names")]
 // This is an internal dev-only module; doc-comments on every field would add
 // noise without benefit.
 #![allow(dead_code, missing_docs, clippy::unwrap_used)]

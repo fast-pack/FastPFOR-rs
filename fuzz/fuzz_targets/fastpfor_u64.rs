@@ -1,4 +1,5 @@
 #![no_main]
+#![allow(deprecated, reason = "tests the deprecated names")]
 
 use fastpfor::cpp::{CppFastPFor128, CppFastPFor256};
 use fastpfor::{BlockCodec64, FastPForWide128, FastPForWide256};

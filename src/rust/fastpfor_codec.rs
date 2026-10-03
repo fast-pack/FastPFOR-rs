@@ -7,9 +7,9 @@ use crate::FastPForResult;
 use crate::codec::{AnyLenCodec, BlockCodec64};
 use crate::rust::VariableByte;
 use crate::rust::composite::CompositeCodec;
-use crate::rust::integer_compression::fastpfor::{FastPFor, sealed};
+use crate::rust::integer_compression::fastpfor::{FastPFor, FastPForBlock, sealed};
 use crate::rust::integer_compression::fastpfor_int::FastPForInt;
-use crate::rust::kernels::{Kernels, Scalar, Simd};
+use crate::rust::kernels::{Auto, Kernels, Scalar, Sequential, Simd};
 
 /// Any-length `FastPFOR` codec over `N`-value blocks of width `T` ([`u32`] or [`u64`]).
 ///
@@ -77,28 +77,70 @@ where
 }
 
 /// Any-length `u32` `FastPFOR` codec with 128-value blocks.
+#[deprecated(since = "0.9.2", note = "renamed to `FastPForSequential32x128`")]
 pub type FastPFor128 = FastPForCodec<128, u32>;
 
 /// Any-length `u32` `FastPFOR` codec with 256-value blocks.
+#[deprecated(since = "0.9.2", note = "renamed to `FastPForSequential32x256`")]
 pub type FastPFor256 = FastPForCodec<256, u32>;
 
 /// Any-length `u64` `FastPFOR` codec with 128-value blocks.
+#[deprecated(since = "0.9.2", note = "renamed to `FastPForSequential64x128`")]
 pub type FastPForWide128 = FastPForCodec<128, u64>;
 
 /// Any-length `u64` `FastPFOR` codec with 256-value blocks.
+#[deprecated(since = "0.9.2", note = "renamed to `FastPForSequential64x256`")]
 pub type FastPForWide256 = FastPForCodec<256, u64>;
 
 /// [`FastPFor128`] using [`Simd`] kernels; byte-compatible with it.
+#[deprecated(since = "0.9.2", note = "use `FastPForSequential32x128`")]
 pub type FastPForSimd128 = FastPForCodec<128, u32, Simd>;
 
 /// [`FastPFor256`] using [`Simd`] kernels; byte-compatible with it.
+#[deprecated(since = "0.9.2", note = "use `FastPForSequential32x256`")]
 pub type FastPForSimd256 = FastPForCodec<256, u32, Simd>;
 
 /// [`FastPForWide128`] using [`Simd`] kernels; byte-compatible with it.
+#[deprecated(since = "0.9.2", note = "use `FastPForSequential64x128`")]
 pub type FastPForSimdWide128 = FastPForCodec<128, u64, Simd>;
 
 /// [`FastPForWide256`] using [`Simd`] kernels; byte-compatible with it.
+#[deprecated(since = "0.9.2", note = "use `FastPForSequential64x256`")]
 pub type FastPForSimdWide256 = FastPForCodec<256, u64, Simd>;
+
+/// The `u32`, 128-value block codec under its 0.10 name. Byte-identical to the C++ `FastPFor<4>` codec.
+///
+/// Uses the [`Auto`] kernels: SIMD where available, with the same output as the portable ones.
+pub type FastPForSequential32x128 = FastPForCodec<128, u32, Auto>;
+
+/// The `u32`, 256-value block codec under its 0.10 name. Byte-identical to the C++ `FastPFor<8>` codec.
+///
+/// Uses the [`Auto`] kernels: SIMD where available, with the same output as the portable ones.
+pub type FastPForSequential32x256 = FastPForCodec<256, u32, Auto>;
+
+/// The `u64`, 128-value block codec under its 0.10 name. Byte-identical to the 64-bit path of the
+/// C++ `FastPFor<4>` codec.
+///
+/// Uses the [`Auto`] kernels: SIMD where available, with the same output as the portable ones.
+pub type FastPForSequential64x128 = FastPForCodec<128, u64, Auto>;
+
+/// The `u64`, 256-value block codec under its 0.10 name. Byte-identical to the 64-bit path of the
+/// C++ `FastPFor<8>` codec.
+///
+/// Uses the [`Auto`] kernels: SIMD where available, with the same output as the portable ones.
+pub type FastPForSequential64x256 = FastPForCodec<256, u64, Auto>;
+
+/// The block codec of [`FastPForSequential32x128`], for whole blocks only.
+pub type FastPForSequentialBlock32x128 = FastPForBlock<Sequential, u32, 128>;
+
+/// The block codec of [`FastPForSequential32x256`], for whole blocks only.
+pub type FastPForSequentialBlock32x256 = FastPForBlock<Sequential, u32, 256>;
+
+/// The block codec of [`FastPForSequential64x128`], for whole blocks only.
+pub type FastPForSequentialBlock64x128 = FastPForBlock<Sequential, u64, 128>;
+
+/// The block codec of [`FastPForSequential64x256`], for whole blocks only.
+pub type FastPForSequentialBlock64x256 = FastPForBlock<Sequential, u64, 256>;
 
 #[cfg(test)]
 mod tests {

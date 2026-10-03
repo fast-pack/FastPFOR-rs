@@ -1,6 +1,7 @@
 //! Benchmark suite for `FastPFOR` compression codecs.
 
 #![allow(clippy::unwrap_used)]
+#![allow(deprecated, reason = "tests the deprecated names")]
 
 use std::hint::black_box;
 
