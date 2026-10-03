@@ -8,14 +8,10 @@ mod test_utils;
 
 use std::fmt::Debug;
 
+#[cfg(feature = "__testing")]
+use fastpfor::__testing::{Implementation, implementation};
 use fastpfor::{
-    AnyLenCodec, BlockCodec, CompositeCodec, FastPFor, FastPFor128, FastPFor256, FastPForBlock128,
-    FastPForBlock256, FastPForBlockWide128, FastPForBlockWide256, FastPForInterleaved128,
-    FastPForInterleaved256, FastPForInterleavedBlock128, FastPForInterleavedBlock256,
-    FastPForInterleavedBlockWide128, FastPForInterleavedBlockWide256, FastPForInterleavedWide128,
-    FastPForInterleavedWide256, FastPForSimd128, FastPForSimd256, FastPForSimdBlock128,
-    FastPForSimdBlock256, FastPForSimdBlockWide128, FastPForSimdBlockWide256, FastPForSimdWide128,
-    FastPForSimdWide256, FastPForWide128, FastPForWide256, InterleavedPortable, VariableByte,
+    AnyLenCodec, Auto, BlockCodec, FastPForBlock, FastPForCodec, Interleaved, Portable, Sequential,
     slice_to_blocks,
 };
 use rand::rngs::StdRng;
@@ -200,81 +196,90 @@ where
 }
 
 #[test]
-fn simd128_matches_scalar() {
-    check_all::<FastPFor128, FastPForSimd128, FastPForBlock128, FastPForSimdBlock128, u32>(128);
-}
-
-#[test]
-fn simd256_matches_scalar() {
-    check_all::<FastPFor256, FastPForSimd256, FastPForBlock256, FastPForSimdBlock256, u32>(256);
-}
-
-#[test]
-fn simd_wide128_matches_scalar() {
+fn simd128_matches_portable() {
     check_all::<
-        FastPForWide128,
-        FastPForSimdWide128,
-        FastPForBlockWide128,
-        FastPForSimdBlockWide128,
+        FastPForCodec<Sequential, u32, 128, Portable>,
+        FastPForCodec<Sequential, u32, 128, Auto>,
+        FastPForBlock<Sequential, u32, 128, Portable>,
+        FastPForBlock<Sequential, u32, 128, Auto>,
+        u32,
+    >(128);
+}
+
+#[test]
+fn simd256_matches_portable() {
+    check_all::<
+        FastPForCodec<Sequential, u32, 256, Portable>,
+        FastPForCodec<Sequential, u32, 256, Auto>,
+        FastPForBlock<Sequential, u32, 256, Portable>,
+        FastPForBlock<Sequential, u32, 256, Auto>,
+        u32,
+    >(256);
+}
+
+#[test]
+fn simd_wide128_matches_portable() {
+    check_all::<
+        FastPForCodec<Sequential, u64, 128, Portable>,
+        FastPForCodec<Sequential, u64, 128, Auto>,
+        FastPForBlock<Sequential, u64, 128, Portable>,
+        FastPForBlock<Sequential, u64, 128, Auto>,
         u64,
     >(128);
 }
 
 #[test]
-fn simd_wide256_matches_scalar() {
+fn simd_wide256_matches_portable() {
     check_all::<
-        FastPForWide256,
-        FastPForSimdWide256,
-        FastPForBlockWide256,
-        FastPForSimdBlockWide256,
+        FastPForCodec<Sequential, u64, 256, Portable>,
+        FastPForCodec<Sequential, u64, 256, Auto>,
+        FastPForBlock<Sequential, u64, 256, Portable>,
+        FastPForBlock<Sequential, u64, 256, Auto>,
         u64,
     >(256);
 }
 
 /// The portable kernels of the interleaved layout, to compare with the vector ones.
-type InterleavedPortableCodec<const N: usize, T> =
-    CompositeCodec<FastPFor<N, T, InterleavedPortable>, VariableByte<T>>;
-
 #[test]
-fn interleaved128_matches_portable() {
+fn interleaved128_simd_matches_portable() {
     check_all::<
-        InterleavedPortableCodec<128, u32>,
-        FastPForInterleaved128,
-        FastPFor<128, u32, InterleavedPortable>,
-        FastPForInterleavedBlock128,
+        FastPForCodec<Interleaved, u32, 128, Portable>,
+        FastPForCodec<Interleaved, u32, 128, Auto>,
+        FastPForBlock<Interleaved, u32, 128, Portable>,
+        FastPForBlock<Interleaved, u32, 128, Auto>,
         u32,
     >(128);
 }
 
 #[test]
-fn interleaved256_matches_portable() {
+fn interleaved256_simd_matches_portable() {
     check_all::<
-        InterleavedPortableCodec<256, u32>,
-        FastPForInterleaved256,
-        FastPFor<256, u32, InterleavedPortable>,
-        FastPForInterleavedBlock256,
+        FastPForCodec<Interleaved, u32, 256, Portable>,
+        FastPForCodec<Interleaved, u32, 256, Auto>,
+        FastPForBlock<Interleaved, u32, 256, Portable>,
+        FastPForBlock<Interleaved, u32, 256, Auto>,
         u32,
     >(256);
 }
 
 #[test]
-fn interleaved_wide128_matches_portable() {
+fn interleaved_wide128_simd_matches_portable() {
     check_all::<
-        InterleavedPortableCodec<128, u64>,
-        FastPForInterleavedWide128,
-        FastPFor<128, u64, InterleavedPortable>,
-        FastPForInterleavedBlockWide128,
+        FastPForCodec<Interleaved, u64, 128, Portable>,
+        FastPForCodec<Interleaved, u64, 128, Auto>,
+        FastPForBlock<Interleaved, u64, 128, Portable>,
+        FastPForBlock<Interleaved, u64, 128, Auto>,
         u64,
     >(128);
 }
 
 #[test]
-fn interleaved_wide256_matches_portable() {
+fn interleaved_wide256_simd_matches_portable() {
     check_all::<
-        InterleavedPortableCodec<256, u64>,
-        FastPForInterleavedWide256,
-        FastPFor<256, u64, InterleavedPortable>,
-        FastPForInterleavedBlockWide256,
+        FastPForCodec<Interleaved, u64, 256, Portable>,
+        FastPForCodec<Interleaved, u64, 256, Auto>,
+        FastPForBlock<Interleaved, u64, 256, Portable>,
+        FastPForBlock<Interleaved, u64, 256, Auto>,
         u64,
     >(256);
 }
@@ -284,22 +289,42 @@ fn interleaved_wide256_matches_portable() {
 fn interleaved_layout_differs_from_standard() {
     let data = every_width::<u32>(128);
     assert_ne!(
-        encode(&mut FastPForInterleaved128::default(), &data),
-        encode(&mut FastPFor128::default(), &data)
+        encode(
+            &mut FastPForCodec::<Interleaved, u32, 128, Auto>::default(),
+            &data
+        ),
+        encode(
+            &mut FastPForCodec::<Sequential, u32, 128, Portable>::default(),
+            &data
+        )
     );
     let data = every_width::<u64>(128);
     assert_ne!(
-        encode(&mut FastPForInterleavedWide128::default(), &data),
-        encode(&mut FastPForWide128::default(), &data)
+        encode(
+            &mut FastPForCodec::<Interleaved, u64, 128, Auto>::default(),
+            &data
+        ),
+        encode(
+            &mut FastPForCodec::<Sequential, u64, 128, Portable>::default(),
+            &data
+        )
     );
 }
 
 #[test]
-fn simd_matches_scalar_on_shared_cases() {
+fn simd_matches_portable_on_shared_cases() {
     for n in test_input_sizes() {
         for data in get_test_cases(n + 37) {
-            assert_compatible::<FastPFor128, FastPForSimd128, u32>(&data);
-            assert_compatible::<FastPFor256, FastPForSimd256, u32>(&data);
+            assert_compatible::<
+                FastPForCodec<Sequential, u32, 128, Portable>,
+                FastPForCodec<Sequential, u32, 128, Auto>,
+                u32,
+            >(&data);
+            assert_compatible::<
+                FastPForCodec<Sequential, u32, 256, Portable>,
+                FastPForCodec<Sequential, u32, 256, Auto>,
+                u32,
+            >(&data);
         }
     }
 }
@@ -307,7 +332,10 @@ fn simd_matches_scalar_on_shared_cases() {
 #[test]
 fn simd_reuses_state_like_scalar() {
     let mut rng = StdRng::seed_from_u64(RNG_SEED);
-    let (mut scalar, mut simd) = (FastPFor128::default(), FastPForSimd128::default());
+    let (mut scalar, mut simd) = (
+        FastPForCodec::<Sequential, u32, 128, Portable>::default(),
+        FastPForCodec::<Sequential, u32, 128, Auto>::default(),
+    );
     for _ in 0..20 {
         let blocks = rng.random_range(0..40);
         let tail = rng.random_range(0..128);
@@ -320,15 +348,92 @@ fn simd_reuses_state_like_scalar() {
 
 #[cfg(feature = "__testing")]
 #[test]
-fn simd_fallback_matches_scalar() {
+fn simd_fallback_matches_portable() {
     fastpfor::__testing::with_simd_fallback(|| {
-        check_all::<FastPFor128, FastPForSimd128, FastPForBlock128, FastPForSimdBlock128, u32>(128);
         check_all::<
-            FastPForWide256,
-            FastPForSimdWide256,
-            FastPForBlockWide256,
-            FastPForSimdBlockWide256,
+            FastPForCodec<Sequential, u32, 128, Portable>,
+            FastPForCodec<Sequential, u32, 128, Auto>,
+            FastPForBlock<Sequential, u32, 128, Portable>,
+            FastPForBlock<Sequential, u32, 128, Auto>,
+            u32,
+        >(128);
+        check_all::<
+            FastPForCodec<Sequential, u64, 256, Portable>,
+            FastPForCodec<Sequential, u64, 256, Auto>,
+            FastPForBlock<Sequential, u64, 256, Portable>,
+            FastPForBlock<Sequential, u64, 256, Auto>,
             u64,
         >(256);
+    });
+}
+
+/// What `Auto` must use on this target and CPU, as `(sequential, interleaved)`: written out here independently
+/// of the library's `cfg`s, so that a mistake there, or a silent fallback, fails instead of letting the tests
+/// above compare the portable code with itself.
+#[cfg(all(feature = "__testing", feature = "simd", target_arch = "x86_64"))]
+fn expected_auto() -> (Implementation, Implementation) {
+    let sequential = if std::is_x86_feature_detected!("avx2") {
+        Implementation::Avx2
+    } else {
+        Implementation::Portable
+    };
+    (sequential, Implementation::Sse2)
+}
+
+#[cfg(all(
+    feature = "__testing",
+    feature = "simd",
+    target_arch = "aarch64",
+    target_feature = "neon"
+))]
+fn expected_auto() -> (Implementation, Implementation) {
+    let interleaved = if cfg!(target_endian = "little") {
+        Implementation::Neon
+    } else {
+        Implementation::Portable
+    };
+    (Implementation::Neon, interleaved)
+}
+
+#[cfg(all(
+    feature = "__testing",
+    not(all(
+        feature = "simd",
+        any(
+            target_arch = "x86_64",
+            all(target_arch = "aarch64", target_feature = "neon")
+        )
+    ))
+))]
+fn expected_auto() -> (Implementation, Implementation) {
+    (Implementation::Portable, Implementation::Portable)
+}
+
+#[cfg(feature = "__testing")]
+#[test]
+fn auto_runs_the_expected_implementation() {
+    let (sequential, interleaved) = expected_auto();
+    assert_eq!(implementation::<Sequential, Auto>(), sequential);
+    assert_eq!(implementation::<Interleaved, Auto>(), interleaved);
+    assert_eq!(
+        implementation::<Sequential, Portable>(),
+        Implementation::Portable
+    );
+    assert_eq!(
+        implementation::<Interleaved, Portable>(),
+        Implementation::Portable
+    );
+}
+
+/// The fallback hook switches the runtime-detected AVX2 path to the portable code, and nothing else.
+#[cfg(all(feature = "__testing", feature = "simd", target_arch = "x86_64"))]
+#[test]
+fn simd_fallback_skips_only_avx2() {
+    fastpfor::__testing::with_simd_fallback(|| {
+        assert_eq!(
+            implementation::<Sequential, Auto>(),
+            Implementation::Portable
+        );
+        assert_eq!(implementation::<Interleaved, Auto>(), Implementation::Sse2);
     });
 }

@@ -4,8 +4,8 @@
 
 use fastpfor::cpp::*;
 use fastpfor::{
-    AnyLenCodec, FastPFor128, FastPFor256, FastPForInterleaved128, FastPForInterleaved256,
-    FastPForResult, JustCopy, VariableByte,
+    AnyLenCodec, FastPForInterleaved32x128, FastPForInterleaved32x256, FastPForResult,
+    FastPForSequential32x128, FastPForSequential32x256, JustCopy, VariableByte,
 };
 
 // ── Debug helper ─────────────────────────────────────────────────────────────
@@ -69,10 +69,10 @@ macro_rules! define_fuzz_any_len {
 }
 
 define_fuzz_any_len!(
-    FastPFor256(FastPFor256),
-    FastPFor128(FastPFor128),
-    FastPForInterleaved256(FastPForInterleaved256),
-    FastPForInterleaved128(FastPForInterleaved128),
+    FastPForSequential32x256(FastPForSequential32x256),
+    FastPForSequential32x128(FastPForSequential32x128),
+    FastPForInterleaved32x256(FastPForInterleaved32x256),
+    FastPForInterleaved32x128(FastPForInterleaved32x128),
     VariableByte(VariableByte),
     JustCopy(JustCopy),
     CppBP32(CppBP32),
@@ -112,17 +112,25 @@ macro_rules! codec_ctor_fn {
     };
 }
 
-codec_ctor_fn!(make_rust_fastpfor256, FastPFor256, FastPFor256);
-codec_ctor_fn!(make_rust_fastpfor128, FastPFor128, FastPFor128);
+codec_ctor_fn!(
+    make_rust_fastpfor256,
+    FastPForSequential32x256,
+    FastPForSequential32x256
+);
+codec_ctor_fn!(
+    make_rust_fastpfor128,
+    FastPForSequential32x128,
+    FastPForSequential32x128
+);
 codec_ctor_fn!(
     make_rust_interleaved256,
-    FastPForInterleaved256,
-    FastPForInterleaved256
+    FastPForInterleaved32x256,
+    FastPForInterleaved32x256
 );
 codec_ctor_fn!(
     make_rust_interleaved128,
-    FastPForInterleaved128,
-    FastPForInterleaved128
+    FastPForInterleaved32x128,
+    FastPForInterleaved32x128
 );
 
 fn make_rust_variable_byte() -> FuzzAnyLen {
@@ -135,12 +143,12 @@ fn make_rust_just_copy() -> FuzzAnyLen {
 
 /// Rust codecs. Block codecs are wrapped in `CompositeCodec<_, VariableByte>`.
 pub static RUST: &[CodecEntry] = &[
-    ("FastPFor256", make_rust_fastpfor256),
-    ("FastPFor128", make_rust_fastpfor128),
+    ("FastPForSequential32x256", make_rust_fastpfor256),
+    ("FastPForSequential32x128", make_rust_fastpfor128),
     ("VariableByte", make_rust_variable_byte),
     ("JustCopy", make_rust_just_copy),
-    ("FastPForInterleaved256", make_rust_interleaved256),
-    ("FastPForInterleaved128", make_rust_interleaved128),
+    ("FastPForInterleaved32x256", make_rust_interleaved256),
+    ("FastPForInterleaved32x128", make_rust_interleaved128),
 ];
 
 codec_ctor_fn!(make_cpp_bp32, CppBP32, CppBP32);
@@ -266,25 +274,25 @@ pub struct CodecPair {
 }
 
 fn pair_rust_fastpfor128() -> FuzzAnyLen {
-    FuzzAnyLen::FastPFor128(FastPFor128::default())
+    FuzzAnyLen::FastPForSequential32x128(FastPForSequential32x128::default())
 }
 fn pair_cpp_fastpfor128() -> FuzzAnyLen {
     FuzzAnyLen::CppFastPFor128(CppFastPFor128::default())
 }
 fn pair_rust_fastpfor256() -> FuzzAnyLen {
-    FuzzAnyLen::FastPFor256(FastPFor256::default())
+    FuzzAnyLen::FastPForSequential32x256(FastPForSequential32x256::default())
 }
 fn pair_cpp_fastpfor256() -> FuzzAnyLen {
     FuzzAnyLen::CppFastPFor256(CppFastPFor256::default())
 }
 fn pair_rust_interleaved128() -> FuzzAnyLen {
-    FuzzAnyLen::FastPForInterleaved128(FastPForInterleaved128::default())
+    FuzzAnyLen::FastPForInterleaved32x128(FastPForInterleaved32x128::default())
 }
 fn pair_cpp_simdfastpfor128() -> FuzzAnyLen {
     FuzzAnyLen::CppSimdFastPFor128(CppSimdFastPFor128::default())
 }
 fn pair_rust_interleaved256() -> FuzzAnyLen {
-    FuzzAnyLen::FastPForInterleaved256(FastPForInterleaved256::default())
+    FuzzAnyLen::FastPForInterleaved32x256(FastPForInterleaved32x256::default())
 }
 fn pair_cpp_simdfastpfor256() -> FuzzAnyLen {
     FuzzAnyLen::CppSimdFastPFor256(CppSimdFastPFor256::default())
@@ -305,22 +313,22 @@ fn pair_cpp_copy() -> FuzzAnyLen {
 /// Pairs of Rust and C++ codecs expected to produce bit-identical output.
 pub static ENCODE_COMPARE_PAIRS: &[CodecPair] = &[
     CodecPair {
-        name: "FastPFor128",
+        name: "FastPForSequential32x128",
         make_rust: pair_rust_fastpfor128,
         make_cpp: pair_cpp_fastpfor128,
     },
     CodecPair {
-        name: "FastPFor256",
+        name: "FastPForSequential32x256",
         make_rust: pair_rust_fastpfor256,
         make_cpp: pair_cpp_fastpfor256,
     },
     CodecPair {
-        name: "FastPForInterleaved128",
+        name: "FastPForInterleaved32x128",
         make_rust: pair_rust_interleaved128,
         make_cpp: pair_cpp_simdfastpfor128,
     },
     CodecPair {
-        name: "FastPForInterleaved256",
+        name: "FastPForInterleaved32x256",
         make_rust: pair_rust_interleaved256,
         make_cpp: pair_cpp_simdfastpfor256,
     },
@@ -337,7 +345,7 @@ pub static ENCODE_COMPARE_PAIRS: &[CodecPair] = &[
 ];
 
 /// Optional pair filter: if set, only the named pair is tested.
-/// Set `FUZZ_PAIR=FastPFor128` or `FUZZ_ENCODE_COMPARE_PAIR=FastPFor128` to restrict.
+/// Set `FUZZ_PAIR=FastPForSequential32x128` or `FUZZ_ENCODE_COMPARE_PAIR=FastPForSequential32x128` to restrict.
 pub fn encode_compare_pair_filter() -> Option<String> {
     std::env::var("FUZZ_PAIR")
         .ok()

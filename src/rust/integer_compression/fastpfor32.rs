@@ -3,32 +3,12 @@ use std::io::Cursor;
 use bytemuck::cast_slice;
 
 use crate::helpers::AsUsize;
-use crate::rust::integer_compression::fastpfor::sealed;
+use crate::rust::integer_compression::fastpfor::{FastPForBlock, sealed};
 use crate::rust::integer_compression::fastpfor_int::FastPForInt;
-use crate::rust::kernels::{Interleaved, Kernels, Simd};
-use crate::{BlockCodec, FastPFor, FastPForError, FastPForResult};
+use crate::rust::kernels::{Kernels, Layout};
+use crate::{BlockCodec, FastPForError, FastPForResult};
 
-/// Type alias for [`FastPFor`] with 128-element `u32` blocks.
-pub type FastPForBlock128 = FastPFor<128, u32>;
-
-/// Type alias for [`FastPFor`] with 256-element `u32` blocks.
-pub type FastPForBlock256 = FastPFor<256, u32>;
-
-/// [`FastPForBlock128`] using [`Simd`] kernels; byte-compatible with it.
-pub type FastPForSimdBlock128 = FastPFor<128, u32, Simd>;
-
-/// [`FastPForBlock256`] using [`Simd`] kernels; byte-compatible with it.
-pub type FastPForSimdBlock256 = FastPFor<256, u32, Simd>;
-
-/// [`FastPFor`] with 128-element `u32` blocks in the interleaved layout of the C++ `SIMDFastPFor`
-/// codec: byte-identical to it, and **not** compatible with [`FastPForBlock128`].
-pub type FastPForInterleavedBlock128 = FastPFor<128, u32, Interleaved>;
-
-/// [`FastPFor`] with 256-element `u32` blocks in the interleaved layout of the C++ `SIMDFastPFor`
-/// codec: byte-identical to it, and **not** compatible with [`FastPForBlock256`].
-pub type FastPForInterleavedBlock256 = FastPFor<256, u32, Interleaved>;
-
-impl<const N: usize, T: FastPForInt, K: Kernels> BlockCodec for FastPFor<N, T, K>
+impl<L: Layout, T: FastPForInt, const N: usize, K: Kernels> BlockCodec for FastPForBlock<L, T, N, K>
 where
     [T; N]: sealed::BlockSize,
 {
@@ -118,59 +98,63 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::rust::kernels::Sequential;
+
+    type Seq128 = FastPForBlock<Sequential, u32, 128>;
+    type Seq256 = FastPForBlock<Sequential, u32, 256>;
     use crate::test_utils::{block_compress, block_decompress, block_roundtrip};
 
     #[test]
     fn fastpfor_test() {
         let mut data = vec![0u32; 256];
         data[126] = u32::MAX;
-        block_roundtrip::<FastPForBlock256>(&data);
+        block_roundtrip::<Seq256>(&data);
     }
 
     #[test]
     fn fastpfor_test_128() {
         let mut data = vec![0u32; 128];
         data[126] = u32::MAX;
-        block_roundtrip::<FastPForBlock128>(&data);
+        block_roundtrip::<Seq128>(&data);
     }
 
     #[test]
     fn test_empty_blocks_ok() {
         // Empty input encodes to length header [0] (matches C++ FastPFor) and decodes cleanly.
-        let enc = block_compress::<FastPForBlock256>(&[]).unwrap();
+        let enc = block_compress::<Seq256>(&[]).unwrap();
         assert_eq!(enc, [0]);
-        let dec = block_decompress::<FastPForBlock256>(&enc, Some(0)).unwrap();
+        let dec = block_decompress::<Seq256>(&enc, Some(0)).unwrap();
         assert!(dec.is_empty());
     }
 
     // Tests ported from C++
     #[test]
     fn test_constant_sequence() {
-        block_roundtrip::<FastPForBlock128>(&vec![42u32; 65536]);
+        block_roundtrip::<Seq128>(&vec![42u32; 65536]);
     }
 
     #[test]
     fn test_alternating_sequence() {
         let data: Vec<_> = (0..65536u32).map(|i| u32::from(i % 2 != 0)).collect();
-        block_roundtrip::<FastPForBlock128>(&data);
+        block_roundtrip::<Seq128>(&data);
     }
 
     #[test]
     fn test_large_numbers() {
         let data: Vec<u32> = (0..65536u32).map(|i| i + (1u32 << 30)).collect();
-        block_roundtrip::<FastPForBlock128>(&data);
+        block_roundtrip::<Seq128>(&data);
     }
 
     #[test]
     fn cursor_api_roundtrip() {
-        block_roundtrip::<FastPForBlock256>(&vec![42u32; 256]);
+        block_roundtrip::<Seq256>(&vec![42u32; 256]);
     }
 
     #[test]
     fn headless_compress_unfit_pagesize() {
         // 640 values with 128-block codec spans two pages (512 + 128), exercising the loop.
         let input: Vec<u32> = (0..640u32).collect();
-        block_roundtrip::<FastPForBlock128>(&input);
+        block_roundtrip::<Seq128>(&input);
     }
 
     #[test]
@@ -179,7 +163,7 @@ mod tests {
         let input: Vec<u32> = (0..1024u32)
             .map(|i| if i % 2 == 0 { 1 << 30 } else { 3 })
             .collect();
-        block_roundtrip::<FastPForBlock128>(&input);
+        block_roundtrip::<Seq128>(&input);
     }
 
     // ── Error / edge tests not covered by `tests/decode_validation.rs` ─────
@@ -190,12 +174,12 @@ mod tests {
     #[test]
     fn uncompress_zero_input_length_err() {
         // Truly empty input (no header word at all) is invalid — C++ would crash reading *in.
-        block_decompress::<FastPForBlock256>(&[], None).unwrap_err();
+        block_decompress::<Seq256>(&[], None).unwrap_err();
     }
 
     #[test]
     fn headless_uncompress_zero_inlength_128_ok() {
-        FastPForBlock128::default()
+        Seq128::default()
             .decode_headless_blocks(
                 &[],
                 0,
@@ -212,14 +196,14 @@ mod tests {
         let data: Vec<u32> = (0..256u32)
             .map(|i| if i % 2 == 0 { 1u32 << 30 } else { 3 })
             .collect();
-        let compressed = block_compress::<FastPForBlock256>(&data).unwrap();
+        let compressed = block_compress::<Seq256>(&data).unwrap();
 
         let mut padded = vec![0u32];
         padded.extend_from_slice(&compressed);
         padded[2] = u32::MAX;
         let out_length = padded[1];
         assert!(
-            FastPForBlock256::default()
+            Seq256::default()
                 .decode_headless_blocks(
                     &padded,
                     out_length,
@@ -235,15 +219,15 @@ mod tests {
     fn decode_rejects_exceptions_from_prior_calls() {
         let mut data = vec![0u32; 128];
         data[45] = 1 << 20;
-        let mut codec = FastPForBlock128::default();
-        let (blocks, _) = crate::slice_to_blocks::<FastPForBlock128>(&data);
+        let mut codec = Seq128::default();
+        let (blocks, _) = crate::slice_to_blocks::<Seq128>(&data);
         let mut words = Vec::new();
         codec.encode_blocks(blocks, &mut words).unwrap();
         let bytesize = words[2];
         let bitmap_at = 3 + bytesize.div_ceil(4) as usize;
         words[bitmap_at] = 0;
 
-        let fresh = FastPForBlock128::default().decode_blocks(&words, None, &mut Vec::new());
+        let fresh = Seq128::default().decode_blocks(&words, None, &mut Vec::new());
         let reused = codec.decode_blocks(&words, None, &mut Vec::new());
         assert!(fresh.is_err());
         assert_eq!(format!("{reused:?}"), format!("{fresh:?}"));
@@ -253,7 +237,7 @@ mod tests {
     fn decode_index1_branch_valid() {
         let mut data = vec![1u32; 256];
         data[0] = 3;
-        block_roundtrip::<FastPForBlock256>(&data);
+        block_roundtrip::<Seq256>(&data);
     }
 
     /// `decode_blocks` with `expected_len: None` and header=0 returns `Ok` with empty output.
@@ -261,15 +245,15 @@ mod tests {
     fn decode_blocks_header_only_input() {
         // Input with just the length header [0]: no blocks to decode.
         let input = vec![0u32];
-        let out = block_decompress::<FastPForBlock256>(&input, None).unwrap();
+        let out = block_decompress::<Seq256>(&input, None).unwrap();
         assert!(out.is_empty());
     }
 
     #[test]
     fn decode_blocks_expected_len_mismatch_errors() {
         let data = vec![7u32; 256];
-        let compressed = block_compress::<FastPForBlock128>(&data).unwrap();
-        let err = block_decompress::<FastPForBlock128>(&compressed, Some(128)).unwrap_err();
+        let compressed = block_compress::<Seq128>(&data).unwrap();
+        let err = block_decompress::<Seq128>(&compressed, Some(128)).unwrap_err();
         assert_eq!(
             format!("{err:?}"),
             "DecodedCountMismatch { actual: 256, expected: 128 }"
@@ -279,7 +263,7 @@ mod tests {
     #[test]
     fn decode_blocks_header_exceeds_max_len_errors() {
         let input = vec![2048u32];
-        let result = block_decompress::<FastPForBlock128>(&input, None);
+        let result = block_decompress::<Seq128>(&input, None);
         assert!(
             matches!(result, Err(FastPForError::NotEnoughData)),
             "expected NotEnoughData, got {result:?}"
@@ -289,8 +273,8 @@ mod tests {
     #[test]
     fn decode_blocks_expected_len_exceeds_max_len_errors() {
         let input = vec![4_286_056_704u32, 27_590_491];
-        let max = FastPForBlock256::max_decompressed_len(input.len());
-        let result = block_decompress::<FastPForBlock256>(&input, Some(4_286_056_704));
+        let max = Seq256::max_decompressed_len(input.len());
+        let result = block_decompress::<Seq256>(&input, Some(4_286_056_704));
         assert!(
             matches!(
                 result,
@@ -308,16 +292,16 @@ mod tests {
             .collect();
         let mut data = vec![1u32; 128];
         data[5] = u32::MAX;
-        let fresh = block_compress::<FastPForBlock128>(&data).unwrap();
+        let fresh = block_compress::<Seq128>(&data).unwrap();
 
-        let mut codec = FastPForBlock128::default();
-        let (blocks, _) = crate::slice_to_blocks::<FastPForBlock128>(&noisy);
+        let mut codec = Seq128::default();
+        let (blocks, _) = crate::slice_to_blocks::<Seq128>(&noisy);
         codec.encode_blocks(blocks, &mut Vec::new()).unwrap();
-        let noisy_enc = block_compress::<FastPForBlock128>(&noisy).unwrap();
+        let noisy_enc = block_compress::<Seq128>(&noisy).unwrap();
         codec
             .decode_blocks(&noisy_enc, None, &mut Vec::new())
             .unwrap();
-        let (blocks, _) = crate::slice_to_blocks::<FastPForBlock128>(&data);
+        let (blocks, _) = crate::slice_to_blocks::<Seq128>(&data);
         let mut reused = Vec::new();
         codec.encode_blocks(blocks, &mut reused).unwrap();
         assert_eq!(reused, fresh);

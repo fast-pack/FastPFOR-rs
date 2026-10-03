@@ -8,8 +8,8 @@ mod test_utils;
 
 use fastpfor::cpp::{CppFastPFor128, CppFastPFor256, CppSimdFastPFor128, CppSimdFastPFor256};
 use fastpfor::{
-    AnyLenCodec, CompositeCodec, FastPFor, FastPFor128, FastPFor256, FastPForInterleaved128,
-    FastPForInterleaved256, InterleavedPortable, VariableByte,
+    AnyLenCodec, FastPForCodec, FastPForInterleaved32x128, FastPForInterleaved32x256,
+    FastPForSequential32x128, FastPForSequential32x256, Interleaved, Portable,
 };
 use rand::rngs::StdRng;
 use rand::{RngExt as _, SeedableRng as _};
@@ -87,17 +87,17 @@ where
     }
 }
 
-type Portable<const N: usize> =
-    CompositeCodec<FastPFor<N, u32, InterleavedPortable>, VariableByte<u32>>;
+/// The interleaved format with the portable kernels, to check them against C++ as well.
+type PortableCodec<const N: usize> = FastPForCodec<Interleaved, u32, N, Portable>;
 
 #[test]
 fn interleaved128_matches_cpp_simdfastpfor() {
-    check_matches_cpp::<FastPForInterleaved128, CppSimdFastPFor128, Portable<128>>(128);
+    check_matches_cpp::<FastPForInterleaved32x128, CppSimdFastPFor128, PortableCodec<128>>(128);
 }
 
 #[test]
 fn interleaved256_matches_cpp_simdfastpfor() {
-    check_matches_cpp::<FastPForInterleaved256, CppSimdFastPFor256, Portable<256>>(256);
+    check_matches_cpp::<FastPForInterleaved32x256, CppSimdFastPFor256, PortableCodec<256>>(256);
 }
 
 /// The two layouts must stay distinct: if `Interleaved` quietly fell back to the standard layout,
@@ -107,8 +107,8 @@ fn interleaved_differs_from_standard_layout() {
     let mut rng = StdRng::seed_from_u64(RNG_SEED);
     let data = pfor_like(&mut rng, 20, 128, 0);
     assert_ne!(
-        encode::<FastPForInterleaved128>(&data),
-        encode::<FastPFor128>(&data)
+        encode::<FastPForInterleaved32x128>(&data),
+        encode::<FastPForSequential32x128>(&data)
     );
     assert_ne!(
         encode::<CppSimdFastPFor128>(&data),
@@ -116,8 +116,8 @@ fn interleaved_differs_from_standard_layout() {
     );
     let data = pfor_like(&mut rng, 20, 256, 0);
     assert_ne!(
-        encode::<FastPForInterleaved256>(&data),
-        encode::<FastPFor256>(&data)
+        encode::<FastPForInterleaved32x256>(&data),
+        encode::<FastPForSequential32x256>(&data)
     );
     assert_ne!(
         encode::<CppSimdFastPFor256>(&data),

@@ -4,8 +4,8 @@ use std::fmt::Debug;
 
 use arbitrary::Arbitrary;
 use fastpfor::{
-    AnyLenCodec, BlockCodec, CompositeCodec, FastPFor, Interleaved, InterleavedPortable, Scalar,
-    Simd, VariableByte, slice_to_blocks,
+    AnyLenCodec, Auto, BlockCodec, CompositeCodec, FastPForBlock, Interleaved, Portable,
+    Sequential, VariableByte, slice_to_blocks,
 };
 use libfuzzer_sys::fuzz_target;
 
@@ -73,7 +73,7 @@ enum Case {
     Narrow256(Vec<Op<u32>>),
     Wide128(Vec<Op<u64>>),
     Wide256(Vec<Op<u64>>),
-    // The interleaved layout: its vector kernels against its portable ones.
+    // The interleaved layout, the same comparison.
     InterleavedNarrow128(Vec<Op<u32>>),
     InterleavedNarrow256(Vec<Op<u32>>),
     InterleavedWide128(Vec<Op<u64>>),
@@ -265,35 +265,33 @@ fn check<T, ScalarCodec, SimdCodec, ScalarBlocks, SimdBlocks>(
 }
 
 macro_rules! block_codec {
-    ($n:literal, $t:ty, $k:ty, $page_blocks:expr) => {
+    ($layout:ty, $n:literal, $t:ty, $k:ty, $page_blocks:expr) => {
         if $page_blocks == 0 {
-            FastPFor::<$n, $t, $k>::default()
+            FastPForBlock::<$layout, $t, $n, $k>::default()
         } else {
-            FastPFor::<$n, $t, $k>::new(u32::from($page_blocks) * $n)
+            FastPForBlock::<$layout, $t, $n, $k>::new(u32::from($page_blocks) * $n)
                 .expect("page size is a multiple of the block size")
         }
     };
 }
 
+/// Runs `ops` against the [`Portable`] and [`Auto`] kernels of one layout, which must agree byte for byte.
 macro_rules! run {
-    ($n:literal, $t:ty, $page_blocks:expr, $ops:expr) => {
-        run!($n, $t, Scalar, Simd, $page_blocks, $ops)
-    };
-    ($n:literal, $t:ty, $scalar:ty, $simd:ty, $page_blocks:expr, $ops:expr) => {
+    ($layout:ty, $n:literal, $t:ty, $page_blocks:expr, $ops:expr) => {
         check(
             Pair {
                 scalar: CompositeCodec::new(
-                    block_codec!($n, $t, $scalar, $page_blocks),
+                    block_codec!($layout, $n, $t, Portable, $page_blocks),
                     VariableByte::<$t>::new(),
                 ),
                 simd: CompositeCodec::new(
-                    block_codec!($n, $t, $simd, $page_blocks),
+                    block_codec!($layout, $n, $t, Auto, $page_blocks),
                     VariableByte::<$t>::new(),
                 ),
             },
             Pair {
-                scalar: block_codec!($n, $t, $scalar, $page_blocks),
-                simd: block_codec!($n, $t, $simd, $page_blocks),
+                scalar: block_codec!($layout, $n, $t, Portable, $page_blocks),
+                simd: block_codec!($layout, $n, $t, Auto, $page_blocks),
             },
             $n,
             $ops,
@@ -304,21 +302,13 @@ macro_rules! run {
 fuzz_target!(|input: Input| {
     let page_blocks = input.page_blocks;
     match &input.case {
-        Case::Narrow128(ops) => run!(128, u32, page_blocks, ops),
-        Case::Narrow256(ops) => run!(256, u32, page_blocks, ops),
-        Case::Wide128(ops) => run!(128, u64, page_blocks, ops),
-        Case::Wide256(ops) => run!(256, u64, page_blocks, ops),
-        Case::InterleavedNarrow128(ops) => {
-            run!(128, u32, InterleavedPortable, Interleaved, page_blocks, ops);
-        }
-        Case::InterleavedNarrow256(ops) => {
-            run!(256, u32, InterleavedPortable, Interleaved, page_blocks, ops);
-        }
-        Case::InterleavedWide128(ops) => {
-            run!(128, u64, InterleavedPortable, Interleaved, page_blocks, ops);
-        }
-        Case::InterleavedWide256(ops) => {
-            run!(256, u64, InterleavedPortable, Interleaved, page_blocks, ops);
-        }
+        Case::Narrow128(ops) => run!(Sequential, 128, u32, page_blocks, ops),
+        Case::Narrow256(ops) => run!(Sequential, 256, u32, page_blocks, ops),
+        Case::Wide128(ops) => run!(Sequential, 128, u64, page_blocks, ops),
+        Case::Wide256(ops) => run!(Sequential, 256, u64, page_blocks, ops),
+        Case::InterleavedNarrow128(ops) => run!(Interleaved, 128, u32, page_blocks, ops),
+        Case::InterleavedNarrow256(ops) => run!(Interleaved, 256, u32, page_blocks, ops),
+        Case::InterleavedWide128(ops) => run!(Interleaved, 128, u64, page_blocks, ops),
+        Case::InterleavedWide256(ops) => run!(Interleaved, 256, u64, page_blocks, ops),
     }
 });

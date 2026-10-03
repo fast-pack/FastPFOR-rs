@@ -22,15 +22,18 @@ required-features = ["rust"]
 harness = false
 
 [features]
-default = ["rust"]
+default = ["rust", "simd"]
 # Used internally for testing and benchmarking. Not intended for public use.
-_all_compatible = ["cpp_portable", "rust"]
+_all_compatible = ["cpp_portable", "rust", "simd"]
 # Use portable C++ code that will not rely on the latest CPU features. This is the default for the C++ bindings.
 cpp_portable = ["cpp"]
 # Optimize FastPFOR for the current CPU.
 cpp_native = ["cpp"]
 cpp = ["dep:cmake", "dep:cxx", "dep:cxx-build"]
-rust = ["dep:bytes", "dep:num-traits", "dep:wide"]
+rust = ["dep:bytes", "dep:num-traits"]
+# SIMD kernels used by the default `Auto` kernels: AVX2 and SSE2 on x86_64, NEON on aarch64. Without it, `Auto` uses the
+# portable code, and with `cpp` also off this crate contains no `unsafe` code (enforced by `forbid(unsafe_code)`).
+simd = ["rust", "dep:wide"]
 __testing = ["rust"]
 
 [dependencies]

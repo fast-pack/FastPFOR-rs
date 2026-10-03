@@ -60,7 +60,7 @@ _check-platform arch name rustflags:
     if [ '{{arch}}' = '{{arch()}}' ]; then
         {{just}} check
     else
-        cargo check --workspace --lib --no-default-features --features rust,__testing
+        cargo check --workspace --lib --no-default-features --features rust,simd,__testing
     fi
 
 # Generate LCOV coverage report for CI to upload to codecov.io

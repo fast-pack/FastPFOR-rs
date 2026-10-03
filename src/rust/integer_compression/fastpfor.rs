@@ -8,14 +8,14 @@ use bytes::{Buf as _, BufMut as _, BytesMut};
 use crate::helpers::{GetWithErr, greatest_multiple};
 use crate::rust::cursor::IncrementCursor;
 use crate::rust::integer_compression::fastpfor_int::FastPForInt;
-use crate::rust::kernels::{Kernels, Scalar};
+use crate::rust::kernels::{Auto, Kernels, Layout};
 use crate::{FastPForError, FastPForResult};
 
 pub(crate) mod sealed {
-    /// Sealed marker trait: only valid `[T; N]` block arrays are accepted by `FastPFor`.
+    /// Sealed marker trait: only valid `[T; N]` block arrays are accepted by `FastPForBlock`.
     ///
     /// This is intentionally private so that users cannot implement it for other sizes,
-    /// preventing instantiation of `FastPFor<N, T>` for unsupported `N`/`T` at compile time.
+    /// preventing instantiation of `FastPForBlock` for unsupported `N`/`T` at compile time.
     pub trait BlockSize: bytemuck::Pod {}
     impl BlockSize for [u32; 128] {}
     impl BlockSize for [u32; 256] {}
@@ -41,33 +41,34 @@ impl<T, F: Fn(&[T], usize, &mut [u32], usize, u8) + Copy> PackFn<T> for F {}
 pub(crate) trait UnpackFn<T>: Fn(&[u32], usize, &mut [T], usize, u8) + Copy {}
 impl<T, F: Fn(&[u32], usize, &mut [T], usize, u8) + Copy> UnpackFn<T> for F {}
 
-/// Fast Patched Frame-of-Reference ([FastPFOR](https://github.com/lemire/FastPFor)) codec.
+/// Block codec of Fast Patched Frame-of-Reference ([FastPFOR](https://github.com/lemire/FastPFor)).
 ///
-/// `N` is the block size (128 or 256 values per block) and `T` the element type, defaulting to `u32`
-/// ([`u32`] or [`u64`]). `K` selects the bit-packing [`Kernels`]: [`Scalar`] (the default) or
-/// [`Simd`](crate::Simd). Both produce byte-identical output. This struct implements [`BlockCodec`](crate::BlockCodec)
-/// with `Block = [u32; N]` for the `u32` element type, giving compile-time guarantees that only
-/// correctly-sized blocks are accepted.
+/// - `L`, the wire [`Layout`]: [`Sequential`](crate::Sequential) (C++ `FastPFor`) or
+///   [`Interleaved`](crate::Interleaved) (C++ `SIMDFastPFor`). The two are **not** interchangeable.
+/// - `T`, the element type: [`u32`] or [`u64`].
+/// - `N`, the block size: 128 or 256 values.
+/// - `K`, the [`Kernels`]: [`Auto`] (the default) or [`Portable`](crate::Portable). They only affect speed:
+///   both write the same bytes.
+///
+/// This codec only accepts whole blocks, with compile-time block sizes through
+/// [`BlockCodec`](crate::BlockCodec). Most users want the any-length codecs instead, such as
+/// [`FastPForSequential32x128`](crate::FastPForSequential32x128), which add a variable-byte tail
+/// for the values after the last whole block.
 ///
 /// The per-block scratch buffers are sized exactly for `T` (`T::WIDTH + 1` buckets) via the
 /// sealed `FastPForInt` trait, so the bucket count is neither wasted nor part of this
 /// type's signature.
 ///
-/// Use [`FastPForBlock128`](crate::FastPForBlock128) or [`FastPForBlock256`](crate::FastPForBlock256)
-/// as convenient `u32` type aliases.
-///
-/// To compress arbitrary-length data (including a sub-block remainder),
-/// wrap this in a [`CompositeCodec`](crate::CompositeCodec):
-///
 /// ```
-/// # use fastpfor::{FastPFor256, AnyLenCodec};
-/// # let data = [];
-/// # let mut out = vec![];
-/// let mut codec = FastPFor256::default();
-/// codec.encode(&data, &mut out).unwrap();
+/// # use fastpfor::{BlockCodec, FastPForBlock, Sequential, slice_to_blocks};
+/// let data: Vec<u32> = (0..512).collect();
+/// let mut codec = FastPForBlock::<Sequential, u32, 256>::default();
+/// let (blocks, _remainder) = slice_to_blocks::<FastPForBlock<Sequential, u32, 256>>(&data);
+/// let mut out = Vec::new();
+/// codec.encode_blocks(blocks, &mut out).unwrap();
 /// ```
 #[derive(Debug)]
-pub struct FastPFor<const N: usize, T: FastPForInt = u32, K: Kernels = Scalar> {
+pub struct FastPForBlock<L: Layout, T: FastPForInt, const N: usize, K: Kernels = Auto> {
     /// Exception values indexed by bit width difference
     exception_buffers: T::ExceptionBuffers,
     /// Metadata buffer for encoding/decoding
@@ -85,18 +86,18 @@ pub struct FastPFor<const N: usize, T: FastPForInt = u32, K: Kernels = Scalar> {
     exception_count: u8,
     /// Maximum bit width required for any value in the block
     max_bits: u8,
-    kernels: PhantomData<K>,
+    marker: PhantomData<(L, K)>,
 }
 
-impl<const N: usize, T: FastPForInt, K: Kernels> Default for FastPFor<N, T, K> {
+impl<L: Layout, T: FastPForInt, const N: usize, K: Kernels> Default for FastPForBlock<L, T, N, K> {
     fn default() -> Self {
         Self::new(DEFAULT_PAGE_SIZE)
             .expect("DEFAULT_PAGE_SIZE is a multiple of all valid block sizes")
     }
 }
 
-impl<const N: usize, T: FastPForInt, K: Kernels> FastPFor<N, T, K> {
-    /// Creates a new `FastPForBlock` with a codec with the given page size.
+impl<L: Layout, T: FastPForInt, const N: usize, K: Kernels> FastPForBlock<L, T, N, K> {
+    /// Creates a codec with the given page size.
     ///
     /// Returns an error if `page_size` is not a multiple of the block size.
     /// Use [`Default`] for the default page size.
@@ -118,7 +119,7 @@ impl<const N: usize, T: FastPForInt, K: Kernels> FastPFor<N, T, K> {
             optimal_bits: 0,
             exception_count: 0,
             max_bits: 0,
-            kernels: PhantomData,
+            marker: PhantomData,
         })
     }
 
@@ -134,7 +135,7 @@ impl<const N: usize, T: FastPForInt, K: Kernels> FastPFor<N, T, K> {
         let final_inpos = input_offset.position() as u32 + inlength;
         while input_offset.position() as u32 != final_inpos {
             let this_size = min(self.page_size, final_inpos - input_offset.position() as u32);
-            K::encode_page(self, input, this_size, input_offset, output, output_offset);
+            L::encode_page(self, input, this_size, input_offset, output, output_offset);
         }
     }
 
@@ -150,7 +151,7 @@ impl<const N: usize, T: FastPForInt, K: Kernels> FastPFor<N, T, K> {
         let final_out = output_offset.position() as u32 + mynvalue;
         while output_offset.position() as u32 != final_out {
             let this_size = min(self.page_size, final_out - output_offset.position() as u32);
-            K::decode_page(self, input, input_offset, output, output_offset, this_size)?;
+            L::decode_page(self, input, input_offset, output, output_offset, this_size)?;
         }
         Ok(())
     }

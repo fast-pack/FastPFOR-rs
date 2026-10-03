@@ -11,7 +11,7 @@
 //! the `u64` layout is this crate's natural extension of the same scheme.
 //!
 //! The kernels are written once over the small [`Lane`] vector trait and instantiated per [`Backend`]:
-//! [`Portable`] plain arrays here, and the SSE2 or NEON vectors of the `wide` crate in `lanes_wide`.
+//! [`Arrays`] plain arrays here, and the SSE2 or NEON vectors of the `wide` crate in `lanes_wide`.
 #![expect(
     clippy::inline_always,
     reason = "the lane operations and rows must inline into the unrolled kernels, whatever the caller"
@@ -20,9 +20,9 @@
 use std::io::Cursor;
 
 use crate::FastPForResult;
-use crate::rust::integer_compression::fastpfor::FastPFor;
+use crate::rust::integer_compression::fastpfor::FastPForBlock;
 use crate::rust::integer_compression::fastpfor_int::FastPForInt;
-use crate::rust::kernels::{InterleavedPortable, Kernels, private};
+use crate::rust::kernels::{Kernels, Layout};
 
 /// A 128-bit vector of unsigned lanes, with the handful of operations the kernels need.
 ///
@@ -97,6 +97,18 @@ macro_rules! backend {
         }
     };
 }
+// Used by the vector backend, which only exists on these targets.
+#[cfg(all(
+    feature = "simd",
+    any(
+        target_arch = "x86_64",
+        all(
+            target_arch = "aarch64",
+            target_feature = "neon",
+            target_endian = "little"
+        )
+    )
+))]
 pub(crate) use backend;
 
 /// Element types with interleaved kernels: [`u32`] and [`u64`].
@@ -288,8 +300,14 @@ impl LaneElem for u64 {
 /// Encodes one page in the interleaved layout using the kernels of backend `B`.
 ///
 /// The 32-value kernel still handles the tail of each exception array, as in C++.
-pub(super) fn encode_page_lanes<const N: usize, T: FastPForInt, K: Kernels, B: Backend>(
-    codec: &mut FastPFor<N, T, K>,
+pub(super) fn encode_page_lanes<
+    L: Layout,
+    T: FastPForInt,
+    const N: usize,
+    K: Kernels,
+    B: Backend,
+>(
+    codec: &mut FastPForBlock<L, T, N, K>,
     input: &[T],
     this_size: u32,
     input_offset: &mut Cursor<u32>,
@@ -310,8 +328,14 @@ pub(super) fn encode_page_lanes<const N: usize, T: FastPForInt, K: Kernels, B: B
 }
 
 /// Decodes one page in the interleaved layout using the kernels of backend `B`.
-pub(super) fn decode_page_lanes<const N: usize, T: FastPForInt, K: Kernels, B: Backend>(
-    codec: &mut FastPFor<N, T, K>,
+pub(super) fn decode_page_lanes<
+    L: Layout,
+    T: FastPForInt,
+    const N: usize,
+    K: Kernels,
+    B: Backend,
+>(
+    codec: &mut FastPForBlock<L, T, N, K>,
     input: &[u32],
     input_offset: &mut Cursor<u32>,
     output: &mut [T],
@@ -331,8 +355,8 @@ pub(super) fn decode_page_lanes<const N: usize, T: FastPForInt, K: Kernels, B: B
     )
 }
 
-/// Portable backend: plain arrays, which the compiler vectorizes where the target allows.
-pub struct Portable;
+/// Plain-array backend, which the compiler vectorizes where the target allows.
+pub struct Arrays;
 
 /// `u32` lanes as an array.
 #[derive(Clone, Copy)]
@@ -342,7 +366,7 @@ pub struct P32([u32; 4]);
 #[derive(Clone, Copy)]
 pub struct P64([u64; 2]);
 
-backend!(Portable, P32, P64);
+backend!(Arrays, P32, P64);
 
 macro_rules! elementwise {
     ($self:ident, $rhs:ident, $op:tt) => {
@@ -449,44 +473,6 @@ impl Lane for P64 {
     }
 }
 
-impl private::PageCodec for InterleavedPortable {
-    fn encode_page<const N: usize, T: FastPForInt>(
-        codec: &mut FastPFor<N, T, Self>,
-        input: &[T],
-        this_size: u32,
-        input_offset: &mut Cursor<u32>,
-        output: &mut [u32],
-        output_offset: &mut Cursor<u32>,
-    ) {
-        encode_page_lanes::<N, T, Self, Portable>(
-            codec,
-            input,
-            this_size,
-            input_offset,
-            output,
-            output_offset,
-        );
-    }
-
-    fn decode_page<const N: usize, T: FastPForInt>(
-        codec: &mut FastPFor<N, T, Self>,
-        input: &[u32],
-        input_offset: &mut Cursor<u32>,
-        output: &mut [T],
-        output_offset: &mut Cursor<u32>,
-        this_size: u32,
-    ) -> FastPForResult<()> {
-        decode_page_lanes::<N, T, Self, Portable>(
-            codec,
-            input,
-            input_offset,
-            output,
-            output_offset,
-            this_size,
-        )
-    }
-}
-
 #[cfg(test)]
 pub(super) mod tests {
     use rand::rngs::StdRng;
@@ -576,6 +562,6 @@ pub(super) mod tests {
 
     #[test]
     fn portable_matches_model() {
-        check_backend::<Portable>();
+        check_backend::<Arrays>();
     }
 }

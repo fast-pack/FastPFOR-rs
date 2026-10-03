@@ -9,7 +9,10 @@
 #[path = "../src/test_utils.rs"]
 mod test_utils;
 
-use fastpfor::{FastPFor128, FastPFor256, FastPForBlock256, JustCopy, VariableByte};
+use fastpfor::{
+    FastPForBlock, FastPForSequential32x128, FastPForSequential32x256, JustCopy, Sequential,
+    VariableByte,
+};
 use test_utils::{block_roundtrip, decompress, roundtrip};
 
 // ── VariableByte round-trip ───────────────────────────────────────────────────
@@ -33,14 +36,14 @@ fn justcopy_roundtrip() {
     roundtrip::<JustCopy>(&[1u32, 2, 3, 42, u32::MAX]);
 }
 
-// ── BlockCodec: FastPForBlock256 — block-exact input ───────────────────────────────
+// ── BlockCodec: FastPForBlock<Sequential, u32, 256> — block-exact input ───────────────────────────────
 
 #[test]
 fn fastpfor256_block_roundtrip() {
-    block_roundtrip::<FastPForBlock256>(&(0u32..512).collect::<Vec<_>>());
+    block_roundtrip::<FastPForBlock<Sequential, u32, 256>>(&(0u32..512).collect::<Vec<_>>());
 }
 
-// ── CompositeCodec (FastPForBlock256 + VByte) ─────────────────────────────────────
+// ── CompositeCodec (FastPForBlock<Sequential, u32, 256> + VByte) ─────────────────────────────────────
 
 /// Compressing more than the default page size (65536) causes `compress_blocks`
 /// to loop more than once, exercising the `this_size == page_size` branch.
@@ -48,14 +51,14 @@ fn fastpfor256_block_roundtrip() {
 fn fastpfor_multi_page_encode_decode() {
     // 65536 (default page size) + 256 (one block) — enough to span two pages
     let data: Vec<u32> = (0..65792u32).map(|i| i % 1024).collect();
-    roundtrip::<FastPFor256>(&data);
+    roundtrip::<FastPForSequential32x256>(&data);
 }
 
 /// A block of all zeros causes `best_b_from_data` to decrement `optimal_bits`
 /// all the way to 0 — no packed words are written.
 #[test]
 fn fastpfor_encode_all_zeros() {
-    roundtrip::<FastPFor256>(&vec![0u32; 256]);
+    roundtrip::<FastPForSequential32x256>(&vec![0u32; 256]);
 }
 
 /// When the metadata byte count is already a multiple of 4 the padding loop
@@ -63,13 +66,13 @@ fn fastpfor_encode_all_zeros() {
 #[test]
 fn fastpfor_encode_metadata_already_aligned() {
     let data = vec![0u32; 32768]; // 128 blocks of 256 zeros
-    roundtrip::<FastPFor256>(&data);
+    roundtrip::<FastPForSequential32x256>(&data);
 }
 
 /// When every value needs all 32 bits.
 #[test]
 fn fastpfor_encode_all_max_u32() {
-    roundtrip::<FastPFor256>(&vec![u32::MAX; 256]);
+    roundtrip::<FastPForSequential32x256>(&vec![u32::MAX; 256]);
 }
 
 /// Exception index == 1 branch.
@@ -78,7 +81,7 @@ fn fastpfor_encode_exception_index1() {
     let mut data = vec![1u32; 256];
     data[0] = 3;
     data[128] = 3;
-    roundtrip::<FastPFor256>(&data);
+    roundtrip::<FastPForSequential32x256>(&data);
 }
 
 /// 128-element block size with exceptions.
@@ -87,7 +90,7 @@ fn fastpfor_encode_128_block_with_exceptions() {
     let data: Vec<u32> = (0..128)
         .map(|i| if i % 4 == 0 { 1u32 << 28 } else { 1 })
         .collect();
-    roundtrip::<FastPFor128>(&data);
+    roundtrip::<FastPForSequential32x128>(&data);
 }
 
 // ── VariableByte AnyLenCodec edge cases ──────────────────────────────────────

@@ -8,11 +8,7 @@ use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_m
 #[cfg(feature = "cpp")]
 use fastpfor::AnyLenCodec;
 use fastpfor::{
-    BlockCodec, FastPFor, FastPForBlock128, FastPForBlock256, FastPForBlockWide128,
-    FastPForBlockWide256, FastPForInterleavedBlock128, FastPForInterleavedBlock256,
-    FastPForInterleavedBlockWide128, FastPForInterleavedBlockWide256, FastPForSimdBlock128,
-    FastPForSimdBlock256, FastPForSimdBlockWide128, FastPForSimdBlockWide256, InterleavedPortable,
-    slice_to_blocks,
+    Auto, BlockCodec, FastPForBlock, Interleaved, Portable, Sequential, slice_to_blocks,
 };
 
 // Shared helpers live in `src/bench_utils.rs` (library exposes the same file only under `cfg(test)`).
@@ -31,12 +27,15 @@ const BLOCK_COUNTS: &[usize] = &[8, 32];
 
 fn benchmark_compression(c: &mut Criterion) {
     let mut group = c.benchmark_group("compression");
-    for (bc, fix) in compress_fixtures::<FastPForBlock128>(BLOCK_COUNTS) {
+    for (bc, fix) in
+        compress_fixtures::<FastPForBlock<Sequential, u32, 128, Portable>>(BLOCK_COUNTS)
+    {
         let n_elem = fix.original.len();
         group.throughput(Throughput::Elements(n_elem as u64));
         group.bench_with_input(BenchmarkId::new(fix.name, bc), &fix.original, |b, data| {
-            let mut codec = FastPForBlock128::default();
-            let (blocks, _) = slice_to_blocks::<FastPForBlock128>(data);
+            let mut codec = FastPForBlock::<Sequential, u32, 128, Portable>::default();
+            let (blocks, _) =
+                slice_to_blocks::<FastPForBlock<Sequential, u32, 128, Portable>>(data);
             let mut out = Vec::new();
             b.iter(|| {
                 out.clear();
@@ -50,11 +49,13 @@ fn benchmark_compression(c: &mut Criterion) {
 
 fn benchmark_decompression(c: &mut Criterion) {
     let mut group = c.benchmark_group("decompression");
-    for (bc, fix) in compress_fixtures::<FastPForBlock128>(BLOCK_COUNTS) {
+    for (bc, fix) in
+        compress_fixtures::<FastPForBlock<Sequential, u32, 128, Portable>>(BLOCK_COUNTS)
+    {
         let n_elem = fix.original.len();
         group.throughput(Throughput::Elements(n_elem as u64));
         group.bench_with_input(BenchmarkId::new(fix.name, bc), &fix, |b, fix| {
-            let mut codec = FastPForBlock128::default();
+            let mut codec = FastPForBlock::<Sequential, u32, 128, Portable>::default();
             let mut out = Vec::new();
             b.iter(|| {
                 out.clear();
@@ -62,8 +63,11 @@ fn benchmark_decompression(c: &mut Criterion) {
                     .decode_blocks(
                         black_box(&fix.compressed),
                         Some(
-                            u32::try_from(fix.n_blocks * FastPForBlock128::size())
-                                .expect("expected_values fits in u32"),
+                            u32::try_from(
+                                fix.n_blocks
+                                    * FastPForBlock::<Sequential, u32, 128, Portable>::size(),
+                            )
+                            .expect("expected_values fits in u32"),
                         ),
                         &mut out,
                     )
@@ -78,14 +82,17 @@ fn benchmark_decompression(c: &mut Criterion) {
 fn benchmark_roundtrip(c: &mut Criterion) {
     let mut group = c.benchmark_group("roundtrip");
     for &bc in BLOCK_COUNTS {
-        let data = generate_uniform_data_small_value_distribution(bc * FastPForBlock128::size());
+        let data = generate_uniform_data_small_value_distribution(
+            bc * FastPForBlock::<Sequential, u32, 128, Portable>::size(),
+        );
         group.throughput(Throughput::Elements(data.len() as u64));
         group.bench_with_input(
             BenchmarkId::new("compress_decompress", bc),
             &data,
             |b, data| {
-                let mut codec = FastPForBlock128::default();
-                let (blocks, _) = slice_to_blocks::<FastPForBlock128>(data);
+                let mut codec = FastPForBlock::<Sequential, u32, 128, Portable>::default();
+                let (blocks, _) =
+                    slice_to_blocks::<FastPForBlock<Sequential, u32, 128, Portable>>(data);
                 let mut compressed = Vec::new();
                 let mut decompressed = Vec::new();
                 b.iter(|| {
@@ -98,8 +105,10 @@ fn benchmark_roundtrip(c: &mut Criterion) {
                         .decode_blocks(
                             &compressed,
                             Some(
-                                u32::try_from(bc * FastPForBlock128::size())
-                                    .expect("expected_values fits in u32"),
+                                u32::try_from(
+                                    bc * FastPForBlock::<Sequential, u32, 128, Portable>::size(),
+                                )
+                                .expect("expected_values fits in u32"),
                             ),
                             &mut decompressed,
                         )
@@ -116,8 +125,8 @@ fn benchmark_block_sizes(c: &mut Criterion) {
     let mut group = c.benchmark_group("block_sizes");
     let bc = *BLOCK_COUNTS.last().unwrap();
 
-    let fix128 = BlockSizeFixture::<FastPForBlock128>::new(bc);
-    let fix256 = BlockSizeFixture::<FastPForBlock256>::new(bc);
+    let fix128 = BlockSizeFixture::<FastPForBlock<Sequential, u32, 128, Portable>>::new(bc);
+    let fix256 = BlockSizeFixture::<FastPForBlock<Sequential, u32, 256, Portable>>::new(bc);
 
     for (label, data, compressed, n_blocks, is_256) in [
         (
@@ -138,8 +147,9 @@ fn benchmark_block_sizes(c: &mut Criterion) {
         group.throughput(Throughput::Elements(data.len() as u64));
         group.bench_function(format!("compress_{label}"), |b| {
             if is_256 {
-                let mut codec = FastPForBlock256::default();
-                let (blocks, _) = slice_to_blocks::<FastPForBlock256>(data);
+                let mut codec = FastPForBlock::<Sequential, u32, 256, Portable>::default();
+                let (blocks, _) =
+                    slice_to_blocks::<FastPForBlock<Sequential, u32, 256, Portable>>(data);
                 let mut out = Vec::new();
                 b.iter(|| {
                     out.clear();
@@ -147,8 +157,9 @@ fn benchmark_block_sizes(c: &mut Criterion) {
                     black_box(out.len())
                 });
             } else {
-                let mut codec = FastPForBlock128::default();
-                let (blocks, _) = slice_to_blocks::<FastPForBlock128>(data);
+                let mut codec = FastPForBlock::<Sequential, u32, 128, Portable>::default();
+                let (blocks, _) =
+                    slice_to_blocks::<FastPForBlock<Sequential, u32, 128, Portable>>(data);
                 let mut out = Vec::new();
                 b.iter(|| {
                     out.clear();
@@ -159,10 +170,12 @@ fn benchmark_block_sizes(c: &mut Criterion) {
         });
         group.bench_function(format!("decompress_{label}"), |b| {
             if is_256 {
-                let mut codec = FastPForBlock256::default();
+                let mut codec = FastPForBlock::<Sequential, u32, 256, Portable>::default();
                 let mut out = Vec::new();
-                let expected = u32::try_from(n_blocks * FastPForBlock256::size())
-                    .expect("expected_values fits in u32");
+                let expected = u32::try_from(
+                    n_blocks * FastPForBlock::<Sequential, u32, 256, Portable>::size(),
+                )
+                .expect("expected_values fits in u32");
                 b.iter(|| {
                     out.clear();
                     codec
@@ -171,9 +184,10 @@ fn benchmark_block_sizes(c: &mut Criterion) {
                     black_box(out.len())
                 });
             } else {
-                let mut codec = FastPForBlock128::default();
+                let mut codec = FastPForBlock::<Sequential, u32, 128, Portable>::default();
                 let mut out = Vec::new();
-                let expected = (n_blocks * FastPForBlock128::size()) as u32;
+                let expected =
+                    (n_blocks * FastPForBlock::<Sequential, u32, 128, Portable>::size()) as u32;
                 b.iter(|| {
                     out.clear();
                     codec
@@ -191,10 +205,11 @@ fn benchmark_compression_ratio(c: &mut Criterion) {
     let mut group = c.benchmark_group("compression_ratio");
     group.sample_size(20);
     let bc = *BLOCK_COUNTS.last().unwrap();
-    for fix in ratio_fixtures::<FastPForBlock128>(bc) {
+    for fix in ratio_fixtures::<FastPForBlock<Sequential, u32, 128, Portable>>(bc) {
         group.bench_function(fix.name, |b| {
-            let mut codec = FastPForBlock128::default();
-            let (blocks, _) = slice_to_blocks::<FastPForBlock128>(&fix.original);
+            let mut codec = FastPForBlock::<Sequential, u32, 128, Portable>::default();
+            let (blocks, _) =
+                slice_to_blocks::<FastPForBlock<Sequential, u32, 128, Portable>>(&fix.original);
             let mut out = Vec::new();
             b.iter(|| {
                 out.clear();
@@ -211,11 +226,13 @@ fn benchmark_compression_ratio(c: &mut Criterion) {
 }
 
 /// Compare encoding and decoding speed of the C++ `CppFastPFor128` (`AnyLenCodec`) against
-/// the pure-Rust `FastPForBlock128` (`BlockCodec`). Same wire format for block-aligned data.
+/// the pure-Rust `FastPForBlock<Sequential, u32, 128, Portable>` (`BlockCodec`). Same wire format for block-aligned data.
 #[cfg(feature = "cpp")]
 fn benchmark_cpp_vs_rust(c: &mut Criterion) {
     let mut group = c.benchmark_group("cpp_vs_rust/encode");
-    for (bc, fix) in compress_fixtures::<FastPForBlock128>(BLOCK_COUNTS) {
+    for (bc, fix) in
+        compress_fixtures::<FastPForBlock<Sequential, u32, 128, Portable>>(BLOCK_COUNTS)
+    {
         let n_elem = fix.original.len();
         group.throughput(Throughput::Elements(n_elem as u64));
         group.bench_with_input(
@@ -235,8 +252,9 @@ fn benchmark_cpp_vs_rust(c: &mut Criterion) {
             BenchmarkId::new(format!("rust/{}", fix.name), bc),
             &fix.original,
             |b, data| {
-                let mut codec = FastPForBlock128::default();
-                let (blocks, _) = slice_to_blocks::<FastPForBlock128>(data);
+                let mut codec = FastPForBlock::<Sequential, u32, 128, Portable>::default();
+                let (blocks, _) =
+                    slice_to_blocks::<FastPForBlock<Sequential, u32, 128, Portable>>(data);
                 let mut out = Vec::new();
                 b.iter(|| {
                     out.clear();
@@ -249,8 +267,10 @@ fn benchmark_cpp_vs_rust(c: &mut Criterion) {
     group.finish();
 
     let mut group = c.benchmark_group("cpp_vs_rust/decode");
-    for (bc, fix) in compress_fixtures::<FastPForBlock128>(BLOCK_COUNTS) {
-        let n_elem = fix.n_blocks * FastPForBlock128::size();
+    for (bc, fix) in
+        compress_fixtures::<FastPForBlock<Sequential, u32, 128, Portable>>(BLOCK_COUNTS)
+    {
+        let n_elem = fix.n_blocks * FastPForBlock::<Sequential, u32, 128, Portable>::size();
         let expected_len = u32::try_from(n_elem).expect("n_elem fits in u32");
         group.throughput(Throughput::Elements(n_elem as u64));
         group.bench_with_input(
@@ -272,7 +292,7 @@ fn benchmark_cpp_vs_rust(c: &mut Criterion) {
             BenchmarkId::new(format!("rust/{}", fix.name), bc),
             &fix.compressed,
             |b, compressed| {
-                let mut codec = FastPForBlock128::default();
+                let mut codec = FastPForBlock::<Sequential, u32, 128, Portable>::default();
                 let mut out = Vec::new();
                 b.iter(|| {
                     out.clear();
@@ -280,8 +300,11 @@ fn benchmark_cpp_vs_rust(c: &mut Criterion) {
                         .decode_blocks(
                             black_box(compressed),
                             Some(
-                                u32::try_from(fix.n_blocks * FastPForBlock128::size())
-                                    .expect("expected_values fits in u32"),
+                                u32::try_from(
+                                    fix.n_blocks
+                                        * FastPForBlock::<Sequential, u32, 128, Portable>::size(),
+                                )
+                                .expect("expected_values fits in u32"),
                             ),
                             &mut out,
                         )
@@ -337,51 +360,99 @@ fn bench_kernel<C: BlockCodec>(
 
 fn benchmark_scalar_vs_simd(c: &mut Criterion) {
     let bc = *BLOCK_COUNTS.last().unwrap();
-    for (_, fix) in compress_fixtures::<FastPForBlock256>(&[bc]) {
+    for (_, fix) in compress_fixtures::<FastPForBlock<Sequential, u32, 256, Portable>>(&[bc]) {
         let data = &fix.original;
         let wide: Vec<u64> = data
             .iter()
             .map(|&v| u64::from(v) << 24 | u64::from(v))
             .collect();
         let name = fix.name;
-        bench_kernel::<FastPForBlock128>(c, "kernels/u32x128", name, "scalar", data);
-        bench_kernel::<FastPForSimdBlock128>(c, "kernels/u32x128", name, "simd", data);
+        bench_kernel::<FastPForBlock<Sequential, u32, 128, Portable>>(
+            c,
+            "kernels/u32x128",
+            name,
+            "scalar",
+            data,
+        );
+        bench_kernel::<FastPForBlock<Sequential, u32, 128, Auto>>(
+            c,
+            "kernels/u32x128",
+            name,
+            "simd",
+            data,
+        );
         // The interleaved layout (C++ `SIMDFastPFor`): a different wire format, not a different speed of the same one.
-        bench_kernel::<FastPFor<128, u32, InterleavedPortable>>(
+        bench_kernel::<FastPForBlock<Interleaved, u32, 128, Portable>>(
             c,
             "kernels/u32x128",
             name,
             "interleaved-portable",
             data,
         );
-        bench_kernel::<FastPForInterleavedBlock128>(
+        bench_kernel::<FastPForBlock<Interleaved, u32, 128, Auto>>(
             c,
             "kernels/u32x128",
             name,
             "interleaved",
             data,
         );
-        bench_kernel::<FastPForBlock256>(c, "kernels/u32x256", name, "scalar", data);
-        bench_kernel::<FastPForSimdBlock256>(c, "kernels/u32x256", name, "simd", data);
-        bench_kernel::<FastPForInterleavedBlock256>(
+        bench_kernel::<FastPForBlock<Sequential, u32, 256, Portable>>(
+            c,
+            "kernels/u32x256",
+            name,
+            "scalar",
+            data,
+        );
+        bench_kernel::<FastPForBlock<Sequential, u32, 256, Auto>>(
+            c,
+            "kernels/u32x256",
+            name,
+            "simd",
+            data,
+        );
+        bench_kernel::<FastPForBlock<Interleaved, u32, 256, Auto>>(
             c,
             "kernels/u32x256",
             name,
             "interleaved",
             data,
         );
-        bench_kernel::<FastPForBlockWide128>(c, "kernels/u64x128", name, "scalar", &wide);
-        bench_kernel::<FastPForSimdBlockWide128>(c, "kernels/u64x128", name, "simd", &wide);
-        bench_kernel::<FastPForInterleavedBlockWide128>(
+        bench_kernel::<FastPForBlock<Sequential, u64, 128, Portable>>(
+            c,
+            "kernels/u64x128",
+            name,
+            "scalar",
+            &wide,
+        );
+        bench_kernel::<FastPForBlock<Sequential, u64, 128, Auto>>(
+            c,
+            "kernels/u64x128",
+            name,
+            "simd",
+            &wide,
+        );
+        bench_kernel::<FastPForBlock<Interleaved, u64, 128, Auto>>(
             c,
             "kernels/u64x128",
             name,
             "interleaved",
             &wide,
         );
-        bench_kernel::<FastPForBlockWide256>(c, "kernels/u64x256", name, "scalar", &wide);
-        bench_kernel::<FastPForSimdBlockWide256>(c, "kernels/u64x256", name, "simd", &wide);
-        bench_kernel::<FastPForInterleavedBlockWide256>(
+        bench_kernel::<FastPForBlock<Sequential, u64, 256, Portable>>(
+            c,
+            "kernels/u64x256",
+            name,
+            "scalar",
+            &wide,
+        );
+        bench_kernel::<FastPForBlock<Sequential, u64, 256, Auto>>(
+            c,
+            "kernels/u64x256",
+            name,
+            "simd",
+            &wide,
+        );
+        bench_kernel::<FastPForBlock<Interleaved, u64, 256, Auto>>(
             c,
             "kernels/u64x256",
             name,

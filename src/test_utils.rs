@@ -16,7 +16,8 @@ use fastpfor::{
 };
 #[cfg(feature = "rust")]
 use fastpfor::{
-    FastPFor128, FastPFor256, FastPForBlock128, FastPForBlock256, JustCopy, VariableByte,
+    FastPForBlock, FastPForSequential32x128, FastPForSequential32x256, JustCopy, Sequential,
+    VariableByte,
 };
 
 pub const RNG_SEED: u64 = 456;
@@ -123,8 +124,8 @@ pub fn decompress64<C: BlockCodec64 + Default>(compressed: &[u32]) -> FastPForRe
 pub fn roundtrip_all(data: &[u32]) {
     roundtrip::<VariableByte>(data);
     roundtrip::<JustCopy>(data);
-    roundtrip::<FastPFor256>(data);
-    roundtrip::<FastPFor128>(data);
+    roundtrip::<FastPForSequential32x256>(data);
+    roundtrip::<FastPForSequential32x128>(data);
 
     #[cfg(feature = "cpp")]
     {
@@ -135,8 +136,8 @@ pub fn roundtrip_all(data: &[u32]) {
 
 #[cfg(feature = "rust")]
 pub fn block_roundtrip_all(data: &[u32]) {
-    block_roundtrip::<FastPForBlock256>(data);
-    block_roundtrip::<FastPForBlock128>(data);
+    block_roundtrip::<FastPForBlock<Sequential, u32, 256>>(data);
+    block_roundtrip::<FastPForBlock<Sequential, u32, 128>>(data);
 }
 
 /// Encode/decode round-trip using `CompositeCodec<B, T>` built from `B::default()` and `T::default()`.

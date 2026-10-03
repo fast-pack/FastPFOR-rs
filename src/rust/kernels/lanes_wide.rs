@@ -5,16 +5,10 @@
     reason = "the lane operations must inline into the unrolled kernels, whatever the caller"
 )]
 
-use std::io::Cursor;
-
 use bytemuck::cast;
 use wide::{u32x4, u64x2};
 
-use crate::FastPForResult;
-use crate::rust::integer_compression::fastpfor::FastPFor;
-use crate::rust::integer_compression::fastpfor_int::FastPForInt;
-use crate::rust::kernels::lanes::{Lane, decode_page_lanes, encode_page_lanes};
-use crate::rust::kernels::{Interleaved, private};
+use crate::rust::kernels::lanes::Lane;
 
 /// The vector backend: `wide`'s 128-bit types.
 pub struct Wide;
@@ -124,45 +118,6 @@ impl Lane for W64 {
     #[inline(always)]
     fn shr(self, s: u32) -> Self {
         Self(self.0 >> s)
-    }
-}
-
-/// [`Interleaved`] on `x86_64` (SSE2) and `aarch64` (NEON).
-impl private::PageCodec for Interleaved {
-    fn encode_page<const N: usize, T: FastPForInt>(
-        codec: &mut FastPFor<N, T, Self>,
-        input: &[T],
-        this_size: u32,
-        input_offset: &mut Cursor<u32>,
-        output: &mut [u32],
-        output_offset: &mut Cursor<u32>,
-    ) {
-        encode_page_lanes::<N, T, Self, Wide>(
-            codec,
-            input,
-            this_size,
-            input_offset,
-            output,
-            output_offset,
-        );
-    }
-
-    fn decode_page<const N: usize, T: FastPForInt>(
-        codec: &mut FastPFor<N, T, Self>,
-        input: &[u32],
-        input_offset: &mut Cursor<u32>,
-        output: &mut [T],
-        output_offset: &mut Cursor<u32>,
-        this_size: u32,
-    ) -> FastPForResult<()> {
-        decode_page_lanes::<N, T, Self, Wide>(
-            codec,
-            input,
-            input_offset,
-            output,
-            output_offset,
-            this_size,
-        )
     }
 }
 
