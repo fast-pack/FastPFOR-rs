@@ -159,9 +159,7 @@ jobs:
     name: Instruction counts
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
+    permissions: { contents: read }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false, submodules: recursive }
@@ -185,13 +183,19 @@ jobs:
       - run: just ci-bench target/bench/summary.md "$BASE_SHA"
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-      # Pull requests from forks get a read-only token, so they only get the job summary
-      - if: github.event.pull_request.head.repo.full_name == github.repository
-        name: Post results as a PR comment
-        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+      # This job has a read-only token (always so for pull requests from forks), so the report is
+      # posted as a PR comment by the `bench-comment.yml` workflow, which runs after this one.
+      - name: Save the PR number for the comment workflow
+        run: echo "$PR_NUMBER" > target/bench/pr-number
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          header: instruction-counts
-          path: target/bench/summary.md
+          name: instruction-counts
+          path: |
+            target/bench/summary.md
+            target/bench/pr-number
+          retention-days: 7
 
   # This job checks if any of the previous jobs failed or were canceled.
   # This approach also allows some jobs to be skipped if they are not needed.
