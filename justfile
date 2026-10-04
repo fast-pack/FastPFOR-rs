@@ -83,7 +83,7 @@ ci-bench output='target/bench/summary.md' base_ref='':  (assert-cmd 'valgrind')
     mkdir -p "$out_dir"
     rm -f "$out_dir"/base-*.tsv
     perf=0
-    if {{just}} bench perf-check 2> "$out_dir/perf.log"; then perf=1; fi
+    if {{just}} bench perf-check 2> "$out_dir/perf.log"; then perf=1; else cat "$out_dir/perf.log" >&2; fi
 
     base_note=""
     if [ -n {{quote(base_ref)}} ]; then

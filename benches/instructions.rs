@@ -738,7 +738,14 @@ fn main() {
                 .expect("unknown case");
             (case.run)(op, repeats.parse().expect("repeat count"));
         }
-        // `cargo bench` passes `--bench`; other unknown arguments are ignored.
+        // `cargo test --all-targets` also runs this binary, without `--bench`: just check that every
+        // case round-trips, without valgrind or perf.
+        None if !args.iter().any(|a| a == "--bench") => {
+            for case in cases() {
+                (case.run)(Op::Decode, 1);
+            }
+            eprintln!("All cases round-trip; run with `cargo bench` to count instructions.");
+        }
         None if args.iter().any(|a| a == "--perf") => summarize(Tool::Perf, &args),
         None => summarize(Tool::Callgrind, &args),
     }
