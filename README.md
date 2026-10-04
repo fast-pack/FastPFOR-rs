@@ -316,20 +316,11 @@ For local development:
 sudo apt-get install build-essential
 ```
 
-`libsimde-dev` is optional. On ARM/aarch64, the C++ build fetches `SIMDe` via `CMake`
-and the CXX bridge reuses that include path automatically.
+On ARM/aarch64, the C++ library uses native NEON intrinsics and needs no extra packages.
 
 ### macOS
 
-On Apple Silicon, `SIMDe` installation is usually not required — the C++ build fetches it via `CMake`.
-
-If you prefer a Homebrew fallback:
-
-```bash
-brew install simde
-export CXXFLAGS="-I/opt/homebrew/include"
-export CFLAGS="-I/opt/homebrew/include"
-```
+The Xcode command line tools are enough, on both Intel and Apple Silicon.
 
 ## Development
 
