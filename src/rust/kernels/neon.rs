@@ -4,9 +4,11 @@ use bytemuck::cast;
 use wide::{i8x16, u32x4};
 
 use crate::FastPForResult;
-use crate::rust::integer_compression::fastpfor::FastPFor;
+use crate::rust::integer_compression::fastpfor::FastPForBlock;
 use crate::rust::integer_compression::fastpfor_int::FastPForInt;
-use crate::rust::kernels::{Simd, pack_narrowed, private, unpack_narrowed};
+use crate::rust::kernels::lanes::{decode_page_lanes, encode_page_lanes};
+use crate::rust::kernels::lanes_wide::Wide;
+use crate::rust::kernels::{Auto, Layout, pack_narrowed, private, unpack_narrowed};
 
 const ZEROING_INDEX: i8 = -1;
 
@@ -47,10 +49,21 @@ impl NeonInt for u64 {
     }
 }
 
-/// [`Simd`] on `aarch64`: NEON kernels.
-impl private::PageCodec for Simd {
-    fn encode_page<const N: usize, T: FastPForInt>(
-        codec: &mut FastPFor<N, T, Self>,
+/// [`Auto`] on little-endian `aarch64`: NEON kernels for both layouts. Both pack values at byte
+/// offsets of the output words, so big-endian `aarch64` uses the portable kernels instead.
+impl private::PageCodec for Auto {
+    #[cfg(feature = "__testing")]
+    fn sequential_implementation() -> crate::rust::kernels::Implementation {
+        crate::rust::kernels::Implementation::Neon
+    }
+
+    #[cfg(feature = "__testing")]
+    fn interleaved_implementation() -> crate::rust::kernels::Implementation {
+        crate::rust::kernels::Implementation::Neon
+    }
+
+    fn encode_sequential<L: Layout, T: FastPForInt, const N: usize>(
+        codec: &mut FastPForBlock<L, T, N, Self>,
         input: &[T],
         this_size: u32,
         input_offset: &mut Cursor<u32>,
@@ -69,8 +82,8 @@ impl private::PageCodec for Simd {
     }
 
     #[inline]
-    fn decode_page<const N: usize, T: FastPForInt>(
-        codec: &mut FastPFor<N, T, Self>,
+    fn decode_sequential<L: Layout, T: FastPForInt, const N: usize>(
+        codec: &mut FastPForBlock<L, T, N, Self>,
         input: &[u32],
         input_offset: &mut Cursor<u32>,
         output: &mut [T],
@@ -85,6 +98,42 @@ impl private::PageCodec for Simd {
             this_size,
             #[inline(always)]
             |src, inpos, out, outpos, bit| T::unpack_neon(src, inpos, out, outpos, bit),
+        )
+    }
+
+    fn encode_interleaved<L: Layout, T: FastPForInt, const N: usize>(
+        codec: &mut FastPForBlock<L, T, N, Self>,
+        input: &[T],
+        this_size: u32,
+        input_offset: &mut Cursor<u32>,
+        output: &mut [u32],
+        output_offset: &mut Cursor<u32>,
+    ) {
+        encode_page_lanes::<L, T, N, Self, Wide>(
+            codec,
+            input,
+            this_size,
+            input_offset,
+            output,
+            output_offset,
+        );
+    }
+
+    fn decode_interleaved<L: Layout, T: FastPForInt, const N: usize>(
+        codec: &mut FastPForBlock<L, T, N, Self>,
+        input: &[u32],
+        input_offset: &mut Cursor<u32>,
+        output: &mut [T],
+        output_offset: &mut Cursor<u32>,
+        this_size: u32,
+    ) -> FastPForResult<()> {
+        decode_page_lanes::<L, T, N, Self, Wide>(
+            codec,
+            input,
+            input_offset,
+            output,
+            output_offset,
+            this_size,
         )
     }
 }

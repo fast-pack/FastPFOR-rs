@@ -3,8 +3,10 @@
 //! Fuzz target: encode the same input with Rust and C++ implementations and assert bit-identical output.
 //!
 //! Codec pairs (Rust vs C++) expected to produce identical compressed bytes:
-//! - FastPFor128 vs CppFastPFor128
-//! - FastPFor256 vs CppFastPFor256
+//! - FastPForSequential32x128 vs CppFastPFor128
+//! - FastPForSequential32x256 vs CppFastPFor256
+//! - FastPForInterleaved32x128 vs CppSimdFastPFor128 (the interleaved `SIMDFastPFor` layout)
+//! - FastPForInterleaved32x256 vs CppSimdFastPFor256
 //! - VariableByte vs CppVarInt
 //! - JustCopy vs CppCopy
 

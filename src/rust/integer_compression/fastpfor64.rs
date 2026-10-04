@@ -1,38 +1,19 @@
-//! 64-bit ([`u64`]) `FastPFOR` block-codec aliases.
+//! Tests of the 64-bit ([`u64`]) `FastPFOR` codecs.
 //!
-//! [`FastPForBlockWide128`]/[`FastPForBlockWide256`] are [`FastPFor`] specialised to `u64` blocks.
-//! They implement the block-only [`BlockCodec`](crate::BlockCodec); the width-generic engine and
-//! exception bitmap are 64 bits wide instead of 32.
-//! The public any-length `u64` codecs [`FastPForWide128`](crate::FastPForWide128) /
-//! [`FastPForWide256`](crate::FastPForWide256) pair these with a [`VariableByte`](crate::VariableByte) tail.
-//! The block wire format is byte-compatible with the C++ `CppFastPFor128` / `CppFastPFor256` 64-bit paths.
-
-use crate::rust::integer_compression::fastpfor::FastPFor;
-use crate::rust::kernels::Simd;
-
-/// Type alias for [`FastPFor`] with 128-element `u64` blocks.
-pub type FastPForBlockWide128 = FastPFor<128, u64>;
-
-/// Type alias for [`FastPFor`] with 256-element `u64` blocks.
-pub type FastPForBlockWide256 = FastPFor<256, u64>;
-
-/// [`FastPForBlockWide128`] using [`Simd`] kernels; byte-compatible with it.
-pub type FastPForSimdBlockWide128 = FastPFor<128, u64, Simd>;
-
-/// [`FastPForBlockWide256`] using [`Simd`] kernels; byte-compatible with it.
-pub type FastPForSimdBlockWide256 = FastPFor<256, u64, Simd>;
+//! The block engine is width-generic: for `u64` its exception bitmap and buffers are 64 bits wide.
 
 #[cfg(test)]
 mod tests {
     use crate::codec::BlockCodec64;
     use crate::rust::fastpfor_codec::FastPForCodec;
     use crate::rust::integer_compression::fastpfor::sealed;
+    use crate::rust::kernels::Sequential;
 
     fn roundtrip<const N: usize>(input: &[u64])
     where
         [u64; N]: sealed::BlockSize,
     {
-        let mut codec = FastPForCodec::<N, u64>::default();
+        let mut codec = FastPForCodec::<Sequential, u64, N>::default();
         let mut encoded = Vec::new();
         codec.encode64(input, &mut encoded).unwrap();
         let mut decoded = Vec::new();
@@ -113,7 +94,7 @@ mod tests {
         }
 
         fn assert_parity<const N: usize>(
-            rust: &mut FastPForCodec<N, u64>,
+            rust: &mut FastPForCodec<Sequential, u64, N>,
             cpp: &mut impl BlockCodec64,
         ) where
             [u64; N]: sealed::BlockSize,
@@ -138,7 +119,7 @@ mod tests {
         #[test]
         fn parity_128() {
             assert_parity(
-                &mut FastPForCodec::<128, u64>::default(),
+                &mut FastPForCodec::<Sequential, u64, 128>::default(),
                 &mut CppFastPFor128::default(),
             );
         }
@@ -146,7 +127,7 @@ mod tests {
         #[test]
         fn parity_256() {
             assert_parity(
-                &mut FastPForCodec::<256, u64>::default(),
+                &mut FastPForCodec::<Sequential, u64, 256>::default(),
                 &mut CppFastPFor256::default(),
             );
         }

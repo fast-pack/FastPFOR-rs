@@ -9,10 +9,12 @@ use bytemuck::cast;
 pub use token::Avx2;
 
 use crate::FastPForResult;
-use crate::rust::integer_compression::fastpfor::FastPFor;
+use crate::rust::integer_compression::fastpfor::FastPForBlock;
 use crate::rust::integer_compression::fastpfor_int::FastPForInt;
+use crate::rust::kernels::lanes::{decode_page_lanes, encode_page_lanes};
+use crate::rust::kernels::lanes_wide::Wide;
 use crate::rust::kernels::portable::{decode_page_scalar, encode_page_scalar};
-use crate::rust::kernels::{Simd, pack_narrowed, private, unpack_narrowed};
+use crate::rust::kernels::{Auto, Layout, pack_narrowed, private, unpack_narrowed};
 
 /// Isolated so that [`Avx2::detect`] is the only way to construct the token, even within this file.
 mod token {
@@ -32,10 +34,26 @@ mod token {
     }
 }
 
-/// [`Simd`] on `x86_64`: AVX2 when detected at runtime, scalar otherwise.
-impl private::PageCodec for Simd {
-    fn encode_page<const N: usize, T: FastPForInt>(
-        codec: &mut FastPFor<N, T, Self>,
+/// [`Auto`] on `x86_64`: for the sequential layout, AVX2 when detected at runtime and portable otherwise;
+/// for the interleaved layout, SSE2, which every `x86_64` CPU has.
+impl private::PageCodec for Auto {
+    // The same check as `encode_sequential` / `decode_sequential` below.
+    #[cfg(feature = "__testing")]
+    fn sequential_implementation() -> crate::rust::kernels::Implementation {
+        if Avx2::detect().is_some() {
+            crate::rust::kernels::Implementation::Avx2
+        } else {
+            crate::rust::kernels::Implementation::Portable
+        }
+    }
+
+    #[cfg(feature = "__testing")]
+    fn interleaved_implementation() -> crate::rust::kernels::Implementation {
+        crate::rust::kernels::Implementation::Sse2
+    }
+
+    fn encode_sequential<L: Layout, T: FastPForInt, const N: usize>(
+        codec: &mut FastPForBlock<L, T, N, Self>,
         input: &[T],
         this_size: u32,
         input_offset: &mut Cursor<u32>,
@@ -57,8 +75,8 @@ impl private::PageCodec for Simd {
         }
     }
 
-    fn decode_page<const N: usize, T: FastPForInt>(
-        codec: &mut FastPFor<N, T, Self>,
+    fn decode_sequential<L: Layout, T: FastPForInt, const N: usize>(
+        codec: &mut FastPForBlock<L, T, N, Self>,
         input: &[u32],
         input_offset: &mut Cursor<u32>,
         output: &mut [T],
@@ -79,12 +97,48 @@ impl private::PageCodec for Simd {
             decode_page_scalar(codec, input, input_offset, output, output_offset, this_size)
         }
     }
+
+    fn encode_interleaved<L: Layout, T: FastPForInt, const N: usize>(
+        codec: &mut FastPForBlock<L, T, N, Self>,
+        input: &[T],
+        this_size: u32,
+        input_offset: &mut Cursor<u32>,
+        output: &mut [u32],
+        output_offset: &mut Cursor<u32>,
+    ) {
+        encode_page_lanes::<L, T, N, Self, Wide>(
+            codec,
+            input,
+            this_size,
+            input_offset,
+            output,
+            output_offset,
+        );
+    }
+
+    fn decode_interleaved<L: Layout, T: FastPForInt, const N: usize>(
+        codec: &mut FastPForBlock<L, T, N, Self>,
+        input: &[u32],
+        input_offset: &mut Cursor<u32>,
+        output: &mut [T],
+        output_offset: &mut Cursor<u32>,
+        this_size: u32,
+    ) -> FastPForResult<()> {
+        decode_page_lanes::<L, T, N, Self, Wide>(
+            codec,
+            input,
+            input_offset,
+            output,
+            output_offset,
+            this_size,
+        )
+    }
 }
 
 pub trait Avx2Int: Sized {
-    fn encode_page_avx2<const N: usize>(
+    fn encode_page_avx2<L: Layout, const N: usize>(
         token: Avx2,
-        codec: &mut FastPFor<N, Self, Simd>,
+        codec: &mut FastPForBlock<L, Self, N, Auto>,
         input: &[Self],
         this_size: u32,
         input_offset: &mut Cursor<u32>,
@@ -93,9 +147,9 @@ pub trait Avx2Int: Sized {
     ) where
         Self: FastPForInt;
 
-    fn decode_page_avx2<const N: usize>(
+    fn decode_page_avx2<L: Layout, const N: usize>(
         token: Avx2,
-        codec: &mut FastPFor<N, Self, Simd>,
+        codec: &mut FastPForBlock<L, Self, N, Auto>,
         input: &[u32],
         input_offset: &mut Cursor<u32>,
         output: &mut [Self],
@@ -108,9 +162,9 @@ pub trait Avx2Int: Sized {
 
 impl Avx2Int for u32 {
     #[inline]
-    fn encode_page_avx2<const N: usize>(
+    fn encode_page_avx2<L: Layout, const N: usize>(
         _token: Avx2,
-        codec: &mut FastPFor<N, Self, Simd>,
+        codec: &mut FastPForBlock<L, Self, N, Auto>,
         input: &[Self],
         this_size: u32,
         input_offset: &mut Cursor<u32>,
@@ -125,9 +179,9 @@ impl Avx2Int for u32 {
     }
 
     #[inline]
-    fn decode_page_avx2<const N: usize>(
+    fn decode_page_avx2<L: Layout, const N: usize>(
         _token: Avx2,
-        codec: &mut FastPFor<N, Self, Simd>,
+        codec: &mut FastPForBlock<L, Self, N, Auto>,
         input: &[u32],
         input_offset: &mut Cursor<u32>,
         output: &mut [Self],
@@ -144,9 +198,9 @@ impl Avx2Int for u32 {
 
 impl Avx2Int for u64 {
     #[inline]
-    fn encode_page_avx2<const N: usize>(
+    fn encode_page_avx2<L: Layout, const N: usize>(
         _token: Avx2,
-        codec: &mut FastPFor<N, Self, Simd>,
+        codec: &mut FastPForBlock<L, Self, N, Auto>,
         input: &[Self],
         this_size: u32,
         input_offset: &mut Cursor<u32>,
@@ -161,9 +215,9 @@ impl Avx2Int for u64 {
     }
 
     #[inline]
-    fn decode_page_avx2<const N: usize>(
+    fn decode_page_avx2<L: Layout, const N: usize>(
         _token: Avx2,
-        codec: &mut FastPFor<N, Self, Simd>,
+        codec: &mut FastPForBlock<L, Self, N, Auto>,
         input: &[u32],
         input_offset: &mut Cursor<u32>,
         output: &mut [Self],
@@ -261,8 +315,8 @@ macro_rules! pack64_body {
 }
 
 #[target_feature(enable = "avx2")]
-fn encode_page_u32<const N: usize>(
-    codec: &mut FastPFor<N, u32, Simd>,
+fn encode_page_u32<L: Layout, const N: usize>(
+    codec: &mut FastPForBlock<L, u32, N, Auto>,
     input: &[u32],
     this_size: u32,
     input_offset: &mut Cursor<u32>,
@@ -281,8 +335,8 @@ fn encode_page_u32<const N: usize>(
 }
 
 #[target_feature(enable = "avx2")]
-fn decode_page_u32<const N: usize>(
-    codec: &mut FastPFor<N, u32, Simd>,
+fn decode_page_u32<L: Layout, const N: usize>(
+    codec: &mut FastPForBlock<L, u32, N, Auto>,
     input: &[u32],
     input_offset: &mut Cursor<u32>,
     output: &mut [u32],
@@ -301,8 +355,8 @@ fn decode_page_u32<const N: usize>(
 }
 
 #[target_feature(enable = "avx2")]
-fn encode_page_u64<const N: usize>(
-    codec: &mut FastPFor<N, u64, Simd>,
+fn encode_page_u64<L: Layout, const N: usize>(
+    codec: &mut FastPForBlock<L, u64, N, Auto>,
     input: &[u64],
     this_size: u32,
     input_offset: &mut Cursor<u32>,
@@ -321,8 +375,8 @@ fn encode_page_u64<const N: usize>(
 }
 
 #[target_feature(enable = "avx2")]
-fn decode_page_u64<const N: usize>(
-    codec: &mut FastPFor<N, u64, Simd>,
+fn decode_page_u64<L: Layout, const N: usize>(
+    codec: &mut FastPForBlock<L, u64, N, Auto>,
     input: &[u32],
     input_offset: &mut Cursor<u32>,
     output: &mut [u64],

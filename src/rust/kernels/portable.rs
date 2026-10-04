@@ -1,14 +1,14 @@
 use std::io::Cursor;
 
 use crate::FastPForResult;
-use crate::rust::integer_compression::fastpfor::FastPFor;
+use crate::rust::integer_compression::fastpfor::FastPForBlock;
 use crate::rust::integer_compression::fastpfor_int::FastPForInt;
-use crate::rust::kernels::{Kernels, Scalar, private};
+use crate::rust::kernels::{Kernels, Layout, Portable, private};
 
-impl private::PageCodec for Scalar {}
+impl private::PageCodec for Portable {}
 
-pub(super) fn encode_page_scalar<const N: usize, T: FastPForInt, K: Kernels>(
-    codec: &mut FastPFor<N, T, K>,
+pub(super) fn encode_page_scalar<L: Layout, T: FastPForInt, const N: usize, K: Kernels>(
+    codec: &mut FastPForBlock<L, T, N, K>,
     input: &[T],
     this_size: u32,
     input_offset: &mut Cursor<u32>,
@@ -27,8 +27,8 @@ pub(super) fn encode_page_scalar<const N: usize, T: FastPForInt, K: Kernels>(
 }
 
 #[inline]
-pub(super) fn decode_page_scalar<const N: usize, T: FastPForInt, K: Kernels>(
-    codec: &mut FastPFor<N, T, K>,
+pub(super) fn decode_page_scalar<L: Layout, T: FastPForInt, const N: usize, K: Kernels>(
+    codec: &mut FastPForBlock<L, T, N, K>,
     input: &[u32],
     input_offset: &mut Cursor<u32>,
     output: &mut [T],
@@ -46,15 +46,23 @@ pub(super) fn decode_page_scalar<const N: usize, T: FastPForInt, K: Kernels>(
     )
 }
 
-/// Targets without SIMD kernels: [`Simd`](super::Simd) uses the scalar kernels.
-#[cfg(not(any(
-    target_arch = "x86_64",
-    all(target_arch = "aarch64", target_feature = "neon")
+/// Targets without SIMD kernels, or builds without the `simd` feature: [`Auto`](super::Auto) uses the
+/// portable kernels.
+#[cfg(not(all(
+    feature = "simd",
+    any(
+        target_arch = "x86_64",
+        all(
+            target_arch = "aarch64",
+            target_feature = "neon",
+            target_endian = "little"
+        )
+    )
 )))]
 pub(super) mod fallback {
     pub trait SimdInt {}
     impl SimdInt for u32 {}
     impl SimdInt for u64 {}
 
-    impl super::private::PageCodec for crate::rust::kernels::Simd {}
+    impl super::private::PageCodec for crate::rust::kernels::Auto {}
 }

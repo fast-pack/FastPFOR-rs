@@ -1,7 +1,7 @@
 #![no_main]
 
-//! Cross-decoder fuzz: encode with `CppFastPFor128`, match it with `FastPFor128` output,
-//! then verify that `FastPFor128` (pure Rust) and `CppFastPFor128` both reproduce the original
+//! Cross-decoder fuzz: encode with `CppFastPFor128`, match it with `FastPForSequential32x128` output,
+//! then verify that `FastPForSequential32x128` (pure Rust) and `CppFastPFor128` both reproduce the original
 //! input exactly.
 //!
 //! # Why `CppSimdFastPFor128` is excluded
@@ -26,7 +26,7 @@
 //! (and vice versa).
 
 use fastpfor::cpp::CppFastPFor128;
-use fastpfor::{AnyLenCodec, FastPFor128};
+use fastpfor::{AnyLenCodec, FastPForSequential32x128};
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: Vec<u32>| {
@@ -36,21 +36,21 @@ fuzz_target!(|data: Vec<u32>| {
         .expect("any data must be encodable");
 
     let mut rust_compressed = Vec::new();
-    FastPFor128::default()
+    FastPForSequential32x128::default()
         .encode(&data, &mut rust_compressed)
         .expect("any data must be encodable");
     assert_eq!(
         compressed, rust_compressed,
-        "CppFastPFor128 and FastPFor128 produced different compressed output",
+        "CppFastPFor128 and FastPForSequential32x128 produced different compressed output",
     );
 
     let mut rust_out = Vec::new();
-    FastPFor128::default()
+    FastPForSequential32x128::default()
         .decode(&compressed, &mut rust_out, None)
-        .expect("FastPFor128 (Rust) failed to decode CppFastPFor128-encoded data");
+        .expect("FastPForSequential32x128 (Rust) failed to decode CppFastPFor128-encoded data");
     assert_eq!(
         rust_out, data,
-        "FastPFor128 (Rust) decoded output does not match original",
+        "FastPForSequential32x128 (Rust) decoded output does not match original",
     );
 
     let mut cpp_out = Vec::new();
