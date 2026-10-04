@@ -21,6 +21,11 @@ name = "fastpfor_benchmark"
 required-features = ["rust"]
 harness = false
 
+[[bench]]
+name = "instructions"
+required-features = ["rust"]
+harness = false
+
 [features]
 default = ["rust", "simd"]
 # Used internally for testing and benchmarking. Not intended for public use.

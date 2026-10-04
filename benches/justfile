@@ -48,3 +48,39 @@ cpp-vs-rust-decode mode='portable':
 # Benchmark scalar vs SIMD kernels (byte-identical output)
 kernels *args:
     cargo bench --bench fastpfor_benchmark --features rust -- kernels/ {{args}}
+
+# Compares C++ vs Rust, portable vs SIMD kernels, sequential vs interleaved wire format, u32/u64, 128/256 blocks.
+# Extra args: `--save <file>` keeps the raw counts, `--baseline <file>` compares with saved ones.
+# Count CPU instructions per value (valgrind/callgrind) of every FastPFor implementation
+instructions mode='native' *args:
+    cargo bench --bench instructions --features rust,simd,cpp_{{mode}} -- {{args}}
+
+# Needs `kernel.perf_event_paranoid <= 2`; set `cpu=''` to not pin the runs to one CPU.
+# Like `instructions`, but counts instructions and cycles with the CPU's hardware counters (`perf stat`)
+perf mode='native' cpu='2' *args: perf-check
+    FASTPFOR_BENCH_CPU='{{cpu}}' cargo bench --bench instructions --features rust,simd,cpp_{{mode}} -- --perf {{args}}
+
+# Check that `perf` can read the CPU's instruction and cycle counters, and explain how to allow it if not
+perf-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! command -v perf >/dev/null; then
+        echo "error: 'perf' is not installed. On Debian/Ubuntu: sudo apt install linux-tools-common linux-tools-\$(uname -r)" >&2
+        exit 1
+    fi
+    paranoid="$(cat /proc/sys/kernel/perf_event_paranoid)"
+    if [ "$paranoid" -gt 2 ]; then
+        echo "error: the kernel does not let unprivileged processes read CPU counters (kernel.perf_event_paranoid = $paranoid, needs 2 or lower)." >&2
+        echo "Allow it until the next reboot:" >&2
+        echo "    sudo sysctl kernel.perf_event_paranoid=2" >&2
+        echo "or permanently:" >&2
+        echo "    echo 'kernel.perf_event_paranoid = 2' | sudo tee /etc/sysctl.d/60-perf.conf && sudo sysctl --system" >&2
+        echo "Level 2 only allows measuring user-space code of your own processes." >&2
+        echo "Alternatively, run 'just bench instructions', which uses valgrind and needs no kernel changes." >&2
+        exit 1
+    fi
+    if ! probe="$(perf stat -x, -e instructions:u,cycles:u -- true 2>&1)" || [[ "$probe" == *"<not supported>"* ]]; then
+        echo "error: perf cannot read the CPU's instruction and cycle counters (in a VM, the hypervisor may not expose them):" >&2
+        echo "$probe" >&2
+        exit 1
+    fi
