@@ -131,9 +131,7 @@ jobs:
     name: Copy/Paste Detection
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
+    permissions: { contents: read }
     env:
       BASE_REF: ${{ github.base_ref }}
     steps:
@@ -146,14 +144,18 @@ jobs:
       - run: just ci-cpd "origin/$BASE_REF"
         env:
           CPD_BLOB_URL: ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.event.pull_request.head.sha }}
-      # Pull requests from forks get a read-only token, so they only get the job summary
-      - if: github.event.pull_request.head.repo.full_name == github.repository
-        name: Post summary as a PR comment
-        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+      # Posted as a PR comment by `pr-comments.yml`: this job has a read-only token (always so for forks).
+      - name: Save the PR number for the comment workflow
+        run: echo "$PR_NUMBER" > target/jscpd/pr-number
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          header: jscpd
-          path: target/jscpd/summary.md
-          skip_unchanged: true
+          name: jscpd
+          path: |
+            target/jscpd/summary.md
+            target/jscpd/pr-number
+          retention-days: 7
 
   bench:
     name: Instruction counts
@@ -183,8 +185,7 @@ jobs:
       - run: just ci-bench target/bench/summary.md "$BASE_SHA"
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-      # This job has a read-only token (always so for pull requests from forks), so the report is
-      # posted as a PR comment by the `bench-comment.yml` workflow, which runs after this one.
+      # Posted as a PR comment by `pr-comments.yml`: this job has a read-only token (always so for forks).
       - name: Save the PR number for the comment workflow
         run: echo "$PR_NUMBER" > target/bench/pr-number
         env:
