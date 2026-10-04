@@ -29,7 +29,7 @@ compatibility and speed:
 |---------------------------|---------------------------------------------------------|------------------------------------------------------------|
 | C++ equivalent            | `FastPFor`, `u32` and `u64`                             | `SIMDFastPFor`, `u32` only                                 |
 | SIMD on `x86_64`          | AVX2, detected at runtime; portable on older CPUs         | SSE2: every `x86_64` CPU, no detection                     |
-| SIMD on `aarch64`         | NEON (`u64` values wider than 32 bits: portable)          | NEON (little-endian)                                       |
+| SIMD on `aarch64`         | NEON, little-endian (`u64` wider than 32 bits: portable)  | NEON, little-endian                                        |
 | `u32` decode, ≤ 20 bits   | 800-900 M values/s (AVX2), 510-580 (portable)             | **860-1090 M values/s**, 10-25% faster                     |
 | `u32` decode, ~31 bits    | **745 M values/s** (AVX2)                               | 630 M values/s                                             |
 | `u64` decode              | 390-560 M values/s (AVX2)                               | about the same                                             |
@@ -196,7 +196,7 @@ The Rust codecs pick the fastest implementation available, and every implementat
 the format, value width and block size in the codec's name are the only choices that matter for the data.
 
 * With the default `simd` feature: AVX2 on `x86_64` for the sequential format, selected at runtime, and SSE2 for the
-  interleaved one; NEON on `aarch64` (little-endian for the interleaved format).
+  interleaved one; NEON on little-endian `aarch64` for both.
 * Without a SIMD implementation for the target (for example WASM), or on an `x86_64` CPU without AVX2 for the
   sequential format, the codecs use the portable code. So does every target when the `simd` feature is disabled,
   which also leaves this crate with no `unsafe` code (its dependencies, such as `bytemuck`, still have their own):

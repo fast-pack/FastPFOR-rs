@@ -52,7 +52,11 @@ pub(super) fn decode_page_scalar<L: Layout, T: FastPForInt, const N: usize, K: K
     feature = "simd",
     any(
         target_arch = "x86_64",
-        all(target_arch = "aarch64", target_feature = "neon")
+        all(
+            target_arch = "aarch64",
+            target_feature = "neon",
+            target_endian = "little"
+        )
     )
 )))]
 pub(super) mod fallback {

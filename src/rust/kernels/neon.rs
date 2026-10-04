@@ -6,9 +6,7 @@ use wide::{i8x16, u32x4};
 use crate::FastPForResult;
 use crate::rust::integer_compression::fastpfor::FastPForBlock;
 use crate::rust::integer_compression::fastpfor_int::FastPForInt;
-#[cfg(target_endian = "little")]
 use crate::rust::kernels::lanes::{decode_page_lanes, encode_page_lanes};
-#[cfg(target_endian = "little")]
 use crate::rust::kernels::lanes_wide::Wide;
 use crate::rust::kernels::{Auto, Layout, pack_narrowed, private, unpack_narrowed};
 
@@ -51,16 +49,15 @@ impl NeonInt for u64 {
     }
 }
 
-/// [`Auto`] on `aarch64`: NEON kernels for both layouts. The interleaved ones need little-endian;
-/// big-endian targets use the portable ones for that layout.
+/// [`Auto`] on little-endian `aarch64`: NEON kernels for both layouts. Both pack values at byte
+/// offsets of the output words, so big-endian `aarch64` uses the portable kernels instead.
 impl private::PageCodec for Auto {
     #[cfg(feature = "__testing")]
     fn sequential_implementation() -> crate::rust::kernels::Implementation {
         crate::rust::kernels::Implementation::Neon
     }
 
-    // Under the same condition as `encode_interleaved` / `decode_interleaved` below.
-    #[cfg(all(feature = "__testing", target_endian = "little"))]
+    #[cfg(feature = "__testing")]
     fn interleaved_implementation() -> crate::rust::kernels::Implementation {
         crate::rust::kernels::Implementation::Neon
     }
@@ -104,7 +101,6 @@ impl private::PageCodec for Auto {
         )
     }
 
-    #[cfg(target_endian = "little")]
     fn encode_interleaved<L: Layout, T: FastPForInt, const N: usize>(
         codec: &mut FastPForBlock<L, T, N, Self>,
         input: &[T],
@@ -123,7 +119,6 @@ impl private::PageCodec for Auto {
         );
     }
 
-    #[cfg(target_endian = "little")]
     fn decode_interleaved<L: Layout, T: FastPForInt, const N: usize>(
         codec: &mut FastPForBlock<L, T, N, Self>,
         input: &[u32],

@@ -20,7 +20,12 @@ mod lanes;
     )
 ))]
 mod lanes_wide;
-#[cfg(all(feature = "simd", target_arch = "aarch64", target_feature = "neon"))]
+#[cfg(all(
+    feature = "simd",
+    target_arch = "aarch64",
+    target_feature = "neon",
+    target_endian = "little"
+))]
 mod neon;
 mod portable;
 
@@ -67,7 +72,8 @@ pub struct Portable;
 
 /// The default kernels: the fastest implementation available in this build, byte-identical to [`Portable`].
 ///
-/// - [`Sequential`] layout: AVX2 on `x86_64` when the CPU has it (detected at runtime), NEON on `aarch64`.
+/// - [`Sequential`] layout: AVX2 on `x86_64` when the CPU has it (detected at runtime), NEON on little-endian
+///   `aarch64`.
 /// - [`Interleaved`] layout: SSE2 on `x86_64` and NEON on little-endian `aarch64`, which those targets always have.
 /// - Anywhere else, and in builds without the default `simd` cargo feature: [`Portable`].
 ///
@@ -298,7 +304,11 @@ pub(crate) mod private {
     feature = "simd",
     any(
         target_arch = "x86_64",
-        all(target_arch = "aarch64", target_feature = "neon")
+        all(
+            target_arch = "aarch64",
+            target_feature = "neon",
+            target_endian = "little"
+        )
     )
 ))]
 #[expect(clippy::inline_always, reason = "kernel must inline into the page")]
@@ -316,7 +326,11 @@ fn pack_narrowed(src: &[u64], inpos: usize, pack32: impl FnOnce(&[u32])) {
     feature = "simd",
     any(
         target_arch = "x86_64",
-        all(target_arch = "aarch64", target_feature = "neon")
+        all(
+            target_arch = "aarch64",
+            target_feature = "neon",
+            target_endian = "little"
+        )
     )
 ))]
 #[expect(clippy::inline_always, reason = "kernel must inline into the page")]
@@ -331,13 +345,22 @@ fn unpack_narrowed(out: &mut [u64], unpack32: impl FnOnce(&mut [u32])) {
 
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 pub(crate) use avx2::Avx2Int as SimdInt;
-#[cfg(all(feature = "simd", target_arch = "aarch64", target_feature = "neon"))]
+#[cfg(all(
+    feature = "simd",
+    target_arch = "aarch64",
+    target_feature = "neon",
+    target_endian = "little"
+))]
 pub(crate) use neon::NeonInt as SimdInt;
 #[cfg(not(all(
     feature = "simd",
     any(
         target_arch = "x86_64",
-        all(target_arch = "aarch64", target_feature = "neon")
+        all(
+            target_arch = "aarch64",
+            target_feature = "neon",
+            target_endian = "little"
+        )
     )
 )))]
 pub(crate) use portable::fallback::SimdInt;

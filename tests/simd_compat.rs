@@ -404,12 +404,12 @@ fn expected_auto() -> (Implementation, Implementation) {
     target_feature = "neon"
 ))]
 fn expected_auto() -> (Implementation, Implementation) {
-    let interleaved = if cfg!(target_endian = "little") {
-        Implementation::Neon
+    // The NEON kernels pack at byte offsets of the output words, which only works on little-endian.
+    if cfg!(target_endian = "little") {
+        (Implementation::Neon, Implementation::Neon)
     } else {
-        Implementation::Portable
-    };
-    (Implementation::Neon, interleaved)
+        (Implementation::Portable, Implementation::Portable)
+    }
 }
 
 #[cfg(all(
