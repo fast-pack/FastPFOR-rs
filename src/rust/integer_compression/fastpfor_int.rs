@@ -8,7 +8,7 @@ use num_traits::PrimInt;
 
 use crate::helpers::GetWithErr;
 use crate::rust::integer_compression::{bit_pack32, bit_pack64, bit_unpack32};
-use crate::rust::kernels::SimdInt;
+use crate::rust::kernels::{LaneElem, SimdInt};
 use crate::{FastPForError, FastPForResult};
 
 mod sealed {
@@ -19,7 +19,7 @@ mod sealed {
 
 /// Sealed element type of `FastPFOR` stream: [`u32`] or [`u64`].
 pub trait FastPForInt:
-    PrimInt + 'static + bytemuck::Pod + sealed::Sealed + BitOrAssign + SimdInt
+    PrimInt + 'static + bytemuck::Pod + sealed::Sealed + BitOrAssign + SimdInt + LaneElem
 {
     /// Bitwidth of the element: 32 or 64.
     const WIDTH: u8 = (size_of::<Self>() * 8) as u8;

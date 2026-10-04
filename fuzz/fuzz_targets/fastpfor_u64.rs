@@ -1,7 +1,7 @@
 #![no_main]
 
 use fastpfor::cpp::{CppFastPFor128, CppFastPFor256};
-use fastpfor::{BlockCodec64, FastPForWide128, FastPForWide256};
+use fastpfor::{BlockCodec64, FastPForSequential64x128, FastPForSequential64x256};
 use libfuzzer_sys::fuzz_target;
 
 #[derive(arbitrary::Arbitrary, Debug)]
@@ -43,17 +43,17 @@ fn check(rust: &mut impl BlockCodec64, cpp: &mut impl BlockCodec64, data: &[u64]
 fuzz_target!(|input: Input| {
     if input.use_256 {
         check(
-            &mut FastPForWide256::default(),
+            &mut FastPForSequential64x256::default(),
             &mut CppFastPFor256::default(),
             &input.data,
-            "FastPForWide256",
+            "FastPForSequential64x256",
         );
     } else {
         check(
-            &mut FastPForWide128::default(),
+            &mut FastPForSequential64x128::default(),
             &mut CppFastPFor128::default(),
             &input.data,
-            "FastPForWide128",
+            "FastPForSequential64x128",
         );
     }
 });

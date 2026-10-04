@@ -2,6 +2,8 @@
     unsafe_code,
     reason = "x86 SIMD dispatch and C++ interop must allow, so can't use forbid here"
 )]
+// Without SIMD intrinsics or C++ interop there is no `unsafe` code at all: make that a guarantee.
+#![cfg_attr(not(any(feature = "simd", feature = "cpp")), forbid(unsafe_code))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc = include_str!("../README.md")]
 
@@ -34,18 +36,20 @@ pub(crate) mod helpers;
 pub use bytemuck::Pod;
 #[cfg(feature = "rust")]
 pub use rust::{
-    CompositeCodec, FastPFor, FastPFor128, FastPFor256, FastPForBlock128, FastPForBlock256,
-    FastPForBlockWide128, FastPForBlockWide256, FastPForSimd128, FastPForSimd256,
-    FastPForSimdBlock128, FastPForSimdBlock256, FastPForSimdBlockWide128, FastPForSimdBlockWide256,
-    FastPForSimdWide128, FastPForSimdWide256, FastPForWide128, FastPForWide256, JustCopy, Kernels,
-    Scalar, Simd, VariableByte,
+    Auto, CompositeCodec, FastPForBlock, FastPForCodec, FastPForInterleaved32x128,
+    FastPForInterleaved32x256, FastPForInterleaved64x128, FastPForInterleaved64x256,
+    FastPForInterleavedBlock32x128, FastPForInterleavedBlock32x256, FastPForInterleavedBlock64x128,
+    FastPForInterleavedBlock64x256, FastPForSequential32x128, FastPForSequential32x256,
+    FastPForSequential64x128, FastPForSequential64x256, FastPForSequentialBlock32x128,
+    FastPForSequentialBlock32x256, FastPForSequentialBlock64x128, FastPForSequentialBlock64x256,
+    Interleaved, JustCopy, Kernels, Layout, Portable, Sequential, VariableByte,
 };
 
 #[cfg(feature = "__testing")]
 #[doc(hidden)]
 /// Test-only hooks. Not part of the public API.
 pub mod __testing {
-    pub use crate::rust::with_simd_fallback;
+    pub use crate::rust::{Implementation, implementation, with_simd_fallback};
 }
 
 // `src/test_utils.rs` uses `fastpfor::...`; alias this crate for unit tests only.
