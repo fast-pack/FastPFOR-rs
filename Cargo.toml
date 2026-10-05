@@ -11,7 +11,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 keywords = ["fastpfor", "compression"]
 categories = ["compression"]
-rust-version = "1.87"
+rust-version = "1.89"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -49,7 +49,7 @@ num-traits = { version = "0.2", optional = true }
 thiserror = "2.0.18"
 
 [target.'cfg(any(target_arch = "x86_64", target_arch = "aarch64"))'.dependencies]
-wide = { version = "0.7.33", optional = true, default-features = false }
+wide = { version = "1.7.1", optional = true, default-features = false }
 
 [build-dependencies]
 cmake = { version = "0.1.57", optional = true }

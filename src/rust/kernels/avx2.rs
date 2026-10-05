@@ -403,13 +403,13 @@ fn store_partial(acc: __m256i, out: &mut [u8]) {
         _mm256_extract_epi64::<2>(acc) as u64,
         _mm256_extract_epi64::<3>(acc) as u64,
     ];
-    let full = out.len() / 8;
-    for (chunk, word) in out.chunks_exact_mut(8).zip(words) {
-        chunk.copy_from_slice(&word.to_le_bytes());
+    let (chunks, rest) = out.as_chunks_mut::<8>();
+    let full = chunks.len();
+    for (chunk, word) in chunks.iter_mut().zip(words) {
+        *chunk = word.to_le_bytes();
     }
-    let rest = out.len() % 8;
-    if rest > 0 {
-        out[8 * full..].copy_from_slice(&words[full].to_le_bytes()[..rest]);
+    if !rest.is_empty() {
+        rest.copy_from_slice(&words[full].to_le_bytes()[..rest.len()]);
     }
 }
 

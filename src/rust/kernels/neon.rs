@@ -148,7 +148,7 @@ const fn select_word(idx: &mut [i8; 16], lane: usize, w: u32) {
 
 #[inline]
 fn swizzle(v: u32x4, idx: [i8; 16]) -> u32x4 {
-    cast(cast::<u32x4, i8x16>(v).swizzle(cast(idx)))
+    cast(cast::<u32x4, i8x16>(v).shuffle_zeroing(cast(idx)))
 }
 
 #[inline]
