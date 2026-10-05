@@ -148,7 +148,7 @@ pub(crate) mod private {
             input: &[T],
             this_size: u32,
             input_offset: &mut Cursor<u32>,
-            output: &mut [u32],
+            output: &mut Vec<u32>,
             output_offset: &mut Cursor<u32>,
         ) where
             Self: Kernels,
@@ -160,7 +160,7 @@ pub(crate) mod private {
             codec: &mut FastPForBlock<L, T, N, Self>,
             input: &[u32],
             input_offset: &mut Cursor<u32>,
-            output: &mut [T],
+            output: &mut Vec<T>,
             output_offset: &mut Cursor<u32>,
             this_size: u32,
         ) -> FastPForResult<()>
@@ -175,7 +175,7 @@ pub(crate) mod private {
             input: &[T],
             this_size: u32,
             input_offset: &mut Cursor<u32>,
-            output: &mut [u32],
+            output: &mut Vec<u32>,
             output_offset: &mut Cursor<u32>,
         ) where
             Self: Kernels,
@@ -194,7 +194,7 @@ pub(crate) mod private {
             codec: &mut FastPForBlock<L, T, N, Self>,
             input: &[u32],
             input_offset: &mut Cursor<u32>,
-            output: &mut [T],
+            output: &mut Vec<T>,
             output_offset: &mut Cursor<u32>,
             this_size: u32,
         ) -> FastPForResult<()>
@@ -223,7 +223,7 @@ pub(crate) mod private {
             input: &[T],
             this_size: u32,
             input_offset: &mut Cursor<u32>,
-            output: &mut [u32],
+            output: &mut Vec<u32>,
             output_offset: &mut Cursor<u32>,
         ) where
             Self: Layout;
@@ -232,7 +232,7 @@ pub(crate) mod private {
             codec: &mut FastPForBlock<Self, T, N, K>,
             input: &[u32],
             input_offset: &mut Cursor<u32>,
-            output: &mut [T],
+            output: &mut Vec<T>,
             output_offset: &mut Cursor<u32>,
             this_size: u32,
         ) -> FastPForResult<()>
@@ -251,7 +251,7 @@ pub(crate) mod private {
             input: &[T],
             this_size: u32,
             input_offset: &mut Cursor<u32>,
-            output: &mut [u32],
+            output: &mut Vec<u32>,
             output_offset: &mut Cursor<u32>,
         ) {
             K::encode_sequential(codec, input, this_size, input_offset, output, output_offset);
@@ -261,7 +261,7 @@ pub(crate) mod private {
             codec: &mut FastPForBlock<Self, T, N, K>,
             input: &[u32],
             input_offset: &mut Cursor<u32>,
-            output: &mut [T],
+            output: &mut Vec<T>,
             output_offset: &mut Cursor<u32>,
             this_size: u32,
         ) -> FastPForResult<()> {
@@ -280,7 +280,7 @@ pub(crate) mod private {
             input: &[T],
             this_size: u32,
             input_offset: &mut Cursor<u32>,
-            output: &mut [u32],
+            output: &mut Vec<u32>,
             output_offset: &mut Cursor<u32>,
         ) {
             K::encode_interleaved(codec, input, this_size, input_offset, output, output_offset);
@@ -290,7 +290,7 @@ pub(crate) mod private {
             codec: &mut FastPForBlock<Self, T, N, K>,
             input: &[u32],
             input_offset: &mut Cursor<u32>,
-            output: &mut [T],
+            output: &mut Vec<T>,
             output_offset: &mut Cursor<u32>,
             this_size: u32,
         ) -> FastPForResult<()> {

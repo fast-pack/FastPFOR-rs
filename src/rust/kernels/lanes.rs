@@ -311,7 +311,7 @@ pub(super) fn encode_page_lanes<
     input: &[T],
     this_size: u32,
     input_offset: &mut Cursor<u32>,
-    output: &mut [u32],
+    output: &mut Vec<u32>,
     output_offset: &mut Cursor<u32>,
 ) {
     codec.encode_page_interleaved_with(
@@ -338,7 +338,7 @@ pub(super) fn decode_page_lanes<
     codec: &mut FastPForBlock<L, T, N, K>,
     input: &[u32],
     input_offset: &mut Cursor<u32>,
-    output: &mut [T],
+    output: &mut Vec<T>,
     output_offset: &mut Cursor<u32>,
     this_size: u32,
 ) -> FastPForResult<()> {

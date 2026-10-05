@@ -3,7 +3,6 @@ use std::io::Cursor;
 use std::marker::PhantomData;
 
 use bytemuck::cast_slice;
-use bytes::{Buf as _, BufMut as _, BytesMut};
 
 use crate::helpers::{GetWithErr, greatest_multiple};
 use crate::rust::cursor::IncrementCursor;
@@ -34,6 +33,22 @@ const GROUP_WORDS_PER_BIT: u32 = GROUP as u32 / 32;
 
 /// Default page size in number of integers.
 const DEFAULT_PAGE_SIZE: u32 = 65536;
+
+/// Elements by which [`grow_to`] lengthens an output vector at a time: few enough (16 KiB of `u32`)
+/// to still be in the L1 cache when the kernels overwrite them.
+const GROW_STEP: usize = 4096;
+
+/// Makes `output` at least `len` elements long, padding it with zeros [`GROW_STEP`] elements at a time.
+///
+/// The encoder and decoder write into the output in place, so it must be initialized first. Zero-filling
+/// it in small steps just ahead of the writes is much cheaper than zero-filling it all up front: a whole
+/// output does not fit in the cache, so every element would be written to memory twice.
+#[inline]
+fn grow_to<E: Copy>(output: &mut Vec<E>, len: usize, zero: E) {
+    if output.len() < len {
+        output.resize(len.max(output.len() + GROW_STEP), zero);
+    }
+}
 
 pub(crate) trait PackFn<T>: Fn(&[T], usize, &mut [u32], usize, u8) + Copy {}
 impl<T, F: Fn(&[T], usize, &mut [u32], usize, u8) + Copy> PackFn<T> for F {}
@@ -72,7 +87,7 @@ pub struct FastPForBlock<L: Layout, T: FastPForInt, const N: usize, K: Kernels =
     /// Exception values indexed by bit width difference
     exception_buffers: T::ExceptionBuffers,
     /// Metadata buffer for encoding/decoding
-    bytes_container: BytesMut,
+    bytes_container: Vec<u8>,
     /// Maximum integers per page
     page_size: u32,
     /// Position trackers for exception arrays
@@ -109,9 +124,7 @@ impl<L: Layout, T: FastPForInt, const N: usize, K: Kernels> FastPForBlock<L, T, 
             });
         }
         Ok(Self {
-            bytes_container: BytesMut::with_capacity(
-                (3 * page_size / N as u32 + page_size) as usize,
-            ),
+            bytes_container: Vec::with_capacity((3 * page_size / N as u32 + page_size) as usize),
             page_size,
             exception_buffers: T::new_exception_buffers(),
             data_pointers: T::new_data_pointers(),
@@ -128,7 +141,7 @@ impl<L: Layout, T: FastPForInt, const N: usize, K: Kernels> FastPForBlock<L, T, 
         input: &[T],
         input_length: u32,
         input_offset: &mut Cursor<u32>,
-        output: &mut [u32],
+        output: &mut Vec<u32>,
         output_offset: &mut Cursor<u32>,
     ) {
         let inlength = greatest_multiple(input_length, N as u32);
@@ -144,7 +157,7 @@ impl<L: Layout, T: FastPForInt, const N: usize, K: Kernels> FastPForBlock<L, T, 
         input: &[u32],
         inlength: u32,
         input_offset: &mut Cursor<u32>,
-        output: &mut [T],
+        output: &mut Vec<T>,
         output_offset: &mut Cursor<u32>,
     ) -> FastPForResult<()> {
         let mynvalue = greatest_multiple(inlength, N as u32);
@@ -177,7 +190,7 @@ impl<L: Layout, T: FastPForInt, const N: usize, K: Kernels> FastPForBlock<L, T, 
         input: &[T],
         this_size: u32,
         input_offset: &mut Cursor<u32>,
-        output: &mut [u32],
+        output: &mut Vec<u32>,
         output_offset: &mut Cursor<u32>,
         pack: impl PackFn<T>,
     ) {
@@ -206,7 +219,7 @@ impl<L: Layout, T: FastPForInt, const N: usize, K: Kernels> FastPForBlock<L, T, 
         input: &[T],
         this_size: u32,
         input_offset: &mut Cursor<u32>,
-        output: &mut [u32],
+        output: &mut Vec<u32>,
         output_offset: &mut Cursor<u32>,
         pack: impl PackFn<T>,
         pack_group: impl PackFn<T>,
@@ -235,12 +248,13 @@ impl<L: Layout, T: FastPForInt, const N: usize, K: Kernels> FastPForBlock<L, T, 
         input: &[T],
         this_size: u32,
         input_offset: &mut Cursor<u32>,
-        output: &mut [u32],
+        output: &mut Vec<u32>,
         output_offset: &mut Cursor<u32>,
         pack: impl PackFn<T>,
         pack_group: impl PackFn<T>,
     ) {
         let header_pos = output_offset.position() as usize;
+        grow_to(output, header_pos + 1, 0);
         output_offset.increment();
         let mut tmp_output_offset = output_offset.position() as u32;
 
@@ -251,11 +265,14 @@ impl<L: Layout, T: FastPForInt, const N: usize, K: Kernels> FastPForBlock<L, T, 
         let mut tmp_input_offset = input_offset.position() as u32;
         let final_input_offset = tmp_input_offset + this_size - N as u32;
         while tmp_input_offset <= final_input_offset {
-            self.best_bit_from_data::<INTERLEAVED>(input, tmp_input_offset);
-            self.bytes_container.put_u8(self.optimal_bits);
-            self.bytes_container.put_u8(self.exception_count);
+            let block: &[T; N] = input[tmp_input_offset as usize..][..N]
+                .try_into()
+                .expect("N-value block");
+            self.best_bit_from_data::<INTERLEAVED>(block);
+            self.bytes_container.push(self.optimal_bits);
+            self.bytes_container.push(self.exception_count);
             if self.exception_count > 0 {
-                self.bytes_container.put_u8(self.max_bits);
+                self.bytes_container.push(self.max_bits);
                 let index = usize::from(self.max_bits - self.optimal_bits);
                 let needed = self.data_pointers[index] + usize::from(self.exception_count);
                 if needed > self.exception_buffers[index].len() {
@@ -263,18 +280,20 @@ impl<L: Layout, T: FastPForInt, const N: usize, K: Kernels> FastPForBlock<L, T, 
                     let new_cap = needed.saturating_mul(2).next_multiple_of(32);
                     self.exception_buffers[index].resize(new_cap, T::zero());
                 }
-                for k in 0..N as u32 {
-                    if input[(k + tmp_input_offset) as usize] >> usize::from(self.optimal_bits)
-                        != T::zero()
-                    {
-                        self.bytes_container.put_u8(k as u8);
-                        self.exception_buffers[index][self.data_pointers[index]] = input
-                            [(k + tmp_input_offset) as usize]
-                            >> usize::from(self.optimal_bits);
-                        self.data_pointers[index] += 1;
+                let exceptions = &mut self.exception_buffers[index];
+                let mut pointer = self.data_pointers[index];
+                for (k, &value) in block.iter().enumerate() {
+                    let high = value >> usize::from(self.optimal_bits);
+                    if high != T::zero() {
+                        self.bytes_container.push(k as u8);
+                        exceptions[pointer] = high;
+                        pointer += 1;
                     }
                 }
+                self.data_pointers[index] = pointer;
             }
+            let block_words = u32::from(self.optimal_bits) * (N as u32 / 32);
+            grow_to(output, (tmp_output_offset + block_words) as usize, 0);
             if INTERLEAVED {
                 for k in (0..N as u32).step_by(GROUP) {
                     pack_group(
@@ -304,14 +323,24 @@ impl<L: Layout, T: FastPForInt, const N: usize, K: Kernels> FastPForBlock<L, T, 
         output[header_pos] = tmp_output_offset - header_pos as u32;
         let byte_size = self.bytes_container.len();
         while (self.bytes_container.len() & 3) != 0 {
-            self.bytes_container.put_u8(0);
+            self.bytes_container.push(0);
         }
+        // Room for the metadata, the bitmap, and the size of each exception array.
+        grow_to(
+            output,
+            tmp_output_offset as usize
+                + 1
+                + self.bytes_container.len() / 4
+                + T::BITMAP_WORDS as usize
+                + usize::from(T::WIDTH),
+            0,
+        );
         // Output should have 3 position as 4
         output[tmp_output_offset as usize] = byte_size as u32;
         tmp_output_offset += 1;
         let how_many_ints = self.bytes_container.len() / 4;
         // Match C++ memcpy: copy metadata bytes as u32s in one shot (native byte order).
-        let meta_u32s: &[u32] = cast_slice(self.bytes_container.chunk());
+        let meta_u32s: &[u32] = cast_slice(&self.bytes_container);
         output[tmp_output_offset as usize..][..how_many_ints]
             .copy_from_slice(&meta_u32s[..how_many_ints]);
         tmp_output_offset += how_many_ints as u32;
@@ -329,9 +358,14 @@ impl<L: Layout, T: FastPForInt, const N: usize, K: Kernels> FastPForBlock<L, T, 
             if self.data_pointers[k] != 0 {
                 output[tmp_output_offset as usize] = self.data_pointers[k] as u32;
                 tmp_output_offset += 1;
+                // Whole interleaved groups (interleaved layout only), then 32-value groups.
+                let used = self.data_pointers[k];
+                let groups = if INTERLEAVED { used / GROUP } else { 0 };
+                let words = groups * GROUP_WORDS_PER_BIT as usize * k
+                    + (used - groups * GROUP).div_ceil(32) * k;
+                grow_to(output, tmp_output_offset as usize + words, 0);
                 // The last group of 32 is packed whole; zero its unused slots (as C++ does via
                 // `resize`) so stale values from earlier pages or calls don't leak into the output.
-                let used = self.data_pointers[k];
                 self.exception_buffers[k][used..used.next_multiple_of(32)].fill(T::zero());
                 let mut j = 0;
                 if INTERLEAVED {
@@ -374,11 +408,22 @@ impl<L: Layout, T: FastPForInt, const N: usize, K: Kernels> FastPForBlock<L, T, 
     /// The standard layout discounts exceptions that are a single bit wider than the packed width,
     /// since they need no exception array. The interleaved layout (`INTERLEAVED`) does not,
     /// matching the C++ `SIMDFastPFor` encoder.
-    fn best_bit_from_data<const INTERLEAVED: bool>(&mut self, input: &[T], pos: u32) {
-        self.freqs.as_mut().fill(0);
-        let k_end = min(pos + N as u32, input.len() as u32);
-        for k in pos..k_end {
-            self.freqs[usize::from(input[k as usize].significant_bits())] += 1;
+    fn best_bit_from_data<const INTERLEAVED: bool>(&mut self, block: &[T; N]) {
+        // Four histograms filled in turn: neighboring values often have the same width, and
+        // incrementing a single counter would make each value wait for the previous one's store.
+        let mut freqs = [
+            T::new_freqs(),
+            T::new_freqs(),
+            T::new_freqs(),
+            T::new_freqs(),
+        ];
+        for values in block.chunks_exact(4) {
+            for (f, value) in freqs.iter_mut().zip(values) {
+                f[usize::from(value.significant_bits())] += 1;
+            }
+        }
+        for (k, total) in self.freqs.as_mut().iter_mut().enumerate() {
+            *total = freqs[0][k] + freqs[1][k] + freqs[2][k] + freqs[3][k];
         }
 
         self.optimal_bits = T::WIDTH;
@@ -430,7 +475,7 @@ impl<L: Layout, T: FastPForInt, const N: usize, K: Kernels> FastPForBlock<L, T, 
         &mut self,
         input: &[u32],
         input_offset: &mut Cursor<u32>,
-        output: &mut [T],
+        output: &mut Vec<T>,
         output_offset: &mut Cursor<u32>,
         this_size: u32,
         unpack: impl UnpackFn<T>,
@@ -458,7 +503,7 @@ impl<L: Layout, T: FastPForInt, const N: usize, K: Kernels> FastPForBlock<L, T, 
         &mut self,
         input: &[u32],
         input_offset: &mut Cursor<u32>,
-        output: &mut [T],
+        output: &mut Vec<T>,
         output_offset: &mut Cursor<u32>,
         this_size: u32,
         unpack: impl UnpackFn<T>,
@@ -487,7 +532,7 @@ impl<L: Layout, T: FastPForInt, const N: usize, K: Kernels> FastPForBlock<L, T, 
         &mut self,
         input: &[u32],
         input_offset: &mut Cursor<u32>,
-        output: &mut [T],
+        output: &mut Vec<T>,
         output_offset: &mut Cursor<u32>,
         this_size: u32,
         unpack: impl UnpackFn<T>,
@@ -626,33 +671,35 @@ impl<L: Layout, T: FastPForInt, const N: usize, K: Kernels> FastPForBlock<L, T, 
             byte_pos += 1;
             let num_exceptions = input_bytes.get_val(byte_pos)?;
             byte_pos += 1;
+
+            let block_start = tmp_output_offset as usize;
+            grow_to(output, block_start + N, T::zero());
+            let block: &mut [T; N] = (&mut output[block_start..block_start + N])
+                .try_into()
+                .expect("N-value block");
             let (group, words_per_group) = if INTERLEAVED {
                 (GROUP, GROUP_WORDS_PER_BIT * u32::from(bits))
             } else {
                 (32, u32::from(bits))
             };
-            for k in (0..N as u32).step_by(group) {
-                let in_start = tmp_input_offset as usize;
-                let out_start = (tmp_output_offset + k) as usize;
-                let in_end = in_start
-                    .checked_add(words_per_group as usize)
-                    .ok_or(FastPForError::NotEnoughData)?;
-                if in_end > input.len() {
-                    return Err(FastPForError::NotEnoughData);
-                }
-                let out_end = out_start
-                    .checked_add(group)
-                    .ok_or(FastPForError::OutputBufferTooSmall)?;
-                if out_end > output.len() {
-                    return Err(FastPForError::OutputBufferTooSmall);
-                }
-                if INTERLEAVED {
-                    unpack_group(input, in_start, output, out_start, bits);
-                } else {
-                    unpack(input, in_start, output, out_start, bits);
-                }
-                tmp_input_offset += words_per_group;
+            let block_words = words_per_group as usize * (N / group);
+            let in_start = tmp_input_offset as usize;
+            if in_start
+                .checked_add(block_words)
+                .is_none_or(|end| end > input.len())
+            {
+                return Err(FastPForError::NotEnoughData);
             }
+            for k in (0..N).step_by(group) {
+                let in_pos = in_start + k / group * words_per_group as usize;
+                if INTERLEAVED {
+                    unpack_group(input, in_pos, block, k, bits);
+                } else {
+                    unpack(input, in_pos, block, k, bits);
+                }
+            }
+            tmp_input_offset += block_words as u32; // safe: checked against input.len() above
+
             if num_exceptions > 0 {
                 let maxbits = input_bytes.get_val(byte_pos)?;
                 byte_pos += 1;
@@ -663,42 +710,40 @@ impl<L: Layout, T: FastPForInt, const N: usize, K: Kernels> FastPForBlock<L, T, 
                     return Err(FastPForError::NotEnoughData);
                 }
                 let index = usize::from(index);
+                let count = usize::from(num_exceptions);
+                let positions = input_bytes
+                    .get(byte_pos..byte_pos + count)
+                    .ok_or(FastPForError::NotEnoughData)?;
+                byte_pos += count;
                 if index == 1 {
-                    for _ in 0..num_exceptions {
-                        let pos = input_bytes.get_val(byte_pos)?;
-                        byte_pos += 1;
-                        if u32::from(pos) >= N as u32 {
-                            return Err(FastPForError::NotEnoughData);
-                        }
-                        let out_idx = tmp_output_offset as usize + pos as usize;
-                        if out_idx >= output.len() {
-                            return Err(FastPForError::OutputBufferTooSmall);
-                        }
-                        output[out_idx] |= T::one() << usize::from(bits);
+                    for &pos in positions {
+                        let value = block
+                            .get_mut(usize::from(pos))
+                            .ok_or(FastPForError::NotEnoughData)?;
+                        *value |= T::one() << usize::from(bits);
                     }
                 } else {
-                    for _ in 0..num_exceptions {
-                        let pos = input_bytes.get_val(byte_pos)?;
-                        byte_pos += 1;
-                        if u32::from(pos) >= N as u32 {
-                            return Err(FastPForError::NotEnoughData);
-                        }
-                        let out_idx = tmp_output_offset as usize + pos as usize;
-                        if out_idx >= output.len() {
-                            return Err(FastPForError::OutputBufferTooSmall);
-                        }
-                        let ptr = self.data_pointers[index];
-                        if ptr >= exception_counts[index] {
-                            return Err(FastPForError::NotEnoughData);
-                        }
-                        let except_value = self.exception_buffers[index].get_val(ptr)?;
-                        output[out_idx] |= except_value << usize::from(bits);
-                        self.data_pointers[index] += 1;
+                    let first = self.data_pointers[index];
+                    let end = first + count;
+                    // Reject exceptions beyond the array's declared size, even if a previous
+                    // call left a longer buffer behind.
+                    if end > exception_counts[index] {
+                        return Err(FastPForError::NotEnoughData);
                     }
+                    let values = &self.exception_buffers[index][first..end];
+                    for (&pos, &except_value) in positions.iter().zip(values) {
+                        let value = block
+                            .get_mut(usize::from(pos))
+                            .ok_or(FastPForError::NotEnoughData)?;
+                        *value |= except_value << usize::from(bits);
+                    }
+                    self.data_pointers[index] = end;
                 }
             }
             tmp_output_offset += N as u32;
         }
+        // Drop the zeros `grow_to` added past the last block.
+        output.truncate(tmp_output_offset as usize);
         output_offset.set_position(u64::from(tmp_output_offset));
         input_offset.set_position(u64::from(inexcept));
         Ok(())

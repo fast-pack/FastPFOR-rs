@@ -57,7 +57,7 @@ impl private::PageCodec for Auto {
         input: &[T],
         this_size: u32,
         input_offset: &mut Cursor<u32>,
-        output: &mut [u32],
+        output: &mut Vec<u32>,
         output_offset: &mut Cursor<u32>,
     ) {
         if let Some(token) = Avx2::detect() {
@@ -79,7 +79,7 @@ impl private::PageCodec for Auto {
         codec: &mut FastPForBlock<L, T, N, Self>,
         input: &[u32],
         input_offset: &mut Cursor<u32>,
-        output: &mut [T],
+        output: &mut Vec<T>,
         output_offset: &mut Cursor<u32>,
         this_size: u32,
     ) -> FastPForResult<()> {
@@ -103,7 +103,7 @@ impl private::PageCodec for Auto {
         input: &[T],
         this_size: u32,
         input_offset: &mut Cursor<u32>,
-        output: &mut [u32],
+        output: &mut Vec<u32>,
         output_offset: &mut Cursor<u32>,
     ) {
         encode_page_lanes::<L, T, N, Self, Wide>(
@@ -120,7 +120,7 @@ impl private::PageCodec for Auto {
         codec: &mut FastPForBlock<L, T, N, Self>,
         input: &[u32],
         input_offset: &mut Cursor<u32>,
-        output: &mut [T],
+        output: &mut Vec<T>,
         output_offset: &mut Cursor<u32>,
         this_size: u32,
     ) -> FastPForResult<()> {
@@ -142,7 +142,7 @@ pub trait Avx2Int: Sized {
         input: &[Self],
         this_size: u32,
         input_offset: &mut Cursor<u32>,
-        output: &mut [u32],
+        output: &mut Vec<u32>,
         output_offset: &mut Cursor<u32>,
     ) where
         Self: FastPForInt;
@@ -152,7 +152,7 @@ pub trait Avx2Int: Sized {
         codec: &mut FastPForBlock<L, Self, N, Auto>,
         input: &[u32],
         input_offset: &mut Cursor<u32>,
-        output: &mut [Self],
+        output: &mut Vec<Self>,
         output_offset: &mut Cursor<u32>,
         this_size: u32,
     ) -> FastPForResult<()>
@@ -168,7 +168,7 @@ impl Avx2Int for u32 {
         input: &[Self],
         this_size: u32,
         input_offset: &mut Cursor<u32>,
-        output: &mut [u32],
+        output: &mut Vec<u32>,
         output_offset: &mut Cursor<u32>,
     ) {
         #[expect(unsafe_code, reason = "calls the #[target_feature] AVX2 page kernel")]
@@ -184,7 +184,7 @@ impl Avx2Int for u32 {
         codec: &mut FastPForBlock<L, Self, N, Auto>,
         input: &[u32],
         input_offset: &mut Cursor<u32>,
-        output: &mut [Self],
+        output: &mut Vec<Self>,
         output_offset: &mut Cursor<u32>,
         this_size: u32,
     ) -> FastPForResult<()> {
@@ -204,7 +204,7 @@ impl Avx2Int for u64 {
         input: &[Self],
         this_size: u32,
         input_offset: &mut Cursor<u32>,
-        output: &mut [u32],
+        output: &mut Vec<u32>,
         output_offset: &mut Cursor<u32>,
     ) {
         #[expect(unsafe_code, reason = "calls the #[target_feature] AVX2 page kernel")]
@@ -220,7 +220,7 @@ impl Avx2Int for u64 {
         codec: &mut FastPForBlock<L, Self, N, Auto>,
         input: &[u32],
         input_offset: &mut Cursor<u32>,
-        output: &mut [Self],
+        output: &mut Vec<Self>,
         output_offset: &mut Cursor<u32>,
         this_size: u32,
     ) -> FastPForResult<()> {
@@ -320,7 +320,7 @@ fn encode_page_u32<L: Layout, const N: usize>(
     input: &[u32],
     this_size: u32,
     input_offset: &mut Cursor<u32>,
-    output: &mut [u32],
+    output: &mut Vec<u32>,
     output_offset: &mut Cursor<u32>,
 ) {
     codec.encode_page_with(
@@ -339,7 +339,7 @@ fn decode_page_u32<L: Layout, const N: usize>(
     codec: &mut FastPForBlock<L, u32, N, Auto>,
     input: &[u32],
     input_offset: &mut Cursor<u32>,
-    output: &mut [u32],
+    output: &mut Vec<u32>,
     output_offset: &mut Cursor<u32>,
     this_size: u32,
 ) -> FastPForResult<()> {
@@ -360,7 +360,7 @@ fn encode_page_u64<L: Layout, const N: usize>(
     input: &[u64],
     this_size: u32,
     input_offset: &mut Cursor<u32>,
-    output: &mut [u32],
+    output: &mut Vec<u32>,
     output_offset: &mut Cursor<u32>,
 ) {
     codec.encode_page_with(
@@ -379,7 +379,7 @@ fn decode_page_u64<L: Layout, const N: usize>(
     codec: &mut FastPForBlock<L, u64, N, Auto>,
     input: &[u32],
     input_offset: &mut Cursor<u32>,
-    output: &mut [u64],
+    output: &mut Vec<u64>,
     output_offset: &mut Cursor<u32>,
     this_size: u32,
 ) -> FastPForResult<()> {
