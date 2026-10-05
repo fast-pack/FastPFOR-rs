@@ -217,10 +217,11 @@ fn decode_returns_error_when_index1_exception_position_out_of_block() {
     let mut buf = block_compress::<FastPForBlock<Sequential, u32, 128>>(&data).unwrap();
     let start = meta_byte_start(&buf);
     let bytes: &mut [u8] = cast_slice_mut(&mut buf);
-    if let Some((bb_off, _, mb_off)) = find_exception_block(bytes, start) {
-        if bytes[mb_off].wrapping_sub(bytes[bb_off]) == 1 && mb_off + 1 < bytes.len() {
-            bytes[mb_off + 1] = 200;
-        }
+    if let Some((bb_off, _, mb_off)) = find_exception_block(bytes, start)
+        && bytes[mb_off].wrapping_sub(bytes[bb_off]) == 1
+        && mb_off + 1 < bytes.len()
+    {
+        bytes[mb_off + 1] = 200;
     }
     decompress::<FastPForSequential32x128>(&buf, Some(128)).unwrap_err();
 }
@@ -233,10 +234,11 @@ fn decode_returns_error_when_exception_position_out_of_block() {
     let mut buf = block_compress::<FastPForBlock<Sequential, u32, 128>>(&data).unwrap();
     let start = meta_byte_start(&buf);
     let bytes: &mut [u8] = cast_slice_mut(&mut buf);
-    if let Some((bb_off, _, mb_off)) = find_exception_block(bytes, start) {
-        if bytes[mb_off].wrapping_sub(bytes[bb_off]) > 1 && mb_off + 1 < bytes.len() {
-            bytes[mb_off + 1] = 200;
-        }
+    if let Some((bb_off, _, mb_off)) = find_exception_block(bytes, start)
+        && bytes[mb_off].wrapping_sub(bytes[bb_off]) > 1
+        && mb_off + 1 < bytes.len()
+    {
+        bytes[mb_off + 1] = 200;
     }
     decompress::<FastPForSequential32x128>(&buf, Some(128)).unwrap_err();
 }
@@ -400,10 +402,11 @@ fn interleaved_decode_returns_error_when_index1_exception_position_out_of_block(
     let mut buf = block_compress::<FastPForBlock<Interleaved, u32, 128>>(&data).unwrap();
     let start = meta_byte_start(&buf);
     let bytes: &mut [u8] = cast_slice_mut(&mut buf);
-    if let Some((bb_off, _, mb_off)) = find_exception_block(bytes, start) {
-        if bytes[mb_off].wrapping_sub(bytes[bb_off]) == 1 && mb_off + 1 < bytes.len() {
-            bytes[mb_off + 1] = 200;
-        }
+    if let Some((bb_off, _, mb_off)) = find_exception_block(bytes, start)
+        && bytes[mb_off].wrapping_sub(bytes[bb_off]) == 1
+        && mb_off + 1 < bytes.len()
+    {
+        bytes[mb_off + 1] = 200;
     }
     decompress::<FastPForInterleaved32x128>(&buf, Some(128)).unwrap_err();
 }
@@ -416,10 +419,11 @@ fn interleaved_decode_returns_error_when_exception_position_out_of_block() {
     let mut buf = block_compress::<FastPForBlock<Interleaved, u32, 128>>(&data).unwrap();
     let start = meta_byte_start(&buf);
     let bytes: &mut [u8] = cast_slice_mut(&mut buf);
-    if let Some((bb_off, _, mb_off)) = find_exception_block(bytes, start) {
-        if bytes[mb_off].wrapping_sub(bytes[bb_off]) > 1 && mb_off + 1 < bytes.len() {
-            bytes[mb_off + 1] = 200;
-        }
+    if let Some((bb_off, _, mb_off)) = find_exception_block(bytes, start)
+        && bytes[mb_off].wrapping_sub(bytes[bb_off]) > 1
+        && mb_off + 1 < bytes.len()
+    {
+        bytes[mb_off + 1] = 200;
     }
     decompress::<FastPForInterleaved32x128>(&buf, Some(128)).unwrap_err();
 }
