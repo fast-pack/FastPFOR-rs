@@ -174,7 +174,7 @@ jobs:
         with: { tool: 'just' }
       - run: sudo apt-get update && sudo apt-get install -y valgrind
       # Best effort: the hosted runners are VMs, which may not expose the CPU's hardware counters.
-      # Without them `just ci-bench` reports only the valgrind counts.
+      # Without them `just bench ci` reports only the valgrind counts.
       - name: Let perf read the CPU counters
         continue-on-error: true
         run: |
@@ -184,7 +184,7 @@ jobs:
         run: git fetch --no-tags --depth=1 origin "$BASE_SHA"
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-      - run: just ci-bench target/bench/summary.md "$BASE_SHA"
+      - run: just bench ci target/bench/summary.md "$BASE_SHA"
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
       # Posted as a PR comment by `pr-comments.yml`: this job has a read-only token (always so for forks).
