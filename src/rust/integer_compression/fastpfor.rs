@@ -417,7 +417,7 @@ impl<L: Layout, T: FastPForInt, const N: usize, K: Kernels> FastPForBlock<L, T, 
             T::new_freqs(),
             T::new_freqs(),
         ];
-        for values in block.chunks_exact(4) {
+        for values in block.as_chunks::<4>().0 {
             for (f, value) in freqs.iter_mut().zip(values) {
                 f[usize::from(value.significant_bits())] += 1;
             }
