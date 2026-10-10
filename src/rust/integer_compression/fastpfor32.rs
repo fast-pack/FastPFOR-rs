@@ -23,26 +23,16 @@ where
         }
         let flat: &[T] = cast_slice(blocks);
 
-        let capacity = flat.len() * 3 + 1024;
-        let start = out.len();
-        // Reserve slot for the length header, then space for compressed data.
-        out.resize(start + 1 + capacity, 0);
-
+        // The encoder grows `out` as it writes, so only reserve room: compressed data is
+        // usually smaller than its input.
+        out.reserve(1 + size_of_val(flat) / 4 + 1024);
+        out.push(n_values);
+        let start = u32::try_from(out.len()).map_err(|_| FastPForError::OutputBufferTooSmall)?;
         let mut in_off = Cursor::new(0u32);
         let mut out_off = Cursor::new(0u32);
-
-        // Write length header then compress.
-        out[start] = n_values;
-        self.compress_blocks(
-            flat,
-            n_values,
-            &mut in_off,
-            &mut out[start + 1..],
-            &mut out_off,
-        );
-
-        let written = 1 + out_off.position() as usize;
-        out.truncate(start + written);
+        out_off.set_position(u64::from(start));
+        self.compress_blocks(flat, n_values, &mut in_off, out, &mut out_off);
+        out.truncate(out_off.position() as usize);
         Ok(())
     }
 
@@ -74,22 +64,20 @@ where
         if n_blocks == 0 {
             return Ok(1);
         }
+        // The decoder grows `out` as it writes, so only reserve room.
+        out.reserve(n_blocks * N);
         let start = out.len();
-        out.resize(start + n_blocks * N, T::zero());
-
+        if u32::try_from(start + n_blocks * N).is_err() {
+            return Err(FastPForError::OutputBufferTooSmall);
+        }
         let mut in_off = Cursor::new(0u32);
         let mut out_off = Cursor::new(0u32);
+        out_off.set_position(start as u64);
 
-        self.decode_headless_blocks(
-            rest,
-            block_n_values,
-            &mut in_off,
-            &mut out[start..],
-            &mut out_off,
-        )?;
+        self.decode_headless_blocks(rest, block_n_values, &mut in_off, out, &mut out_off)?;
 
         // `decode_headless_blocks` only returns `Ok` once it has filled every block.
-        debug_assert_eq!(out_off.position() as usize, n_blocks * N);
+        debug_assert_eq!(out.len(), start + n_blocks * N);
         // +1 for the header word (block_n_values) that precedes `rest`.
         Ok(1 + in_off.position() as usize)
     }
@@ -183,7 +171,7 @@ mod tests {
                 &[],
                 0,
                 &mut Cursor::new(0u32),
-                &mut [],
+                &mut Vec::new(),
                 &mut Cursor::new(0u32),
             )
             .expect("zero-length decompress must succeed");

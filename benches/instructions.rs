@@ -12,6 +12,7 @@
 //! - `just bench perf`: under `perf stat`, with the CPU's hardware counters. Full speed, and also
 //!   counts cycles, but needs `kernel.perf_event_paranoid <= 2`.
 //!
+//! `--filter <text>` only counts the cases whose id contains it, e.g. `Interleaved-u32-128`.
 //! `--save <file>` writes the raw counts, and `--baseline <file>` adds tables comparing against
 //! counts saved earlier, e.g. from the base commit of a pull request.
 
@@ -470,7 +471,7 @@ type Row = (&'static str, u32, u32);
 /// Raw counts of all runs: `(case id, operation) -> one count per metric`.
 type Results = HashMap<(String, &'static str), Vec<Option<u64>>>;
 
-fn measure(tool: Tool) -> Results {
+fn measure(tool: Tool, filter: Option<&str>) -> Results {
     let exe = env::current_exe().expect("current exe");
     let dir = exe.with_extension(match tool {
         Tool::Callgrind => "callgrind",
@@ -481,6 +482,7 @@ fn measure(tool: Tool) -> Results {
     let cases = cases();
     let jobs: Vec<(&Case, Op)> = cases
         .iter()
+        .filter(|c| filter.is_none_or(|f| c.id().contains(f)))
         .flat_map(|c| [(c, Op::Encode), (c, Op::Decode)])
         .collect();
     let results = Mutex::new(Results::new());
@@ -561,7 +563,7 @@ fn option<'a>(args: &'a [String], name: &str) -> Option<&'a str> {
 }
 
 fn summarize(tool: Tool, args: &[String]) {
-    let results = measure(tool);
+    let results = measure(tool, option(args, "--filter"));
     if let Some(path) = option(args, "--save") {
         save(&results, path);
     }

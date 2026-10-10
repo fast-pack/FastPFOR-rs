@@ -67,7 +67,7 @@ impl private::PageCodec for Auto {
         input: &[T],
         this_size: u32,
         input_offset: &mut Cursor<u32>,
-        output: &mut [u32],
+        output: &mut Vec<u32>,
         output_offset: &mut Cursor<u32>,
     ) {
         codec.encode_page_with(
@@ -86,7 +86,7 @@ impl private::PageCodec for Auto {
         codec: &mut FastPForBlock<L, T, N, Self>,
         input: &[u32],
         input_offset: &mut Cursor<u32>,
-        output: &mut [T],
+        output: &mut Vec<T>,
         output_offset: &mut Cursor<u32>,
         this_size: u32,
     ) -> FastPForResult<()> {
@@ -106,7 +106,7 @@ impl private::PageCodec for Auto {
         input: &[T],
         this_size: u32,
         input_offset: &mut Cursor<u32>,
-        output: &mut [u32],
+        output: &mut Vec<u32>,
         output_offset: &mut Cursor<u32>,
     ) {
         encode_page_lanes::<L, T, N, Self, Wide>(
@@ -123,7 +123,7 @@ impl private::PageCodec for Auto {
         codec: &mut FastPForBlock<L, T, N, Self>,
         input: &[u32],
         input_offset: &mut Cursor<u32>,
-        output: &mut [T],
+        output: &mut Vec<T>,
         output_offset: &mut Cursor<u32>,
         this_size: u32,
     ) -> FastPForResult<()> {
