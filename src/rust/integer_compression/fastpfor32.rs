@@ -123,8 +123,7 @@ mod tests {
         // Empty input encodes to length header [0] (matches C++ FastPFor) and decodes cleanly.
         let enc = block_compress::<Seq256>(&[]).unwrap();
         assert_eq!(enc, [0]);
-        let dec = block_decompress::<Seq256>(&enc, Some(0)).unwrap();
-        assert_eq!(dec, []);
+        assert_eq!(block_decompress::<Seq256>(&enc, Some(0)).unwrap(), []);
     }
 
     // Tests ported from C++
@@ -245,8 +244,7 @@ mod tests {
     fn decode_blocks_header_only_input() {
         // Input with just the length header [0]: no blocks to decode.
         let input = vec![0u32];
-        let out = block_decompress::<Seq256>(&input, None).unwrap();
-        assert_eq!(out, []);
+        assert_eq!(block_decompress::<Seq256>(&input, None).unwrap(), []);
     }
 
     #[test]

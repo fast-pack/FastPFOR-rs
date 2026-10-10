@@ -258,8 +258,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_decode32_cpp_empty_format() {
-        let result = decompress::<CppFastPFor128>(&[0u32], Some(0)).unwrap();
-        assert_eq!(result, []);
+        assert_eq!(decompress::<CppFastPFor128>(&[0u32], Some(0)).unwrap(), []);
     }
 
     #[test]
