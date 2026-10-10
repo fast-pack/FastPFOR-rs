@@ -145,20 +145,18 @@ mod tests {
     #[test]
     fn test_decode_truly_empty_input() {
         // Decoding a zero-length slice (not even a header word) must succeed with empty output.
-        assert!(
-            decompress::<FastPForSequential32x256>(&[], None)
-                .unwrap()
-                .is_empty()
+        assert_eq!(
+            decompress::<FastPForSequential32x256>(&[], None).unwrap(),
+            []
         );
     }
 
     #[test]
     fn test_decode_empty_input_with_expected_zero() {
         // Empty input with expected_len=0 must succeed.
-        assert!(
-            decompress::<FastPForSequential32x256>(&[], Some(0))
-                .unwrap()
-                .is_empty()
+        assert_eq!(
+            decompress::<FastPForSequential32x256>(&[], Some(0)).unwrap(),
+            []
         );
     }
 

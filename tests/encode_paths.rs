@@ -99,7 +99,7 @@ fn fastpfor_encode_128_block_with_exceptions() {
 #[test]
 fn variable_byte_anylen_decompress_short_input() {
     let out = decompress::<VariableByte>(&[], None).unwrap();
-    assert!(out.is_empty());
+    assert_eq!(out, []);
 }
 
 /// Decompressing into a `Vec` that starts empty is fine — it grows as needed.
