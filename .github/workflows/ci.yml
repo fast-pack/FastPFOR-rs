@@ -29,7 +29,8 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           prefix-key: "v0-${{ matrix.simd_mode }}"
-      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
         with: { tool: 'just,cargo-binstall' }
       - run: just ci-test
 
@@ -43,7 +44,7 @@ jobs:
         with: { persist-credentials: false, submodules: recursive }
       - if: github.event_name != 'release' && github.event_name != 'workflow_dispatch'
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
         with: { tool: 'just' }
       - run: rustup install nightly --profile minimal
       - run: just test-publish
@@ -57,13 +58,13 @@ jobs:
         with: { persist-credentials: false, submodules: recursive }
       - if: github.event_name != 'release' && github.event_name != 'workflow_dispatch'
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
         with: { tool: 'just' }
       - name: Read MSRV
         id: msrv
         run: echo "value=$(just get-msrv)" >> $GITHUB_OUTPUT
       - name: Install MSRV Rust ${{ steps.msrv.outputs.value }}
-        uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # v1
+        uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
         with:
           toolchain: ${{ steps.msrv.outputs.value }}
       - run: just ci-test-msrv
@@ -96,7 +97,7 @@ jobs:
       - run: rustup toolchain install nightly
       - run: rustup default nightly
       # Install and cache `cargo-fuzz`.
-      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
         with: { tool: 'cargo-fuzz@0.13.2' }
       # Build and then run the fuzz target.
       #  An explicit --target is necessary to not default to musl, which is not supported by cargo-fuzz.
@@ -118,7 +119,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false, submodules: recursive }
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
         with: { tool: 'just,cargo-llvm-cov' }
       - run: just ci-coverage
       - name: Upload coverage to Codecov
@@ -139,7 +141,7 @@ jobs:
         with: { persist-credentials: false }
       - name: Fetch base branch to detect newly added clones
         run: git fetch --no-tags --depth=1 origin "$BASE_REF"
-      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
         with: { tool: 'just,cargo-binstall' }
       - run: just ci-cpd "origin/$BASE_REF"
         env:
@@ -168,7 +170,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           prefix-key: "v0-bench"
-      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
         with: { tool: 'just' }
       - run: sudo apt-get update && sudo apt-get install -y valgrind
       # Best effort: the hosted runners are VMs, which may not expose the CPU's hardware counters.
@@ -236,7 +238,7 @@ jobs:
 #      # The full history is needed to compute versions and changelogs, and the `cpp` submodule is part of the published package.
 #      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 #        with: { fetch-depth: 0, persist-credentials: false, submodules: recursive }
-#      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # v1
+#      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
 #        with: { toolchain: stable }
 #      - name: Publish to crates.io if crate's version is newer
 #        uses: release-plz/action@b8d6b54b02889ff2ae2bb82e8b57c3a8fc1683a5 # v0.5.139

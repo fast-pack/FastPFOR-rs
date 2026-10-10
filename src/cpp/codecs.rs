@@ -253,27 +253,26 @@ pub(crate) mod tests {
 
     #[test]
     fn test_decode32_empty_input() {
-        assert!(decompress::<CppVByte>(&[], None).unwrap().is_empty());
+        assert_eq!(decompress::<CppVByte>(&[], None).unwrap(), []);
     }
 
     #[test]
     fn test_decode32_cpp_empty_format() {
-        let result = decompress::<CppFastPFor128>(&[0u32], Some(0)).unwrap();
-        assert!(result.is_empty());
+        assert_eq!(decompress::<CppFastPFor128>(&[0u32], Some(0)).unwrap(), []);
     }
 
     #[test]
     fn test_decode64_empty_input() {
-        assert!(decompress64::<CppFastPFor256>(&[]).unwrap().is_empty());
+        assert_eq!(decompress64::<CppFastPFor256>(&[]).unwrap(), []);
     }
 
     #[test]
     fn test_decode64_empty_format() {
-        assert!(decompress64::<CppVarInt>(&[]).unwrap().is_empty());
+        assert_eq!(decompress64::<CppVarInt>(&[]).unwrap(), []);
     }
 
     #[test]
     fn test_decode_empty_input() {
-        assert!(decompress::<CppFastPFor128>(&[], None).unwrap().is_empty());
+        assert_eq!(decompress::<CppFastPFor128>(&[], None).unwrap(), []);
     }
 }
